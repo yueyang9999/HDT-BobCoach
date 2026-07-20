@@ -1,0 +1,15 @@
+{
+  "name": "hdt-bobcoach",
+  "version": "0.2.0-beta.1",
+  "private": true,
+  "description": "Offline-first BobCoach plugin for Hearthstone Deck Tracker",
+  "license": "MIT",
+  "scripts": {
+    "test": "npm run test:contracts && npm run test:behavior && npm run test:package",
+    "test:contracts": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/run_contract_tests.ps1",
+    "test:behavior": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/run_behavior_tests.ps1",
+    "test:package": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/run_package_tests.ps1",
+    "build:hdt": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build/build_release.ps1",
+    "package:offline": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/release/build_offline_package.ps1"
+  }
+}

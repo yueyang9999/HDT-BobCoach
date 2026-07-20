@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a player-facing improvement within the offline-first and free product boundary.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        All player-facing functionality remains free. Voluntary support must not unlock features and must not appear in Hearthstone or the HDT overlay.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the player problem, not only a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy, data, and offline impact
+      description: Identify any new local data, network endpoint, third-party source, or required online behavior.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Product boundary
+      options:
+        - label: This request does not make a player-facing feature paid or exclusive.
+          required: true
+        - label: This request does not require third-party logos or imply third-party endorsement.
+          required: true

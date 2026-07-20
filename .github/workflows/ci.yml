@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download and verify HDT 1.53.5 baseline
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $url = 'https://github.com/HearthSim/Hearthstone-Deck-Tracker/releases/download/v1.53.5/Hearthstone.Deck.Tracker-v1.53.5.zip'
+          $archive = Join-Path $env:RUNNER_TEMP 'Hearthstone.Deck.Tracker-v1.53.5.zip'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'hdt-1.53.5'
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $archiveInfo = Get-Item -LiteralPath $archive
+          if ($archiveInfo.Length -ne 19715198) { throw "Unexpected HDT archive size: $($archiveInfo.Length)" }
+          $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($archiveHash -ne '551ab1a125c9fc0d674513bd20fee572345cbb0b87c8d7cda78759855612d477') {
+            throw "Unexpected HDT archive SHA-256: $archiveHash"
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+          $executables = @(Get-ChildItem -LiteralPath $extractRoot -Recurse -File -Filter 'HearthstoneDeckTracker.exe')
+          if ($executables.Count -ne 1) { throw "Expected one HearthstoneDeckTracker.exe, found $($executables.Count)" }
+          $hdtDirectory = $executables[0].Directory.FullName
+          foreach ($fileName in @('HearthstoneDeckTracker.exe', 'HearthDb.dll', 'Newtonsoft.Json.dll')) {
+            if (!(Test-Path -LiteralPath (Join-Path $hdtDirectory $fileName) -PathType Leaf)) {
+              throw "Missing HDT baseline file: $fileName"
+            }
+          }
+          "BOBCOACH_HDT_DIR=$hdtDirectory" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+
+      - name: Validate repository content
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\validate_repository.ps1
+
+      - name: Run automated tests
+        shell: powershell
+        run: npm test
+
+      - name: Build x64 net472 Release plugin
+        shell: powershell
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\build_release.ps1
+          -HdtDirectory "$env:BOBCOACH_HDT_DIR"
+          -OutputDirectory "$env:RUNNER_TEMP\bobcoach-build"
+          -Force
+
+      - name: Build formal offline package
+        shell: powershell
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\build_offline_package.ps1
+          -HdtDirectory "$env:BOBCOACH_HDT_DIR"
+          -OutputDirectory "$env:RUNNER_TEMP\bobcoach-package"
+          -Force

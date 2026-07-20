@@ -1,0 +1,41 @@
+# Build and test output
+bin/
+obj/
+artifacts/
+TestResults/
+coverage/
+eval/
+*.zip
+*.sha256
+*.dll
+*.exe
+*.pdb
+*.log
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.user
+*.suo
+*.pfx
+*.p12
+*.snk
+
+# Editors and operating systems
+.vs/
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+
+# Local validation and VM state
+.debate/
+.mcp/
+sessions/
+local-data/
+vm/
+*.iso
+*.qcow
+*.qcow2

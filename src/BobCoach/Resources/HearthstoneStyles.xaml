@@ -1,0 +1,57 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- === 核心调色板：贴合酒馆战棋 === -->
+    <Color x:Key="HearthGold">#FFD700</Color>
+    <Color x:Key="HearthDarkGold">#B8860B</Color>
+    <Color x:Key="TavernWood">#3E2723</Color>
+    <Color x:Key="TavernDark">#1A0F0A</Color>
+
+    <SolidColorBrush x:Key="BrushCritical" Color="#FFCC00"/>
+    <SolidColorBrush x:Key="BrushMajorPos" Color="#69F0AE"/>
+    <SolidColorBrush x:Key="BrushMajorWarn" Color="#FFAB40"/>
+    <SolidColorBrush x:Key="BrushMinor" Color="#82B1FF"/>
+    <SolidColorBrush x:Key="BrushDanger" Color="#FF5252"/>
+    <SolidColorBrush x:Key="BrushTextMain" Color="#FFF8E1"/>
+    <SolidColorBrush x:Key="BrushTextDim" Color="#BCAAA4"/>
+
+    <!-- === 炉石材质笔刷 === -->
+    <LinearGradientBrush x:Key="WoodPanelBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#4E342E" Offset="0"/>
+        <GradientStop Color="#3E2723" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- === 发光效果（分级） === -->
+    <DropShadowEffect x:Key="GlowCritical" Color="#FFD700" BlurRadius="20" ShadowDepth="0" Opacity="0.9"/>
+    <DropShadowEffect x:Key="GlowMajor" Color="#69F0AE" BlurRadius="10" ShadowDepth="0" Opacity="0.7"/>
+    <DropShadowEffect x:Key="GlowMinor" Color="#82B1FF" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
+    <DropShadowEffect x:Key="GlowDanger" Color="#FF1744" BlurRadius="16" ShadowDepth="0" Opacity="0.8"/>
+
+    <!-- === 通用字体与描边样式 === -->
+    <Style x:Key="HearthTextBase" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Microsoft YaHei Bold, SimHei, Lucida Sans Unicode"/>
+        <Setter Property="Foreground" Value="{StaticResource BrushTextMain}"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="#000000" BlurRadius="4" ShadowDepth="2" Opacity="0.9"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- === 脉冲动画（仅用于特级提示） === -->
+    <Storyboard x:Key="PulseCritical">
+        <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity" RepeatBehavior="Forever">
+            <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.85"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1.0"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:1.2" Value="0.85"/>
+        </DoubleAnimationUsingKeyFrames>
+    </Storyboard>
+
+    <Storyboard x:Key="FloatY">
+        <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" RepeatBehavior="Forever">
+            <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:1.0" Value="-4"/>
+            <EasingDoubleKeyFrame KeyTime="0:0:2.0" Value="0"/>
+        </DoubleAnimationUsingKeyFrames>
+    </Storyboard>
+</ResourceDictionary>

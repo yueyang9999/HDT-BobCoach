@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <OutputType>Library</OutputType>
+    <RootNamespace>BobCoach</RootNamespace>
+    <AssemblyName>BobCoach</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <LangVersion>7.3</LangVersion>
+    <Deterministic>true</Deterministic>
+    <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>Error</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+    <HdtDirectory Condition=" '$(HdtDirectory)' == '' ">$(BOBCOACH_HDT_DIR)</HdtDirectory>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>.\bin\x64\Release\</OutputPath>
+    <WarningLevel>0</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="netstandard" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="HearthstoneDeckTracker">
+      <HintPath>$(HdtDirectory)\HearthstoneDeckTracker.exe</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="HearthDb">
+      <HintPath>$(HdtDirectory)\HearthDb.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(HdtDirectory)\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Plugin entry -->
+    <Compile Include="BobCoachPlugin.cs" />
+    <Compile Include="GameStateExtractor.cs" />
+    <Compile Include="OverlayRenderer.cs" />
+    <Compile Include="ReleaseAssemblyInfo.cs" />
+
+    <!-- Core/ decision engine -->
+    <Compile Include="Core\BobCoachDataPaths.cs" />
+    <Compile Include="Core\GameState.cs" />
+    <Compile Include="Core\AnomalyContext.cs" />
+    <Compile Include="Core\EffectiveGameRules.cs" />
+    <Compile Include="Core\FirstPurchaseExtraCopyRule.cs" />
+    <Compile Include="Core\UpgradePrizeRule.cs" />
+    <Compile Include="Core\PortalInBottleRule.cs" />
+    <Compile Include="Core\SharedYoggWheelRule.cs" />
+    <Compile Include="Core\SharedCardVoteRule.cs" />
+    <Compile Include="Core\BuddyPoolRule.cs" />
+    <Compile Include="Core\AllHeroesOverrideRule.cs" />
+    <Compile Include="Core\HeroIdentityExpectation.cs" />
+    <Compile Include="Core\HeroRosterOverrideEvaluator.cs" />
+    <Compile Include="Core\BattlegroundsHeroIdentity.cs" />
+    <Compile Include="Core\SecondHeroPowerDiscoverRule.cs" />
+    <Compile Include="Core\SecondHeroPowerChoiceExpectation.cs" />
+    <Compile Include="Core\SecondHeroPowerChoiceBatchObservation.cs" />
+    <Compile Include="Core\SecondHeroPowerChoiceSelection.cs" />
+    <Compile Include="Core\SecondHeroPowerEntityObservation.cs" />
+    <Compile Include="Core\HeroPowerChoiceIdentity.cs" />
+    <Compile Include="Core\SecondHeroPowerDiscoverTracker.cs" />
+    <Compile Include="Core\TeammateGoldTransferRule.cs" />
+    <Compile Include="Core\ObservedTeammateGoldTransfer.cs" />
+    <Compile Include="Core\SimulatedTeammateGoldTransfer.cs" />
+    <Compile Include="Core\TeammateGoldTransferTracker.cs" />
+    <Compile Include="Core\TeammateGoldTransferEvaluator.cs" />
+    <Compile Include="Core\EffectiveCardPoolRules.cs" />
+    <Compile Include="Core\BuddyCardPoolEvaluator.cs" />
+    <Compile Include="Core\SharedCardVoteOccurrence.cs" />
+    <Compile Include="Core\SharedCardVoteSelection.cs" />
+    <Compile Include="Core\SharedCardGrantExpectation.cs" />
+    <Compile Include="Core\SharedCardGrantObservation.cs" />
+    <Compile Include="Core\SharedCardVoteTracker.cs" />
+    <Compile Include="Core\SharedTurnEventExpectation.cs" />
+    <Compile Include="Core\SharedTurnEventOutcome.cs" />
+    <Compile Include="Core\SharedTurnEventTracker.cs" />
+    <Compile Include="Core\TurnStartCardGrantExpectation.cs" />
+    <Compile Include="Core\TurnStartCardGrantTracker.cs" />
+    <Compile Include="Core\UpgradePrizeEvaluator.cs" />
+    <Compile Include="Core\TavernUpgradeOccurrence.cs" />
+    <Compile Include="Core\PrizeDiscoverExpectation.cs" />
+    <Compile Include="Core\UpgradePrizeTracker.cs" />
+    <Compile Include="Core\ObservedPurchase.cs" />
+    <Compile Include="Core\PurchaseRewardExpectation.cs" />
+    <Compile Include="Core\PurchaseRewardTracker.cs" />
+    <Compile Include="Core\StartResourceExpectation.cs" />
+    <Compile Include="Core\StartResourceExpectationEvaluator.cs" />
+    <Compile Include="Core\ScheduledGrant.cs" />
+    <Compile Include="Core\SecondaryHeroPowerRule.cs" />
+    <Compile Include="Core\HeroPowerState.cs" />
+    <Compile Include="Core\HeroPowerStateResolver.cs" />
+    <Compile Include="Core\TimewarpVisit.cs" />
+    <Compile Include="Core\TimewarpScheduleEvaluator.cs" />
+    <Compile Include="Core\TimewarpOfferRule.cs" />
+    <Compile Include="Core\TimewarpPoolMergeRule.cs" />
+    <Compile Include="Core\TimewarpCardPoolEvaluator.cs" />
+    <Compile Include="Core\ScheduledGrantEvaluator.cs" />
+    <Compile Include="Core\AnomalyRuleResolver.cs" />
+    <Compile Include="Core\GameRuleEvaluator.cs" />
+    <Compile Include="Core\TripleRuleEvaluator.cs" />
+    <Compile Include="Core\PanelStateMachine.cs" />
+    <Compile Include="Core\UiTargetStateMachine.cs" />
+    <Compile Include="Core\FeatureExtractor.cs" />
+    <Compile Include="Core\CardSemanticFactSource.cs" />
+    <Compile Include="Core\CardSemanticRuleEvaluator.cs" />
+    <Compile Include="Core\CachedCardSemanticSource.cs" />
+    <Compile Include="Core\HearthDbCardSemanticFactSource.cs" />
+    <Compile Include="Core\SemanticSynergyEvaluator.cs" />
+    <Compile Include="Core\CardClassificationFactSource.cs" />
+    <Compile Include="Core\CardClassificationRuleEvaluator.cs" />
+    <Compile Include="Core\CachedCardClassificationSource.cs" />
+    <Compile Include="Core\HearthDbCardClassificationFactSource.cs" />
+    <Compile Include="Core\ValueFunction.cs" />
+    <Compile Include="Core\ActionEnumerator.cs" />
+    <Compile Include="Core\Simulator.cs" />
+    <Compile Include="Core\DecisionEngine.cs" />
+    <Compile Include="Core\HeroPowerDisplayTextResolver.cs" />
+    <Compile Include="Core\CardNameService.cs" />
+    <Compile Include="Core\HearthDbCardIdentitySource.cs" />
+    <Compile Include="Core\TrinketFactSource.cs" />
+    <Compile Include="Core\HearthDbTrinketFactSource.cs" />
+    <Compile Include="Core\TrinketRuleEvaluator.cs" />
+    <Compile Include="Core\TrinketRecommendationService.cs" />
+    <Compile Include="Core\TrinketReasonFormatter.cs" />
+    <Compile Include="Core\CardPurchaseFactSource.cs" />
+    <Compile Include="Core\HearthDbCardPurchaseFactSource.cs" />
+    <Compile Include="Core\ShopItemFactResolver.cs" />
+    <Compile Include="Core\CardPoolFactSource.cs" />
+    <Compile Include="Core\HearthDbCardPoolFactSource.cs" />
+    <Compile Include="Core\LocalCardPoolMembershipSource.cs" />
+    <Compile Include="Core\LocalCardPoolMembershipSnapshot.cs" />
+    <Compile Include="Core\HearthDbCardPoolMembershipSource.cs" />
+    <Compile Include="Core\CardPoolSampler.cs" />
+    <Compile Include="Core\CardPoolTracker.cs" />
+    <Compile Include="Core\FastJsonWriter.cs" />
+    <Compile Include="Core\ProbabilityCalculator.cs" />
+    <Compile Include="Core\ProfileEngine.cs" />
+    <Compile Include="Core\DecisionLevel.cs" />
+    <Compile Include="Core\VisualScheduler.cs" />
+    <Compile Include="Core\SafeNativeMethods.cs" />
+    <Compile Include="Core\RelativePositioner.cs" />
+    <Compile Include="Core\OpponentModel.cs" />
+    <Compile Include="Core\AnomalyRegistry.cs" />
+    <Compile Include="Core\AnomalyFactSource.cs" />
+    <Compile Include="Core\AnomalyRuleEvaluator.cs" />
+    <Compile Include="Core\HearthDbAnomalyFactSource.cs" />
+    <Compile Include="Core\CachedAnomalyDefinitionSource.cs" />
+    <Compile Include="Core\BobsBuddyBridge.cs" />
+    <Compile Include="Core\BrushHelper.cs" />
+    <Compile Include="Core\BuddyRegistry.cs" />
+    <Compile Include="Core\CalibrationOverlay.cs" />
+    <Compile Include="Core\CardClassifier.cs" />
+    <Compile Include="Core\CardPoolFilter.cs" />
+    <Compile Include="Core\CardQuality.cs" />
+    <Compile Include="Core\CombatChoiceRenderPolicy.cs" />
+    <Compile Include="Core\CombatContext.cs" />
+    <Compile Include="Core\CombatEffects.cs" />
+    <Compile Include="Core\CombatEventQueue.cs" />
+    <Compile Include="Core\CombatSimulator.cs" />
+    <Compile Include="Core\CompLockDetector.cs" />
+    <Compile Include="Core\ContextDetector.cs" />
+    <Compile Include="Core\DecisionVisualizer.cs" />
+    <Compile Include="Core\CachedCardEffectSource.cs" />
+    <Compile Include="Core\CardEffectBaselineProvider.cs" />
+    <Compile Include="Core\CardEffectFactSource.cs" />
+    <Compile Include="Core\CardEffectRuleEvaluator.cs" />
+    <Compile Include="Core\EffectValueTable.cs" />
+    <Compile Include="Core\HearthDbCardEffectFactSource.cs" />
+    <Compile Include="Core\GameLayoutCalculator.cs" />
+    <Compile Include="Core\GoldTracker.cs" />
+    <Compile Include="Core\CachedHeroStrategySource.cs" />
+    <Compile Include="Core\HearthDbHeroPowerFactSource.cs" />
+    <Compile Include="Core\HeroPowerFactSource.cs" />
+    <Compile Include="Core\HeroPowerEngine.cs" />
+    <Compile Include="Core\HeroStrategyRuleEvaluator.cs" />
+    <Compile Include="Core\LayoutConfig.cs" />
+    <Compile Include="Core\LogConfigEnsurer.cs" />
+    <Compile Include="Core\MCTSSearch.cs" />
+    <Compile Include="Core\PhaseDetector.cs" />
+    <Compile Include="Core\PositioningEngine.cs" />
+    <Compile Include="Core\PowerLogInitialBuildScanner.cs" />
+    <Compile Include="Core\PowerLogParser.cs" />
+    <Compile Include="Core\PowerLogWatcher.cs" />
+    <Compile Include="Core\CachedPrizeSpellSource.cs" />
+    <Compile Include="Core\HearthDbPrizeSpellFactSource.cs" />
+    <Compile Include="Core\PrizeSpellFactSource.cs" />
+    <Compile Include="Core\PrizeSpellRegistry.cs" />
+    <Compile Include="Core\PrizeSpellRuleEvaluator.cs" />
+    <Compile Include="Core\PrizeSpellScorer.cs" />
+    <Compile Include="Core\PurchaseDetector.cs" />
+    <Compile Include="Core\StrategyAdjuster.cs" />
+    <Compile Include="Core\SynergyEngine.cs" />
+    <Compile Include="Core\TimewarpPurchaseAdvisor.cs" />
+    <Compile Include="Core\TimewarpSpellRegistry.cs" />
+    <Compile Include="Core\TrinketChoiceBatchLifecycle.cs" />
+    <Compile Include="Core\TrinketShadowCaptureSession.cs" />
+    <Compile Include="Core\TrinketStatsFetcher.cs" />
+    <Compile Include="Core\TrinketStatsModels.cs" />
+    <Compile Include="Core\TrinketStatsStore.cs" />
+    <Compile Include="Core\TrinketStatsUpdater.cs" />
+    <Compile Include="Core\TrinketStatsVerifier.cs" />
+    <Compile Include="Core\TurnPhaseEngine.cs" />
+    <Compile Include="Core\UIDemoMode.cs" />
+    <Compile Include="Core\VisualPlan.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\HearthstoneStyles.xaml" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

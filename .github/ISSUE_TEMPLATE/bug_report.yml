@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible Bob Coach problem without personal gameplay data.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach full Power.log files, replays, account identifiers, tokens, secrets, or unredacted absolute paths. GitHub Releases are not currently authorized; do not report an unauthorized package as an official release.
+  - type: input
+    id: version
+    attributes:
+      label: Bob Coach version or commit
+      placeholder: 0.2.0-beta.1 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Windows and HDT versions
+      placeholder: Windows 11 24H2 x64, HDT 1.53.5
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: State the affected feature, turn/phase, and minimal steps.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed private gameplay data, account information, secrets, and personal paths.
+          required: true

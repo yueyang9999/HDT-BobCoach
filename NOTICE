@@ -1,0 +1,43 @@
+Bob Coach Third-Party Notice
+============================
+
+Bob Coach is an independent, community-developed teaching assistant for
+Hearthstone Battlegrounds. It is not affiliated with, endorsed by, sponsored
+by, or approved by Blizzard Entertainment, HearthSim, Hearthstone Deck
+Tracker, Firestone, Zero to Heroes, or Gamerhub.
+
+The root MIT LICENSE applies only to original Bob Coach code and original
+project material for which contributors have the right to grant that license.
+It does not relicense third-party software, game data, card names or text,
+trademarks, images, aggregate statistics, or user gameplay records.
+
+Runtime relationships
+---------------------
+
+- Hearthstone and Hearthstone Battlegrounds are products of Blizzard
+  Entertainment. Their names, marks, game text, and assets remain the
+  property of their respective owners.
+- Hearthstone Deck Tracker is the runtime host. Bob Coach does not distribute
+  HDT binaries. Any public plugin distribution requires a separate
+  compatibility and permission review.
+- HearthDb is supplied by the user's HDT installation and is licensed by
+  HearthSim under the MIT License. Bob Coach does not bundle HearthDb.dll.
+- Newtonsoft.Json and other HDT-provided assemblies are runtime dependencies
+  supplied by the user's HDT installation and are not bundled by Bob Coach.
+- HearthstoneJSON/hsdata, Gamerhub, and Firestone/Zero to Heroes data remain
+  subject to their own rights and terms. See DATA_SOURCES.md.
+
+Release restriction
+-------------------
+
+The formal plugin DLL contains no JSON data resources. Historical datasets,
+raw third-party responses, development reports, logs, replays, profiles, and
+user-local HearthDb content are excluded from the offline package.
+
+The repository is being prepared for public use, but GitHub Release
+publication is not authorized. Clean-checkout reproducibility, compatibility,
+artifact validation, third-party review, and explicit owner authorization must
+be complete before any public release, upload, or distribution.
+
+All product names and trademarks are used only to identify compatibility and
+data provenance. No trademark license or endorsement is implied.

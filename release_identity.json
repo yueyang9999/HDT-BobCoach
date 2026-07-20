@@ -1,0 +1,7 @@
+{
+  "packageVersion": "0.2.0-beta.1",
+  "assemblyVersion": "0.2.0.0",
+  "targetFramework": "net472",
+  "runtimeIdentifier": "win-x64",
+  "hdtBaselineVersion": "1.53.5.0"
+}
