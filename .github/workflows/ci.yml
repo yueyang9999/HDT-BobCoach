@@ -34,9 +34,11 @@ jobs:
             throw "Unexpected HDT archive SHA-256: $archiveHash"
           }
           Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
-          $executables = @(Get-ChildItem -LiteralPath $extractRoot -Recurse -File -Filter 'HearthstoneDeckTracker.exe')
-          if ($executables.Count -ne 1) { throw "Expected one HearthstoneDeckTracker.exe, found $($executables.Count)" }
+          $executables = @(Get-ChildItem -LiteralPath $extractRoot -Recurse -File -Filter 'Hearthstone Deck Tracker.exe')
+          if ($executables.Count -ne 1) { throw "Expected one official HDT executable, found $($executables.Count)" }
           $hdtDirectory = $executables[0].Directory.FullName
+          $buildReference = Join-Path $hdtDirectory 'HearthstoneDeckTracker.exe'
+          Copy-Item -LiteralPath $executables[0].FullName -Destination $buildReference
           foreach ($fileName in @('HearthstoneDeckTracker.exe', 'HearthDb.dll', 'Newtonsoft.Json.dll')) {
             if (!(Test-Path -LiteralPath (Join-Path $hdtDirectory $fileName) -PathType Leaf)) {
               throw "Missing HDT baseline file: $fileName"

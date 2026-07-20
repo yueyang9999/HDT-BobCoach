@@ -5,9 +5,9 @@
 - Windows x64；
 - .NET Framework 4.7.2 Developer Pack；
 - Node.js（仅执行无第三方依赖的合同测试）；
-- HDT `1.53.5.0` x64 安装目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
+- HDT `1.53.5.7354` x64 官方发布目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
 
-HDT 程序集由用户本地提供，不能提交或打包进仓库。
+HDT 程序集由用户本地提供，不能提交或打包进仓库。`hdtBaselineVersion` 是官方 `v1.53.5` 发布资产写入的精确程序集版本，不是源码项目文件中的三段基础版本 `1.53.5`。
 
 ## 构建
 

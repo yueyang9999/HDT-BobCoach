@@ -15,7 +15,7 @@ function Resolve-HdtDirectory {
         $executable = Join-Path $candidate "HearthstoneDeckTracker.exe"
         if (Test-Path -LiteralPath $executable -PathType Leaf) {
             try {
-                if ([Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString() -eq "1.53.5.0") {
+                if ([Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString() -eq "1.53.5.7354") {
                     $candidate
                 }
             } catch { }
@@ -32,7 +32,7 @@ try {
     New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
     $hdtDirectory = Resolve-HdtDirectory
     if ([string]::IsNullOrWhiteSpace($hdtDirectory)) {
-        throw "HDT 1.53.5.0 not found; set BOBCOACH_HDT_DIR"
+        throw "HDT 1.53.5.7354 not found; set BOBCOACH_HDT_DIR"
     }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "tools\build\build_release.ps1") `
         -HdtDirectory $hdtDirectory -OutputDirectory $buildRoot -Force

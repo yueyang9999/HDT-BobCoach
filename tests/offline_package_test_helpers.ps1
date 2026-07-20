@@ -147,7 +147,7 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
         informationalVersion = "0.2.0-beta.1"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
-        hdtBaselineVersion = "1.53.5.0"
+        hdtBaselineVersion = "1.53.5.7354"
         pluginFile = "BobCoach.dll"
         pluginSize = $pluginSize
         pluginSha256 = $pluginHash

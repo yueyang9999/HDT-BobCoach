@@ -3,5 +3,5 @@
   "assemblyVersion": "0.2.0.0",
   "targetFramework": "net472",
   "runtimeIdentifier": "win-x64",
-  "hdtBaselineVersion": "1.53.5.0"
+  "hdtBaselineVersion": "1.53.5.7354"
 }

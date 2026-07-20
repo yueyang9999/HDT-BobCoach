@@ -13,6 +13,7 @@ function Invoke-Checked([string]$File, [string]$Kind) {
 
 foreach ($file in @(
     "test_clean_checkout_contract.js",
+    "test_ci_hdt_baseline_contract.js",
     "test_behavior_output_contract.js",
     "test_repository_validator.js",
     "test_release_build_contract.js",

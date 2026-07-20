@@ -196,7 +196,7 @@ if ($CurrentSeasonPreview) {
 $identity = Get-Content -Raw -Encoding UTF8 -LiteralPath $identityPath | ConvertFrom-Json
 if ($identity.packageVersion -ne "0.2.0-beta.1" -or $identity.assemblyVersion -ne "0.2.0.0" -or
     $identity.targetFramework -ne "net472" -or $identity.runtimeIdentifier -ne "win-x64" -or
-    $identity.hdtBaselineVersion -ne "1.53.5.0") {
+    $identity.hdtBaselineVersion -ne "1.53.5.7354") {
     throw "Unsupported release identity"
 }
 
