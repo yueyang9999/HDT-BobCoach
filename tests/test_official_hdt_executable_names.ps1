@@ -192,7 +192,7 @@ try {
         $seed = Join-Path $seedRoot "BobCoach.dll"
         New-TestManagedBobCoach -Path $seed -Version "0.1.0.0" | Out-Null
         $seedHash = (Get-FileHash -LiteralPath $seed -Algorithm SHA256).Hash
-        $sourceBackup = Join-Path $rollbackPlugins `
+        $sourceBackup = Join-Path ($rollbackPlugins + "\.") `
             ("BobCoach.dll.backup-20000101T000000000Z-" + $seedHash.Substring(0, 16))
         Move-Item -LiteralPath $seed -Destination $sourceBackup
         Set-TestReadOnly $sourceBackup
@@ -211,7 +211,8 @@ try {
         Assert-TestFileSnapshot $sourceBackupBefore $sourceBackup "read-only rollback source preserved"
         $rollbackBackups = @(Get-ChildItem -LiteralPath $rollbackPlugins -Filter "BobCoach.dll.backup-*" -File)
         Assert-Equal 2 $rollbackBackups.Count "read-only rollback backup count"
-        $currentTargetBackups = @($rollbackBackups | Where-Object { $_.FullName -ne $sourceBackup })
+        $sourceBackupName = [IO.Path]::GetFileName($sourceBackup)
+        $currentTargetBackups = @($rollbackBackups | Where-Object { $_.Name -ne $sourceBackupName })
         Assert-Equal 1 $currentTargetBackups.Count "read-only rollback current target backup count"
         $currentTargetBackup = Get-TestFileSnapshot $currentTargetBackups[0].FullName
         Assert-Equal $rollbackTargetBefore.Length $currentTargetBackup.Length `
