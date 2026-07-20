@@ -31,7 +31,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\validate_r
 git diff --check
 ```
 
-`npm test` 不安装 npm 运行时依赖；它执行 Node 合同测试和 PowerShell 测试。`validate_repository.ps1` 是仓库内容、敏感数据、个人路径、大文件、发布身份与包白名单的最终检查。该脚本及 CI 尚在本次仓库准备工作中补齐前，不能把缺失的检查视为通过。
+`npm test` 不安装 npm 运行时依赖；它执行 Node 合同测试和 PowerShell 测试。`validate_repository.ps1` 是仓库内容、敏感数据、个人路径、大文件、发布身份与包白名单的最终检查。CI 会在真实 HDT `1.53.5` 基线上执行仓库验证、全部测试、Release 构建和正式离线包构建；任一门禁缺失或失败都不能视为通过。
 
 ## 离线包
 

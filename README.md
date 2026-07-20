@@ -17,7 +17,7 @@ Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (H
 
 ## 安装
 
-1. 从 Releases 下载 `BobCoach-0.2.0-beta.1-win-x64.zip` 和同名 `.sha256` 文件。
+1. 从 Releases 下载 `BobCoach-0.2.0-beta.1-win-x64.zip` 和 `BobCoach-0.2.0-beta.1-win-x64.zip.sha256`。
 2. 关闭 HDT。
 3. 核对 ZIP 的 SHA-256，解压到普通本地目录。
 4. 在解压目录运行：

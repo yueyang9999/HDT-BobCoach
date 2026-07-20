@@ -34,8 +34,8 @@ The formal plugin DLL contains no JSON data resources. Historical datasets,
 raw third-party responses, development reports, logs, replays, profiles, and
 user-local HearthDb content are excluded from the offline package.
 
-The repository is being prepared for public use, but GitHub Release
-publication is not authorized. Clean-checkout reproducibility, compatibility,
+The source repository is public, but GitHub Release publication is not
+authorized. Clean-checkout reproducibility, compatibility,
 artifact validation, third-party review, and explicit owner authorization must
 be complete before any public release, upload, or distribution.
 
