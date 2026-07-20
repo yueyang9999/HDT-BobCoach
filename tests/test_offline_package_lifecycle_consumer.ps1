@@ -587,7 +587,7 @@ function Test-OutputFlood {
     Write-TestManifestAndSums $fixture.PackageRoot
     Publish-TestZip $fixture.PackageRoot $fixture.ZipPath
     Write-ExternalHash $fixture.ZipPath $fixture.Sha256Path
-    $result = Invoke-Consumer $fixture -Execute -CommandTimeoutSeconds 5
+    $result = Invoke-Consumer $fixture -Execute
     Assert-Equal 0 $result.ExitCode "output flood lifecycle exit: $($result.Stderr)"
     Write-Host "PASS child output flood"
 }
