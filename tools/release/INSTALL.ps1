@@ -23,12 +23,16 @@ $PackageFiles = @(
 $HashedFiles = @($PackageFiles | Where-Object { $_ -ne "SHA256SUMS.txt" } | Sort-Object)
 
 function Get-Sha256([string]$Path) {
-    $previousWhatIf = $WhatIfPreference
+    $stream = [IO.File]::OpenRead($Path)
     try {
-        $WhatIfPreference = $false
-        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return [BitConverter]::ToString($sha256.ComputeHash($stream)).Replace("-", "")
+        } finally {
+            $sha256.Dispose()
+        }
     } finally {
-        $WhatIfPreference = $previousWhatIf
+        $stream.Dispose()
     }
 }
 
