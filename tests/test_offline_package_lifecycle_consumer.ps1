@@ -725,6 +725,7 @@ if (!(Test-Path -LiteralPath $link)) {
 
 function Test-FinalStateCaptureFailure {
     $fixture = New-PackageFixture $script:testRoot "final-state-capture-failure"
+    $canonicalPluginDirectory = Join-Path (Get-Item -LiteralPath $fixture.Root -Force).FullName "IsolatedAppData\HearthstoneDeckTracker\Plugins"
     $uninstallerPath = Join-Path $fixture.PackageRoot "UNINSTALL.ps1"
     $uninstallerBody = Get-Content -Raw -Encoding UTF8 -LiteralPath $uninstallerPath
     $injection = @'
@@ -746,7 +747,8 @@ throw "synthetic lifecycle root failure before final state capture"
     Assert-Equal "default-uninstall" $lifecycle.failedStep "final state capture preserves lifecycle step"
     Assert-Contains "Child PowerShell failed for default-uninstall" $lifecycle.errorMessage "final state capture preserves lifecycle root error"
     Assert-True ($null -ne $lifecycle.finalStateEvidenceFailure) "final state capture records evidence failure"
-    Assert-Contains "Cannot find path" $lifecycle.finalStateEvidenceFailure.errorMessage "final state capture diagnostic"
+    Assert-Equal "System.Management.Automation.ItemNotFoundException" $lifecycle.finalStateEvidenceFailure.errorType "final state capture diagnostic type"
+    Assert-Contains $canonicalPluginDirectory $lifecycle.finalStateEvidenceFailure.errorMessage "final state capture diagnostic path"
     Assert-True ($null -eq $lifecycle.finalState) "final state capture leaves unavailable state null"
     Write-Host "PASS final state capture failure preservation"
 }
