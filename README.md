@@ -28,7 +28,7 @@ Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (H
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 ```
 
-安装器会验证包内哈希、DLL 版本和 x64 架构，只写入 HDT 的 `Plugins` 目录。完整步骤见 [安装说明](docs/user/INSTALL.md)。升级、回滚和卸载分别见 [UPGRADE](docs/user/UPGRADE.md)、[ROLLBACK](docs/user/ROLLBACK.md) 和 [UNINSTALL](docs/user/UNINSTALL.md)。
+安装器会验证包内哈希、DLL 版本和 x64 架构，只写入 `%APPDATA%\HearthstoneDeckTracker\Plugins`。HDT 程序目录下的 `Plugins` 不是用户插件安装位置，安装器会拒绝该路径。完整步骤见 [安装说明](docs/user/INSTALL.md)。升级、回滚和卸载分别见 [UPGRADE](docs/user/UPGRADE.md)、[ROLLBACK](docs/user/ROLLBACK.md) 和 [UNINSTALL](docs/user/UNINSTALL.md)。
 
 ## 隐私与联网
 

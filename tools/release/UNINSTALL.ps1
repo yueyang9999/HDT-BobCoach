@@ -6,19 +6,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Resolve-PortableHdtExecutable([string]$Parent) {
-    $candidates = @(
-        (Join-Path $Parent "Hearthstone Deck Tracker.exe"),
-        (Join-Path $Parent "HearthstoneDeckTracker.exe")
-    )
-    $matches = @($candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-    if ($matches.Count -eq 0) {
-        throw "Portable HDT executable not found; expected one of: $($candidates -join ', ')"
+function Assert-NoReparseInExistingChain([string]$Path, [string]$Label) {
+    $current = [IO.Path]::GetFullPath($Path).TrimEnd('\')
+    while (![string]::IsNullOrWhiteSpace($current)) {
+        if (Test-Path -LiteralPath $current) {
+            $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "$Label contains a reparse point: $current"
+            }
+        }
+        $parent = [IO.Path]::GetDirectoryName($current)
+        if ([string]::IsNullOrWhiteSpace($parent) -or
+            $parent.Equals($current, [StringComparison]::OrdinalIgnoreCase)) {
+            break
+        }
+        $current = $parent.TrimEnd('\')
     }
-    if ($matches.Count -ne 1) {
-        throw "Multiple portable HDT executables found: $($matches -join ', ')"
-    }
-    return $matches[0]
 }
 
 function Resolve-PluginDirectory([string]$RequestedPath) {
@@ -33,36 +36,24 @@ function Resolve-PluginDirectory([string]$RequestedPath) {
     if ([IO.Path]::GetFileName($resolved) -ne "Plugins") {
         throw "PluginDirectory must end with Plugins: $resolved"
     }
+    if (!$resolved.Equals($defaultPlugins, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "PluginDirectory must be the HDT AppData plugin directory: $defaultPlugins"
+    }
     $parent = Split-Path -Parent $resolved
     if (!(Test-Path -LiteralPath $parent -PathType Container)) {
         throw "PluginDirectory parent does not exist: $parent"
     }
-    $isDefault = $resolved.Equals($defaultPlugins, [StringComparison]::OrdinalIgnoreCase)
-    if (!$isDefault) {
-        Resolve-PortableHdtExecutable $parent | Out-Null
-    }
+    Assert-NoReparseInExistingChain $resolved "PluginDirectory"
     return [pscustomobject]@{
         Path = $resolved
         Parent = $parent
-        IsDefault = $isDefault
     }
 }
 
 function Assert-HdtStopped($ResolvedPluginDirectory) {
     $processes = @(Get-Process -Name "HearthstoneDeckTracker", "Hearthstone Deck Tracker" -ErrorAction SilentlyContinue)
     if ($processes.Count -eq 0) { return }
-    if ($ResolvedPluginDirectory.IsDefault) {
-        throw "Close Hearthstone Deck Tracker before uninstalling Bob Coach"
-    }
-    foreach ($process in $processes) {
-        $processPath = $null
-        try { $processPath = $process.Path } catch { $processPath = $null }
-        if ([string]::IsNullOrWhiteSpace($processPath)) { continue }
-        $processParent = [IO.Path]::GetFullPath((Split-Path -Parent $processPath)).TrimEnd('\')
-        if ($processParent.Equals($ResolvedPluginDirectory.Parent, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Close the portable Hearthstone Deck Tracker before uninstalling Bob Coach"
-        }
-    }
+    throw "Close Hearthstone Deck Tracker before uninstalling Bob Coach"
 }
 
 function Resolve-UserDataPath {

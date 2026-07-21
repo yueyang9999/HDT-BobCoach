@@ -214,8 +214,8 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     $fixtureRoot = Join-Path $Root $Name
     $packageRoot = Join-Path $fixtureRoot "BobCoach-0.2.0-beta.1-win-x64"
     $hdtDirectory = Join-Path $fixtureRoot "SyntheticHdt"
-    $pluginDirectory = Join-Path $hdtDirectory "Plugins"
     $appDataRoot = Join-Path $fixtureRoot "IsolatedAppData"
+    $pluginDirectory = Join-Path (Join-Path $appDataRoot "HearthstoneDeckTracker") "Plugins"
     $evidenceDirectory = Join-Path $fixtureRoot "Evidence"
     $logConfigPath = Join-Path $fixtureRoot "log.config"
     $previousPluginPath = Join-Path $fixtureRoot "previous\BobCoach.dll"
@@ -223,7 +223,7 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     $sha256Path = "$zipPath.sha256"
 
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
-    New-Item -ItemType Directory -Path $pluginDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $hdtDirectory -Force | Out-Null
     New-Item -ItemType Directory -Path (Split-Path -Parent $previousPluginPath) -Force | Out-Null
     Write-Utf8NoBom (Join-Path $hdtDirectory "HearthstoneDeckTracker.exe") "synthetic HDT fixture"
     Write-Utf8NoBom $logConfigPath "isolated log.config sentinel`n"
@@ -380,11 +380,13 @@ function Test-PreflightRefusals {
 
     Invoke-RefusalScenario "NonemptyTarget" {
         param($f, $app, $evidence, $process)
+        New-Item -ItemType Directory -Path $f.PluginDirectory -Force | Out-Null
         Write-Utf8NoBom (Join-Path $f.PluginDirectory "BobCoach.dll") "occupied"
     } "plugin target is not empty"
 
     Invoke-RefusalScenario "NonemptyTargetDirectory" {
         param($f, $app, $evidence, $process)
+        New-Item -ItemType Directory -Path $f.PluginDirectory -Force | Out-Null
         New-Item -ItemType Directory -Path (Join-Path $f.PluginDirectory "BobCoach.dll") | Out-Null
     } "plugin target is not empty"
 

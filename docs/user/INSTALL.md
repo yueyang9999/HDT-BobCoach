@@ -34,13 +34,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 
 默认目标是 `%APPDATA%\HearthstoneDeckTracker\Plugins`。如果该目录不存在，先正常启动并退出一次 HDT。
 
-对于便携版或自定义 HDT，传入实际的 `Plugins` 目录，而不是 HDT 根目录：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -PluginDirectory "D:\HDT\Plugins"
-```
-
-父目录必须包含唯一的 HDT 可执行文件。安装器会验证包完整性、清单、DLL 身份和 x64 架构，验证失败时不会写入插件目录。
+HDT 的用户插件目录不随程序安装位置变化；便携版或自定义程序目录也使用上述 AppData 路径。不要把 DLL 安装到 HDT 程序目录下的 `Plugins`。`-PluginDirectory` 只接受当前 `%APPDATA%` 对应的同一目录，通常应省略。安装器会验证包完整性、清单、DLL 身份、x64 架构和目标路径，验证失败时不会写入插件目录。
 
 ## Power.log
 

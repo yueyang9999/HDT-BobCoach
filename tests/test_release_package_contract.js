@@ -67,8 +67,8 @@ for (const [token, label] of [
   ['[IO.File]::Replace', 'installer atomic replace'],
   ['-Rollback', 'installer rollback mode'],
   ['BackupPath', 'installer selected backup'],
-  ['Hearthstone Deck Tracker.exe', 'installer official HDT process'],
-  ['HearthstoneDeckTracker.exe', 'installer legacy HDT process'],
+  ['"Hearthstone Deck Tracker"', 'installer official HDT process'],
+  ['"HearthstoneDeckTracker"', 'installer legacy HDT process'],
 ]) requireText(installer, token, label);
 
 for (const [token, label] of [
