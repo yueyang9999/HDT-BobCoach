@@ -261,7 +261,7 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     }
 }
 
-function Invoke-Consumer($Fixture, [switch]$Execute, [string]$AppDataRoot, [string]$EvidenceDirectory, [int]$CommandTimeoutSeconds = 30) {
+function Invoke-Consumer($Fixture, [switch]$Execute, [string]$AppDataRoot, [string]$EvidenceDirectory, [int]$CommandTimeoutSeconds = 120) {
     if (!(Test-Path -LiteralPath $consumerPath -PathType Leaf)) {
         throw "consumer script missing: $consumerPath"
     }

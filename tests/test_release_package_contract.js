@@ -50,6 +50,7 @@ const installer = read('tools/release/INSTALL.ps1');
 const uninstaller = read('tools/release/UNINSTALL.ps1');
 const builder = read('tools/release/build_offline_package.ps1');
 const lifecycle = read('tools/release/verify_offline_package_lifecycle.ps1');
+const lifecycleConsumerTest = read('tests/test_offline_package_lifecycle_consumer.ps1');
 const readme = read('tools/release/README_OFFLINE.md');
 
 for (const [source, label] of [[installer, 'installer'], [builder, 'builder']]) {
@@ -102,6 +103,11 @@ for (const phase of ['Install', 'Upgrade', 'Rollback', 'Uninstall', 'Reinstall']
     errors.push(`missing lifecycle ${phase.toLowerCase()} phase`);
   }
 }
+requireText(
+  lifecycleConsumerTest,
+  '[int]$CommandTimeoutSeconds = 120',
+  'lifecycle consumer production-aligned default timeout',
+);
 for (const token of ['0.2.0-beta.2', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
