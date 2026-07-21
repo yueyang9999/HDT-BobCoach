@@ -9,7 +9,16 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "offline_package_test_helpers.ps1")
 
 $testRoot = Join-Path $env:TEMP ("bobcoach-official-hdt-name-test-" + [Guid]::NewGuid().ToString("N"))
+$previousAppData = $env:APPDATA
 Assert-SafeTestRoot $testRoot
+
+function New-TestHdtPluginDirectory([string]$Name) {
+    $appData = Join-Path (Join-Path $testRoot $Name) "AppData"
+    $hdtAppData = Join-Path $appData "HearthstoneDeckTracker"
+    New-Item -ItemType Directory -Path $hdtAppData -Force | Out-Null
+    $env:APPDATA = $appData
+    return Join-Path $hdtAppData "Plugins"
+}
 
 function Set-TestReadOnly([string]$Path) {
     $item = Get-Item -LiteralPath $Path -Force
@@ -51,9 +60,7 @@ try {
     if ($Scenario -in @("All", "WhatIf")) {
         $whatIfPackage = New-TestOfflinePackage -Root $testRoot -Name "WhatIfPackage"
         Set-TestReadOnly $whatIfPackage.Plugin
-        $whatIfHdt = New-TestPortableHdt -Root $testRoot -Name "WhatIfOfficialHdt" `
-            -ExecutableName "Hearthstone Deck Tracker.exe"
-        $whatIfPlugins = Join-Path $whatIfHdt "Plugins"
+        $whatIfPlugins = New-TestHdtPluginDirectory "WhatIf"
         $packageSnapshots = @{}
         foreach ($file in Get-ChildItem -LiteralPath $whatIfPackage.Root -File) {
             $packageSnapshots[$file.Name] = Get-TestFileSnapshot $file.FullName
@@ -110,9 +117,7 @@ try {
             "tampered",
             (New-Object Text.UTF8Encoding($false))
         )
-        $tamperedHdt = New-TestPortableHdt -Root $testRoot -Name "TamperedWhatIfHdt" `
-            -ExecutableName "Hearthstone Deck Tracker.exe"
-        $tamperedPlugins = Join-Path $tamperedHdt "Plugins"
+        $tamperedPlugins = New-TestHdtPluginDirectory "TamperedWhatIf"
         $tamperedResult = Invoke-TestPowerShell $tamperedPackage.Installer @(
             "-PluginDirectory", $tamperedPlugins, "-WhatIf", "-Confirm:`$false"
         )
@@ -129,9 +134,7 @@ try {
         $readOnlyPackage = New-TestOfflinePackage -Root $testRoot -Name "ReadOnlyFreshPackage"
         Set-TestReadOnly $readOnlyPackage.Plugin
         $sourceBefore = Get-TestFileSnapshot $readOnlyPackage.Plugin
-        $readOnlyHdt = New-TestPortableHdt -Root $testRoot -Name "ReadOnlyFreshHdt" `
-            -ExecutableName "Hearthstone Deck Tracker.exe"
-        $readOnlyPlugins = Join-Path $readOnlyHdt "Plugins"
+        $readOnlyPlugins = New-TestHdtPluginDirectory "ReadOnlyFresh"
 
         $readOnlyFresh = Invoke-TestPowerShell $readOnlyPackage.Installer @(
             "-PluginDirectory", $readOnlyPlugins, "-Confirm:`$false"
@@ -149,9 +152,7 @@ try {
 
     if ($Scenario -in @("All", "ReadOnlyUpgrade")) {
         $upgradePackage = New-TestOfflinePackage -Root $testRoot -Name "ReadOnlyUpgradePackage"
-        $upgradeHdt = New-TestPortableHdt -Root $testRoot -Name "ReadOnlyUpgradeHdt" `
-            -ExecutableName "Hearthstone Deck Tracker.exe"
-        $upgradePlugins = Join-Path $upgradeHdt "Plugins"
+        $upgradePlugins = New-TestHdtPluginDirectory "ReadOnlyUpgrade"
         New-Item -ItemType Directory -Path $upgradePlugins | Out-Null
         $upgradeTarget = Join-Path $upgradePlugins "BobCoach.dll"
         New-TestManagedBobCoach -Path $upgradeTarget -Version "0.1.0.0" | Out-Null
@@ -179,9 +180,7 @@ try {
 
     if ($Scenario -in @("All", "ReadOnlyRollback")) {
         $rollbackPackage = New-TestOfflinePackage -Root $testRoot -Name "ReadOnlyRollbackPackage"
-        $rollbackHdt = New-TestPortableHdt -Root $testRoot -Name "ReadOnlyRollbackHdt" `
-            -ExecutableName "Hearthstone Deck Tracker.exe"
-        $rollbackPlugins = Join-Path $rollbackHdt "Plugins"
+        $rollbackPlugins = New-TestHdtPluginDirectory "ReadOnlyRollback"
         New-Item -ItemType Directory -Path $rollbackPlugins | Out-Null
         $rollbackTarget = Join-Path $rollbackPlugins "BobCoach.dll"
         Copy-Item -LiteralPath $rollbackPackage.Plugin -Destination $rollbackTarget
@@ -225,9 +224,7 @@ try {
 
     if ($Scenario -in @("All", "ReplaceFailure")) {
         $failurePackage = New-TestOfflinePackage -Root $testRoot -Name "ReplaceFailurePackage"
-        $failureHdt = New-TestPortableHdt -Root $testRoot -Name "ReplaceFailureHdt" `
-            -ExecutableName "Hearthstone Deck Tracker.exe"
-        $failurePlugins = Join-Path $failureHdt "Plugins"
+        $failurePlugins = New-TestHdtPluginDirectory "ReplaceFailure"
         New-Item -ItemType Directory -Path $failurePlugins | Out-Null
         $failureTarget = Join-Path $failurePlugins "BobCoach.dll"
         Copy-Item -LiteralPath $failurePackage.Plugin -Destination $failureTarget
@@ -296,37 +293,40 @@ try {
     }
 
     $package = New-TestOfflinePackage -Root $testRoot -Name "Package"
-    $hdt = New-TestPortableHdt -Root $testRoot -Name "OfficialHdt" -ExecutableName "Hearthstone Deck Tracker.exe"
-    $plugins = Join-Path $hdt "Plugins"
+    $plugins = New-TestHdtPluginDirectory "Main"
 
     $install = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $plugins, "-Confirm:`$false")
-    Assert-Equal 0 $install.ExitCode "official HDT executable name install exit"
-    Assert-FileHashEqual $package.Plugin (Join-Path $plugins "BobCoach.dll") "official HDT executable name install hash"
+    Assert-Equal 0 $install.ExitCode "AppData plugin directory install exit"
+    Assert-FileHashEqual $package.Plugin (Join-Path $plugins "BobCoach.dll") "AppData plugin directory install hash"
 
-    $ambiguousHdt = New-TestPortableHdt -Root $testRoot -Name "AmbiguousHdt" -ExecutableName "Hearthstone Deck Tracker.exe"
-    Write-Utf8NoBom (Join-Path $ambiguousHdt "HearthstoneDeckTracker.exe") "second test fixture"
-    $ambiguousPlugins = Join-Path $ambiguousHdt "Plugins"
-    $ambiguous = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $ambiguousPlugins, "-Confirm:`$false")
-    Assert-True ($ambiguous.ExitCode -ne 0) "ambiguous HDT executable names fail"
-    Assert-False (Test-Path -LiteralPath $ambiguousPlugins) "ambiguous HDT executable names write nothing"
+    $programHdt = New-TestPortableHdt -Root $testRoot -Name "ProgramHdt" `
+        -ExecutableName "Hearthstone Deck Tracker.exe"
+    $programPlugins = Join-Path $programHdt "Plugins"
+    $wrongProgramInstall = Invoke-TestPowerShell $package.Installer @(
+        "-PluginDirectory", $programPlugins, "-Confirm:`$false"
+    )
+    Assert-True ($wrongProgramInstall.ExitCode -ne 0) "HDT program Plugins install fails"
+    Assert-False (Test-Path -LiteralPath $programPlugins) "HDT program Plugins install writes nothing"
 
     $uninstaller = Join-Path (Split-Path -Parent $PSScriptRoot) "tools\release\UNINSTALL.ps1"
-    New-Item -ItemType Directory -Path $ambiguousPlugins -Force | Out-Null
-    Copy-Item -LiteralPath $package.Plugin -Destination (Join-Path $ambiguousPlugins "BobCoach.dll")
-    $ambiguousUninstall = Invoke-TestPowerShell $uninstaller @(
-        "-PluginDirectory", $ambiguousPlugins, "-WhatIf", "-Confirm:`$false"
+    New-Item -ItemType Directory -Path $programPlugins -Force | Out-Null
+    Copy-Item -LiteralPath $package.Plugin -Destination (Join-Path $programPlugins "BobCoach.dll")
+    $wrongProgramUninstall = Invoke-TestPowerShell $uninstaller @(
+        "-PluginDirectory", $programPlugins, "-WhatIf", "-Confirm:`$false"
     )
-    Assert-True ($ambiguousUninstall.ExitCode -ne 0) "ambiguous HDT executable names block uninstall"
-    Assert-True (Test-Path -LiteralPath (Join-Path $ambiguousPlugins "BobCoach.dll") -PathType Leaf) "ambiguous uninstall writes nothing"
+    Assert-True ($wrongProgramUninstall.ExitCode -ne 0) "HDT program Plugins uninstall fails"
+    Assert-True (Test-Path -LiteralPath (Join-Path $programPlugins "BobCoach.dll") -PathType Leaf) `
+        "HDT program Plugins uninstall writes nothing"
 
+    $plugins = New-TestHdtPluginDirectory "Main"
     $uninstallWhatIf = Invoke-TestPowerShell $uninstaller @(
         "-PluginDirectory", $plugins, "-WhatIf", "-Confirm:`$false"
     )
-    Assert-Equal 0 $uninstallWhatIf.ExitCode "official HDT executable name uninstall WhatIf exit"
+    Assert-Equal 0 $uninstallWhatIf.ExitCode "AppData uninstall WhatIf exit"
     Assert-True (Test-Path -LiteralPath (Join-Path $plugins "BobCoach.dll") -PathType Leaf) "uninstall WhatIf preserves DLL"
 
     $runningHdt = New-TestPortableHdt -Root $testRoot -Name "RunningOfficialHdt" -ExecutableName "Hearthstone Deck Tracker.exe"
-    $runningPlugins = Join-Path $runningHdt "Plugins"
+    $runningPlugins = New-TestHdtPluginDirectory "Running"
     $runningProcess = Start-TestHdtProcess -HdtRoot $runningHdt -ExecutableName "Hearthstone Deck Tracker.exe"
     try {
         $runningInstall = Invoke-TestPowerShell $package.Installer @(
@@ -346,12 +346,13 @@ try {
         if (!$runningProcess.HasExited) { Stop-Process -Id $runningProcess.Id -Force }
     }
 
-    Write-Host "PASS installer WhatIf, readonly lifecycle, failure recovery, official HDT names, and process contracts"
+    Write-Host "PASS installer WhatIf, readonly lifecycle, failure recovery, AppData path, and process contracts"
 } catch {
     Write-Host "FAIL official HDT executable name install contract"
     Write-Host $_.Exception.Message
     exit 1
 } finally {
+    $env:APPDATA = $previousAppData
     if ($Preserve) {
         Write-Host "PRESERVED test root: $testRoot"
     } elseif (Test-Path -LiteralPath $testRoot) {

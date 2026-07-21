@@ -5,14 +5,22 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "offline_package_test_helpers.ps1")
 
 $testRoot = Join-Path $env:TEMP ("bobcoach-offline-installer-test-" + [Guid]::NewGuid().ToString("N"))
+$previousAppData = $env:APPDATA
 Assert-SafeTestRoot $testRoot
+
+function New-TestHdtPluginDirectory([string]$Name) {
+    $appData = Join-Path (Join-Path $testRoot $Name) "AppData"
+    $hdtAppData = Join-Path $appData "HearthstoneDeckTracker"
+    New-Item -ItemType Directory -Path $hdtAppData -Force | Out-Null
+    $env:APPDATA = $appData
+    return Join-Path $hdtAppData "Plugins"
+}
 
 try {
     New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 
     $package = New-TestOfflinePackage -Root $testRoot -Name "FreshPackage"
-    $hdt = New-TestPortableHdt -Root $testRoot -Name "FreshHdt"
-    $plugins = Join-Path $hdt "Plugins"
+    $plugins = New-TestHdtPluginDirectory "Fresh"
 
     $whatIf = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $plugins, "-WhatIf", "-Confirm:`$false")
     Assert-Equal 0 $whatIf.ExitCode "WhatIf exit"
@@ -23,10 +31,14 @@ try {
     Assert-FileHashEqual $package.Plugin (Join-Path $plugins "BobCoach.dll") "fresh install DLL hash"
     Assert-Equal 0 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "fresh backup count"
 
+    $defaultPlugins = New-TestHdtPluginDirectory "DefaultSuccess"
+    $defaultFresh = Invoke-TestPowerShell $package.Installer @("-Confirm:`$false")
+    Assert-Equal 0 $defaultFresh.ExitCode "default fresh install exit"
+    Assert-FileHashEqual $package.Plugin (Join-Path $defaultPlugins "BobCoach.dll") "default fresh install DLL hash"
+
     $tampered = New-TestOfflinePackage -Root $testRoot -Name "TamperedPackage"
     Add-Content -LiteralPath (Join-Path $tampered.Root "README_OFFLINE.md") -Value "tampered"
-    $tamperHdt = New-TestPortableHdt -Root $testRoot -Name "TamperHdt"
-    $tamperPlugins = Join-Path $tamperHdt "Plugins"
+    $tamperPlugins = New-TestHdtPluginDirectory "Tamper"
     $tamperResult = Invoke-TestPowerShell $tampered.Installer @("-PluginDirectory", $tamperPlugins, "-Confirm:`$false")
     Assert-True ($tamperResult.ExitCode -ne 0) "tampered package fails"
     Assert-False (Test-Path -LiteralPath $tamperPlugins) "tampered package writes nothing"
@@ -36,19 +48,28 @@ try {
     Assert-True ($invalidResult.ExitCode -ne 0) "non-Plugins path fails"
     Assert-False (Test-Path -LiteralPath $invalidTarget) "non-Plugins path writes nothing"
 
-    $missingHdtParent = Join-Path (Join-Path $testRoot "MissingHdt") "Plugins"
-    New-Item -ItemType Directory -Path (Split-Path -Parent $missingHdtParent) -Force | Out-Null
-    $missingHdtResult = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $missingHdtParent, "-Confirm:`$false")
-    Assert-True ($missingHdtResult.ExitCode -ne 0) "portable path without HDT exe fails"
-    Assert-False (Test-Path -LiteralPath $missingHdtParent) "missing-HDT path writes nothing"
+    $programHdt = New-TestPortableHdt -Root $testRoot -Name "ProgramHdt"
+    $programPlugins = Join-Path $programHdt "Plugins"
+    $programResult = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $programPlugins, "-Confirm:`$false")
+    Assert-True ($programResult.ExitCode -ne 0) "HDT program Plugins path fails"
+    Assert-False (Test-Path -LiteralPath $programPlugins) "HDT program Plugins path writes nothing"
+
+    $junctionTarget = Join-Path (New-TestPortableHdt -Root $testRoot -Name "JunctionTargetHdt") "Plugins"
+    New-Item -ItemType Directory -Path $junctionTarget -Force | Out-Null
+    $junctionPlugins = New-TestHdtPluginDirectory "JunctionPlugins"
+    New-Item -ItemType Junction -Path $junctionPlugins -Target $junctionTarget | Out-Null
+    $junctionResult = Invoke-TestPowerShell $package.Installer @(
+        "-PluginDirectory", $junctionPlugins, "-Confirm:`$false"
+    )
+    Assert-True ($junctionResult.ExitCode -ne 0) "reparse Plugins path fails"
+    Assert-False (Test-Path -LiteralPath (Join-Path $junctionTarget "BobCoach.dll")) "reparse target writes nothing"
 
     if ($FreshInstallOnly) {
         Write-Host "PASS offline installer fresh install, integrity, path, and WhatIf contracts"
         return
     }
 
-    $upgradeHdt = New-TestPortableHdt -Root $testRoot -Name "UpgradeHdt"
-    $upgradePlugins = Join-Path $upgradeHdt "Plugins"
+    $upgradePlugins = New-TestHdtPluginDirectory "Upgrade"
     New-Item -ItemType Directory -Path $upgradePlugins -Force | Out-Null
     $targetDll = Join-Path $upgradePlugins "BobCoach.dll"
     New-TestManagedBobCoach -Path $targetDll -Version "0.1.0.0" | Out-Null
@@ -103,18 +124,17 @@ try {
     )
     Assert-True ($withoutRollback.ExitCode -ne 0) "BackupPath without Rollback fails"
 
-    $emptyHdt = New-TestPortableHdt -Root $testRoot -Name "EmptyRollbackHdt"
-    $emptyPlugins = Join-Path $emptyHdt "Plugins"
+    $emptyPlugins = New-TestHdtPluginDirectory "EmptyRollback"
     $emptyRollback = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $emptyPlugins, "-Rollback", "-Confirm:`$false")
     Assert-True ($emptyRollback.ExitCode -ne 0) "rollback without backup fails"
     Assert-False (Test-Path -LiteralPath $emptyPlugins) "empty rollback writes nothing"
 
     $runningHdt = New-TestPortableHdt -Root $testRoot -Name "RunningHdt"
-    $runningPlugins = Join-Path $runningHdt "Plugins"
+    $runningPlugins = New-TestHdtPluginDirectory "Running"
     $runningProcess = Start-TestHdtProcess $runningHdt
     try {
         $runningResult = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $runningPlugins, "-Confirm:`$false")
-        Assert-True ($runningResult.ExitCode -ne 0) "running portable HDT blocks install"
+        Assert-True ($runningResult.ExitCode -ne 0) "running HDT blocks AppData install"
         Assert-False (Test-Path -LiteralPath $runningPlugins) "running HDT writes nothing"
 
         $previousAppData = $env:APPDATA
@@ -139,6 +159,7 @@ try {
     Write-Host $_.Exception.Message
     exit 1
 } finally {
+    $env:APPDATA = $previousAppData
     if (Test-Path -LiteralPath $testRoot) {
         Assert-SafeTestRoot $testRoot
         Remove-Item -LiteralPath $testRoot -Recurse -Force

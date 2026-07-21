@@ -67,13 +67,7 @@ BobCoach.dll.backup-<UTC时间>-<旧文件哈希前16位>
 
 安装器不自动删除历史备份。
 
-便携版或自定义目录 HDT 必须显式指定它自己的 `Plugins` 目录。该目录的父目录必须存在官方 `Hearthstone Deck Tracker.exe`；同时兼容历史文件名 `HearthstoneDeckTracker.exe`，但两者不得同时存在：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -PluginDirectory "D:\HDT\Plugins"
-```
-
-不要把 HDT 安装根目录本身传给 `-PluginDirectory`，路径必须以 `Plugins` 结尾。
+HDT 的用户插件目录不随程序安装位置变化；便携版或自定义程序目录也使用 `%APPDATA%\HearthstoneDeckTracker\Plugins`。不要把 DLL 安装到 HDT 程序目录下的 `Plugins`。`-PluginDirectory` 只接受当前 `%APPDATA%` 对应的同一目录，通常应省略；其他路径会被安装器拒绝。
 
 ## 在 HDT 中启用并确认保持可用
 
@@ -100,22 +94,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -PluginDirecto
 powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback
 ```
 
-便携版或自定义目录 HDT 恢复最新备份：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -PluginDirectory "D:\HDT\Plugins"
-```
-
 恢复指定备份：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -BackupPath "$env:APPDATA\HearthstoneDeckTracker\Plugins\BobCoach.dll.backup-..."
-```
-
-便携版或自定义目录 HDT 恢复指定备份时，备份也必须位于同一个 `Plugins` 目录：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -PluginDirectory "D:\HDT\Plugins" -BackupPath "D:\HDT\Plugins\BobCoach.dll.backup-..."
 ```
 
 回退前的当前DLL也会被保留为新备份。回退不会删除原备份。
@@ -133,20 +115,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -Plu
 - 确认 HDT 已完全退出，解压目录中正好有本说明列出的 11 个文件。
 - 不要单独替换 `BobCoach.dll`、`manifest.json` 或 `SHA256SUMS.txt`，也不要混用旧包文件。
 - 重新取得完整 ZIP，先解除 ZIP 的 Windows 锁定，再解压到一个新目录并重新运行安装命令。
-- 默认目录不存在时，先启动并退出一次 HDT；便携版必须传入实际的 `Plugins` 路径。
+- 默认目录不存在时，先启动并退出一次 HDT；不要改用 HDT 程序目录下的 `Plugins`。
 - 不要通过改脚本、删哈希行或关闭 Windows 安全功能来绕过失败。
 
 ### HDT 中没有出现 BobCoach
 
 - 在 PowerShell 中确认安装结果以 `PASS installed` 或 `PASS upgraded` 开头。
-- 确认 `BobCoach.dll` 实际位于当前 HDT 使用的 `Plugins` 目录，而不是另一个 HDT 副本。
+- 确认 `BobCoach.dll` 实际位于 `%APPDATA%\HearthstoneDeckTracker\Plugins`，而不是 HDT 程序目录或另一个副本。
 - 打开 DLL 的“属性”检查是否有“解除锁定”；若有，退出 HDT，解除锁定后重新运行安装器。
 - 完全退出并重启 HDT，然后到 `Options > Tracker > Plugins` 再检查一次。
 - 仍未出现时，保留安装器完整错误文字和 HDT 日志中的 BobCoach 加载错误；不要上传完整私人对局日志。
 
 ### 旧版本仍在工作或升级后异常
 
-- 不要手工把新 DLL 覆盖到多个 HDT 目录。对当前实际使用的 `Plugins` 目录重新运行安装命令。
+- 不要手工把新 DLL 覆盖到多个 HDT 目录。对 `%APPDATA%\HearthstoneDeckTracker\Plugins` 重新运行安装命令。
 - `PASS upgraded` 会把旧 DLL 留为 `BobCoach.dll.backup-*`，它不会和当前 `BobCoach.dll` 同时加载。
 - 重启 HDT 后仍异常时，先按下方命令回退到最新备份；如需指定版本，使用完整的 `-BackupPath`。
 
@@ -164,11 +146,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -Plu
 powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1
 ```
 
-便携版或自定义目录 HDT：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1 -PluginDirectory "D:\HDT\Plugins"
-```
+卸载目标固定为 `%APPDATA%\HearthstoneDeckTracker\Plugins\BobCoach.dll`，不随 HDT 程序安装位置变化。卸载器会拒绝 HDT 程序目录下的 `Plugins`。
 
 默认保留：
 
@@ -180,12 +158,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1 -PluginDirec
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1 -RemoveUserData
-```
-
-便携版或自定义目录 HDT 同时删除 BobCoach 用户数据：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1 -PluginDirectory "D:\HDT\Plugins" -RemoveUserData
 ```
 
 该命令仍不删除DLL备份或`log.config`。确认不再需要回退后，可在HDT退出状态下手工删除Plugins目录中的`BobCoach.dll.backup-*`。

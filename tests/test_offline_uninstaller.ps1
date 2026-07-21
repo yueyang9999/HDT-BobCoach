@@ -17,8 +17,7 @@ try {
     New-Item -ItemType Directory -Path $testAppData -Force | Out-Null
     $env:APPDATA = $testAppData
 
-    $hdt = New-TestPortableHdt -Root $testRoot -Name "PortableHdt"
-    $plugins = Join-Path $hdt "Plugins"
+    $plugins = Join-Path (Join-Path $testAppData "HearthstoneDeckTracker") "Plugins"
     New-Item -ItemType Directory -Path $plugins -Force | Out-Null
     $targetDll = Join-Path $plugins "BobCoach.dll"
     New-TestManagedBobCoach -Path $targetDll | Out-Null
@@ -32,14 +31,14 @@ try {
     $logConfig = Join-Path $testRoot "log.config"
     Write-Utf8NoBom $logConfig "shared log config"
 
-    $defaultResult = Invoke-TestPowerShell $uninstaller @("-PluginDirectory", $plugins, "-Confirm:`$false")
+    $defaultResult = Invoke-TestPowerShell $uninstaller @("-Confirm:`$false")
     Assert-Equal 0 $defaultResult.ExitCode "default uninstall exit"
     Assert-False (Test-Path -LiteralPath $targetDll) "default removes DLL"
     Assert-Equal 2 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "default retains backups"
     Assert-True (Test-Path -LiteralPath $userDataFile) "default retains user data"
     Assert-True (Test-Path -LiteralPath $logConfig) "default retains log.config"
 
-    $idempotent = Invoke-TestPowerShell $uninstaller @("-PluginDirectory", $plugins, "-Confirm:`$false")
+    $idempotent = Invoke-TestPowerShell $uninstaller @("-Confirm:`$false")
     Assert-Equal 0 $idempotent.ExitCode "idempotent uninstall exit"
 
     New-TestManagedBobCoach -Path $targetDll | Out-Null
@@ -57,14 +56,29 @@ try {
     Assert-Equal 2 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "explicit data uninstall retains backups"
     Assert-True (Test-Path -LiteralPath $logConfig) "explicit data uninstall retains log.config"
 
+    $junctionTarget = Join-Path (New-TestPortableHdt -Root $testRoot -Name "JunctionTargetHdt") "Plugins"
+    New-Item -ItemType Directory -Path $junctionTarget -Force | Out-Null
+    $junctionTargetDll = Join-Path $junctionTarget "BobCoach.dll"
+    New-TestManagedBobCoach -Path $junctionTargetDll | Out-Null
+    $junctionAppData = Join-Path $testRoot "JunctionAppData"
+    $junctionHdtAppData = Join-Path $junctionAppData "HearthstoneDeckTracker"
+    New-Item -ItemType Directory -Path $junctionHdtAppData -Force | Out-Null
+    $junctionPlugins = Join-Path $junctionHdtAppData "Plugins"
+    New-Item -ItemType Junction -Path $junctionPlugins -Target $junctionTarget | Out-Null
+    $env:APPDATA = $junctionAppData
+    $junctionResult = Invoke-TestPowerShell $uninstaller @(
+        "-PluginDirectory", $junctionPlugins, "-Confirm:`$false"
+    )
+    Assert-True ($junctionResult.ExitCode -ne 0) "reparse Plugins path fails"
+    Assert-True (Test-Path -LiteralPath $junctionTargetDll -PathType Leaf) "reparse target DLL retained"
+    $env:APPDATA = $testAppData
+
     $runningHdt = New-TestPortableHdt -Root $testRoot -Name "RunningHdt"
-    $runningPlugins = Join-Path $runningHdt "Plugins"
-    New-Item -ItemType Directory -Path $runningPlugins -Force | Out-Null
-    $runningDll = Join-Path $runningPlugins "BobCoach.dll"
+    $runningDll = Join-Path $plugins "BobCoach.dll"
     New-TestManagedBobCoach -Path $runningDll | Out-Null
     $runningProcess = Start-TestHdtProcess $runningHdt
     try {
-        $runningResult = Invoke-TestPowerShell $uninstaller @("-PluginDirectory", $runningPlugins, "-Confirm:`$false")
+        $runningResult = Invoke-TestPowerShell $uninstaller @("-PluginDirectory", $plugins, "-Confirm:`$false")
         Assert-True ($runningResult.ExitCode -ne 0) "running HDT blocks uninstall"
         Assert-True (Test-Path -LiteralPath $runningDll) "running HDT retains DLL"
     } finally {

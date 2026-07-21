@@ -275,6 +275,7 @@ function Read-ZipContract([string]$Path) {
 }
 
 function Assert-NoTargetArtifacts([string]$PluginDirectory) {
+    if (!(Test-Path -LiteralPath $PluginDirectory -PathType Container)) { return }
     $artifacts = @()
     foreach ($pattern in @("BobCoach.dll", "BobCoach.dll.backup-*", "BobCoach.dll.installing-*")) {
         $artifacts += @(Get-ChildItem -LiteralPath $PluginDirectory -Filter $pattern -Force -ErrorAction Stop)
@@ -338,6 +339,9 @@ function Invoke-ReadOnlyPreflight {
     if ((Test-PathEqual $appData $realAppData) -or (Test-PathWithin $realAppData $appData)) {
         throw "AppDataRoot must not equal or be within real APPDATA"
     }
+    $pluginDirectory = Join-Path (Join-Path $appData "HearthstoneDeckTracker") "Plugins"
+    Assert-NoReparseInExistingChain $pluginDirectory "PluginDirectory"
+    Assert-NoTargetArtifacts $pluginDirectory
     if (Test-Path -LiteralPath $appData) {
         if (!(Test-Path -LiteralPath $appData -PathType Container)) { throw "AppDataRoot must be a directory" }
         if (@(Get-ChildItem -LiteralPath $appData -Force).Count -ne 0) { throw "AppDataRoot must be empty" }
@@ -351,10 +355,6 @@ function Invoke-ReadOnlyPreflight {
     $exePaths = @($candidateExePaths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
     if ($exePaths.Count -ne 1) { throw "HdtDirectory must contain exactly one supported HDT executable" }
     Assert-NoReparseInExistingChain $exePaths[0] "HdtExecutable"
-    $pluginDirectory = Join-Path $hdt "Plugins"
-    if (!(Test-Path -LiteralPath $pluginDirectory -PathType Container)) { throw "HDT Plugins directory missing: $pluginDirectory" }
-    Assert-NoReparseInExistingChain $pluginDirectory "PluginDirectory"
-    Assert-NoTargetArtifacts $pluginDirectory
     Assert-HdtStopped $hdt
 
     $externalHash = Read-ExternalSha256 $sha ([IO.Path]::GetFileName($zip))
@@ -823,6 +823,11 @@ function Invoke-LifecycleExecution($Preflight) {
 
         try {
             $package = Expand-ValidatedPackage $Preflight
+            $hdtAppData = Split-Path -Parent $Preflight.Paths.PluginDirectory
+            [IO.Directory]::CreateDirectory($hdtAppData) | Out-Null
+            Assert-NoReparseDescendants $hdtAppData "HdtAppDataDirectory"
+            [IO.Directory]::CreateDirectory($Preflight.Paths.PluginDirectory) | Out-Null
+            Assert-NoReparseDescendants $Preflight.Paths.PluginDirectory "PluginDirectory"
             $userData = Join-Path $Preflight.Paths.AppData "bob-coach"
             [IO.Directory]::CreateDirectory($userData) | Out-Null
             Assert-NoReparseDescendants $userData "UserData"

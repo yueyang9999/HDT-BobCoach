@@ -41,6 +41,7 @@ try {
 
     foreach ($file in @(
         "test_deterministic_build_and_package.ps1",
+        "test_hdt_plugin_directory_contract.ps1",
         "test_official_hdt_executable_names.ps1",
         "test_offline_installer.ps1",
         "test_offline_uninstaller.ps1",
