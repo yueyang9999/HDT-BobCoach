@@ -4,11 +4,12 @@
 
 Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (HDT) 教练插件。它在本机读取 HDT 已知的对局状态，提供选牌、阵容、站位和战斗决策辅助。
 
-当前版本为 `0.2.0-beta.1`。源码仓库已公开；GitHub Release 和官方安装包尚未发布。请勿将源码、CI 产物或第三方附件视为官方安装包。
+当前公开测试版本为 `0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。
 
 ## 系统要求
 
-- Windows 11 24H2 x64，或兼容性支持的 Windows 10 22H2 x64
+- 已实机验证：Windows 11 24H2 x64
+- 目标兼容环境：Windows 10 22H2 x64（技术兼容，尚未完成专用实机验证）
 - Hearthstone Deck Tracker `1.53.5` x64
 - 系统提供的 .NET Framework 4.8/4.8.1 运行时
 - 标准 Windows 用户权限
@@ -17,9 +18,7 @@ Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (H
 
 ## 安装
 
-以下步骤在 GitHub Release 正式发布后适用；当前没有可供用户安装的官方包。
-
-1. 从 Releases 下载 `BobCoach-0.2.0-beta.1-win-x64.zip` 和 `BobCoach-0.2.0-beta.1-win-x64.zip.sha256`。
+1. 从 [Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 下载同一版本的 `BobCoach-0.2.0-beta.1-win-x64.zip` 和 `BobCoach-0.2.0-beta.1-win-x64.zip.sha256`。
 2. 关闭 HDT。
 3. 核对 ZIP 的 SHA-256，解压到普通本地目录。
 4. 在解压目录运行：

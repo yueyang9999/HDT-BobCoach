@@ -8,7 +8,7 @@
 
 Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.53.5 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
 
-Windows 10 22H2 仅保证技术兼容，微软的常规支持已经结束；同时支持 Windows 11 23H2/24H2 x64。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
+已完成 Windows 11 24H2 x64 + HDT 1.53.5 实机验收。Windows 10 22H2 x64 是目标兼容环境，当前仅确认技术兼容，尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
 
 ## 安装前
 
