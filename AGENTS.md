@@ -11,9 +11,11 @@ This repository contains only the distributable BobCoach plugin for Hearthstone 
 - `tools/build/`: deterministic build and validation tools.
 - `tools/release/`: packaging, manifest, checksum, and release verification tools.
 - `tools/migrate/`: one-time allowlist migration helpers retained for provenance and auditability.
+- `docs/README.md`: Chinese-first documentation index and authority map for users, maintainers, contributors, policy, and historical records.
 - `docs/user/`: installation, upgrade, rollback, uninstall, privacy, and troubleshooting documentation.
 - `docs/maintainer/`: architecture, dependency, build, release, and maintenance documentation.
 - `docs/design/`: approved repository and product design decisions.
+- `docs/superpowers/specs/`: dated, owner-approved design specifications.
 - `docs/superpowers/plans/`: dated implementation plans.
 - `.github/`: GitHub templates, funding links, dependency automation, and CI workflows.
 

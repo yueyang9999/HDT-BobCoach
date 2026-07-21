@@ -9,6 +9,9 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const chineseReadme = read("README.md");
 const englishReadme = read("README.en.md");
 const installGuide = read("docs/user/INSTALL.md");
+const docsIndex = read("docs/README.md");
+const dataSources = read("DATA_SOURCES.md");
+const notice = read("NOTICE");
 const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
 const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
 
@@ -37,5 +40,38 @@ assert.ok(
     "English README must preserve Win10 limitation",
 );
 assert.ok(installGuide.startsWith("# Bob Coach 中文安装教程\n"), "install guide must have a recognizable Chinese title");
+
+assert.ok(chineseReadme.includes("[文档目录](docs/README.md)"), "Chinese README must expose the documentation index");
+assert.ok(englishReadme.includes("[Documentation index](docs/README.md)"), "English README must expose the documentation index");
+
+for (const heading of ["普通用户", "维护者", "贡献者", "政策与合规", "设计与实施历史", "包内文档模板"]) {
+    assert.ok(docsIndex.includes(`## ${heading}`), `documentation index must contain ${heading}`);
+}
+
+for (const link of [
+    "user/INSTALL.md",
+    "maintainer/BUILD.md",
+    "../CONTRIBUTING.md",
+    "../DATA_SOURCES.md",
+    "design/公开产品仓库治理设计_2026-07-20.md",
+    "superpowers/plans/2026-07-21-chinese-download-guidance.md",
+    "../tools/release/README_OFFLINE.md",
+]) {
+    assert.ok(docsIndex.includes(`](${link})`), `documentation index must link ${link}`);
+}
+
+for (const text of [
+    "https://static.zerotoheroes.com/api/bgs/trinket-stats/last-patch/overview-from-hourly.gz.json",
+    "https://api.hearthstonejson.com/v1/<build>/enUS/cards.json",
+    "公开应用许可待书面确认",
+    "当前不接入、不请求、不抓取、不打包、不再分发 HSReplay 数据",
+    "2026-07-21",
+]) {
+    assert.ok(dataSources.includes(text), `data source registry must contain ${text}`);
+}
+
+assert.ok(notice.includes("v0.2.0-beta.1"), "NOTICE must acknowledge the existing public release");
+assert.ok(notice.includes("separate explicit owner authorization"), "NOTICE must require authorization for each future release");
+assert.ok(!notice.includes("GitHub Release publication is not authorized"), "NOTICE must not retain the obsolete release statement");
 
 console.log("PASS public documentation contract");

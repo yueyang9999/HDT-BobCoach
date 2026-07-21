@@ -2,6 +2,8 @@
 
 [中文](README.md) | [English](README.en.md)
 
+[Documentation index](docs/README.md) (Chinese-first, with categorized links to all current documents)
+
 [![CI](https://github.com/yueyang9999/HDT-BobCoach/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yueyang9999/HDT-BobCoach/actions/workflows/ci.yml)
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
