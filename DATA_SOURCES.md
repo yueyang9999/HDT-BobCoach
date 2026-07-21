@@ -32,7 +32,10 @@
 ## 已装备饰品的本地规则
 
 - **来源与输入：** HDT 已知的本机对局状态提供 `GameState.ActiveTrinkets`（精确 `CardId` 列表）；已知饰品只按精确、版本化的本地 `CardId` 规则匹配，不使用报价统计、名称匹配或模糊文本推断。
+- **规则事实版本：** `hdt-1.53.5-hearthdb-2026-07-22`，依据维护者本机 HDT 1.53.5 / HearthDb build 245258 快照审计；仓库和发布包不复制该快照。
+- **当前精确覆盖：** `BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`。
 - **处理边界：** `GameState.ActiveTrinkets` 经本地注册表解析后进入 `EffectiveGameRules`、`FeatureExtractor`、`ActionScoring` 和 `CombatSimulator`，用于确定装备后的费用、合法性、卡牌与阵容价值以及战斗效果。
+- **战斗隔离：** 战斗开始效果只读取对应一方的战团与手牌快照；攻击、生命、类型和位置选择不会跨到对手上下文。
 - **与报价推荐的关系：** 首发不显示饰品报价选择提示，也不让该提示抢占其他推荐；显示开关只控制渲染，不禁用已装备饰品识别和效果计算。
 - **未知效果：** 未知 ID 保守忽略其效果并记录诊断，不根据名称或模糊文本改变规则、费用或评分。
 - **数据与测试：** 这条本地链路不请求或使用 Firestone/Zero to Heroes 统计，不读取历史缓存；规则测试只使用合成状态和本地固定 ID。

@@ -37,6 +37,8 @@ GameState.ActiveTrinkets (exact CardId list)
 
 `GameStateExtractor` 从 HDT 状态取得 `GameState.ActiveTrinkets`（精确 `CardId` 列表），注册表只按精确、版本化的本地 `CardId` 规则解析。硬规则必须在行动枚举和资源计算前进入 `EffectiveGameRules`；协同修正进入特征与行动评分；战斗开始和召唤类效果进入双方隔离的战斗上下文。未知 ID 只记录限频诊断并保守忽略未知效果，不得用名称或模糊文本猜测合法性、费用或评分。
 
+当前 `hdt-1.53.5-hearthdb-2026-07-22` 规则集覆盖 8 个精确 ID：Designer Eyepatch (`BG30_MagicItem_439`)、Cowrie Necklace (`BG35_MagicItem_921`)、Ironforge Anvil (`BG30_MagicItem_403`)、Slamma Sticker (`BG30_MagicItem_540`)、Emerald Dreamcatcher (`BG30_MagicItem_542`)、Stegodon Portrait (`BG35_MagicItem_702`)、Tinyfin Onesie (`BG30_MagicItem_441`) 和 Dramaloc Sticker (`BG35_MagicItem_754`)。`ApplyStartOfCombat(ownerBoard, ownerHand)` 使用修改前快照计算最高属性，并由 `CombatSimulator` 分别传入攻击方和防守方自己的战团与手牌，禁止跨方读取或应用效果。
+
 这条已装备效果链不依赖 Firestone 统计、报价推荐结果或历史缓存，测试只使用合成状态和固定 ID。`TrinketStatsVerifier` 另行保留来源无关的纯校验边界；`TrinketStatsFetcher` 只保留 HearthstoneJSON 的受限通用能力，但生产插件当前没有外部饰品统计运行路径。未来适配器必须重新设计并单独审批。详见根目录的 `PRIVACY.md` 与 `DATA_SOURCES.md`。
 
 ## 目录职责

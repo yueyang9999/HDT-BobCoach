@@ -6,11 +6,15 @@ namespace BobCoach.Engine
     /// <summary>Versioned registry of deterministic local equipped-trinket rules.</summary>
     public sealed class TrinketEffectRegistry
     {
-        public const string RuleSetVersion = "hdt-1.53.5-hearthdb-2026-07-21";
+        public const string RuleSetVersion = "hdt-1.53.5-hearthdb-2026-07-22";
         public const string DesignerEyepatchCardId = "BG30_MagicItem_439";
         public const string CowrieNecklaceCardId = "BG35_MagicItem_921";
         public const string IronforgeAnvilCardId = "BG30_MagicItem_403";
         public const string SlammaStickerCardId = "BG30_MagicItem_540";
+        public const string EmeraldDreamcatcherCardId = "BG30_MagicItem_542";
+        public const string StegodonPortraitCardId = "BG35_MagicItem_702";
+        public const string TinyfinOnesieCardId = "BG30_MagicItem_441";
+        public const string DramalocStickerCardId = "BG35_MagicItem_754";
 
         // Audited against the HDT 1.53.5 HearthDb snapshot. Cowrie's hard cost rule
         // must fail closed: localized text is never used to infer resource changes.
@@ -39,6 +43,7 @@ namespace BobCoach.Engine
             var unknown = new List<string>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             bool eyepatch = false, cowrie = false, anvil = false, slamma = false;
+            bool dreamcatcher = false, stegodon = false, tinyfin = false, dramaloc = false;
 
             foreach (string cardId in activeCardIds)
             {
@@ -49,13 +54,18 @@ namespace BobCoach.Engine
                     case CowrieNecklaceCardId: cowrie = true; resolved.Add(cardId); break;
                     case IronforgeAnvilCardId: anvil = true; resolved.Add(cardId); break;
                     case SlammaStickerCardId: slamma = true; resolved.Add(cardId); break;
+                    case EmeraldDreamcatcherCardId: dreamcatcher = true; resolved.Add(cardId); break;
+                    case StegodonPortraitCardId: stegodon = true; resolved.Add(cardId); break;
+                    case TinyfinOnesieCardId: tinyfin = true; resolved.Add(cardId); break;
+                    case DramalocStickerCardId: dramaloc = true; resolved.Add(cardId); break;
                     default: unknown.Add(cardId); break;
                 }
             }
 
             if (resolved.Count == 0 && unknown.Count == 0) return ActiveTrinketContext.Empty;
             return new ActiveTrinketContext(
-                resolved, unknown, eyepatch, cowrie, anvil, slamma);
+                resolved, unknown, eyepatch, cowrie, anvil, slamma,
+                dreamcatcher, stegodon, tinyfin, dramaloc);
         }
     }
 

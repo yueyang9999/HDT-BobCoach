@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using BobCoach.Engine;
 
@@ -10,6 +11,10 @@ internal static class ActiveTrinketEffectsHarness
     private const string CowrieNecklaceId = "BG35_MagicItem_921";
     private const string IronforgeAnvilId = "BG30_MagicItem_403";
     private const string SlammaStickerId = "BG30_MagicItem_540";
+    private const string EmeraldDreamcatcherId = "BG30_MagicItem_542";
+    private const string StegodonPortraitId = "BG35_MagicItem_702";
+    private const string TinyfinOnesieId = "BG30_MagicItem_441";
+    private const string DramalocStickerId = "BG35_MagicItem_754";
 
     private static int Main()
     {
@@ -17,7 +22,7 @@ internal static class ActiveTrinketEffectsHarness
 
         if (!string.Equals(
             TrinketEffectRegistry.RuleSetVersion,
-            "hdt-1.53.5-hearthdb-2026-07-21",
+            "hdt-1.53.5-hearthdb-2026-07-22",
             StringComparison.Ordinal))
             return Fail("equipped-trinket rules must expose their audited local ruleset version");
         if (TestExactResolutionAndDiagnostics(registry) != 0) return 1;
@@ -27,9 +32,11 @@ internal static class ActiveTrinketEffectsHarness
         if (TestTavernSpellCost(registry) != 0) return 1;
         if (TestSynergyScoring(registry) != 0) return 1;
         if (TestCombatEffectsAndContextIsolation(registry) != 0) return 1;
+        if (TestExpandedStartOfCombatEffects(registry) != 0) return 1;
         if (TestCombatSimulatorContextWiring(registry) != 0) return 1;
         if (TestEyepatchPurchaseGoldenResolution(registry) != 0) return 1;
         if (TestSimulationCopyAndOfferIsolation(registry) != 0) return 1;
+        if (TestProductionExtractionBoundary() != 0) return 1;
 
         Console.WriteLine("PASS active trinket effects are local, exact, and simulation-safe");
         return 0;
@@ -66,12 +73,20 @@ internal static class ActiveTrinketEffectsHarness
         ActiveTrinketContext context = registry.Resolve(new[]
         {
             DesignerEyepatchId,
+            EmeraldDreamcatcherId,
+            StegodonPortraitId,
+            TinyfinOnesieId,
+            DramalocStickerId,
             DesignerEyepatchId.ToLowerInvariant(),
             "UNKNOWN_ACTIVE_TRINKET",
         });
 
-        if (context.ResolvedCardIds.Count != 1
+        if (context.ResolvedCardIds.Count != 5
             || context.ResolvedCardIds[0] != DesignerEyepatchId
+            || !context.ResolvedCardIds.Contains(EmeraldDreamcatcherId)
+            || !context.ResolvedCardIds.Contains(StegodonPortraitId)
+            || !context.ResolvedCardIds.Contains(TinyfinOnesieId)
+            || !context.ResolvedCardIds.Contains(DramalocStickerId)
             || context.UnknownCardIds.Count != 2
             || !context.UnknownCardIds.Contains(DesignerEyepatchId.ToLowerInvariant())
             || !context.UnknownCardIds.Contains("UNKNOWN_ACTIVE_TRINKET"))
@@ -121,19 +136,104 @@ internal static class ActiveTrinketEffectsHarness
 
     private static int TestSynergyScoring(TrinketEffectRegistry registry)
     {
-        var pirate = new MinionData { CardId = "TEST_PIRATE", Tribe = "Pirate" };
+        var pirate = new MinionData { CardId = "TEST_PIRATE", Tribe = "海盗" };
         var beast = new MinionData { CardId = "TEST_BEAST", Tribe = "Beast" };
         var statSpell = new MinionData { CardId = "TEST_STAT_SPELL", IsSpell = true, GrantsStats = true };
         var ordinarySpell = new MinionData { CardId = "TEST_ORDINARY_SPELL", IsSpell = true };
         var typeless = new MinionData { CardId = "TEST_TYPELESS" };
+        var dragon = new MinionData { CardId = "TEST_DRAGON", Tribe = "龙" };
+        var murloc = new MinionData { CardId = "TEST_MURLOC", Tribe = "鱼人" };
 
         if (!HasPositiveTargetOnlyScore(registry.Resolve(new[] { DesignerEyepatchId }), pirate, beast)
             || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { CowrieNecklaceId }), statSpell, ordinarySpell)
             || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { IronforgeAnvilId }), typeless, beast)
-            || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { SlammaStickerId }), beast, pirate))
+            || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { SlammaStickerId }), beast, pirate)
+            || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { EmeraldDreamcatcherId }), dragon, pirate)
+            || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { StegodonPortraitId }), beast, pirate)
+            || !HasPositiveTargetOnlyScore(registry.Resolve(new[] { DramalocStickerId }), murloc, pirate))
             return Fail("each equipped trinket must give positive synergy only to its own target card and board");
 
         return 0;
+    }
+
+    private static int TestExpandedStartOfCombatEffects(TrinketEffectRegistry registry)
+    {
+        var dreamBoard = new List<CombatUnit>
+        {
+            Unit("DREAM_DRAGON_LEFT", 3, 6, "龙"),
+            Unit("DREAM_PIRATE", 12, 4, "Pirate"),
+            Unit("DREAM_DRAGON_RIGHT", 9, 6, "Dragon"),
+        };
+        registry.Resolve(new[] { EmeraldDreamcatcherId })
+            .ApplyStartOfCombat(dreamBoard, new List<MinionData>());
+        if (dreamBoard[0].Attack != 12 || dreamBoard[1].Attack != 12
+            || dreamBoard[2].Attack != 12)
+            return Fail("Dreamcatcher must set only Dragons to the owner's highest board Attack");
+
+        var stegodonBoard = new List<CombatUnit>
+        {
+            Unit("STEGODON_PIRATE", 2, 2, "Pirate"),
+            Unit("STEGODON_BEAST_1", 3, 3, "野兽"),
+            Unit("STEGODON_BEAST_2", 4, 4, "Beast"),
+            Unit("STEGODON_BEAST_3", 5, 5, "Beast"),
+        };
+        registry.Resolve(new[] { StegodonPortraitId })
+            .ApplyStartOfCombat(stegodonBoard, new List<MinionData>());
+        if (stegodonBoard[0].DivineShield || !stegodonBoard[1].DivineShield
+            || !stegodonBoard[2].DivineShield || stegodonBoard[3].DivineShield)
+            return Fail("Stegodon must give Divine Shield to exactly the two left-most Beasts");
+
+        var tinyfinBoard = new List<CombatUnit>
+        {
+            Unit("TINYFIN_LEFT", 2, 3, "Pirate"),
+            Unit("TINYFIN_RIGHT", 8, 8, "Murloc"),
+        };
+        var tinyfinHand = new List<MinionData>
+        {
+            new MinionData { CardId = "HAND_HIGH_HEALTH", Attack = 4, Health = 9 },
+            new MinionData { CardId = "HAND_HIGH_ATTACK", Attack = 10, Health = 5 },
+        };
+        var tinyfin = registry.Resolve(new[] { TinyfinOnesieId });
+        tinyfin.ApplyStartOfCombat(tinyfinBoard, tinyfinHand);
+        if (tinyfinBoard[0].Attack != 6 || tinyfinBoard[0].Health != 12
+            || tinyfinBoard[0].MaxHealth != 12 || tinyfinBoard[1].Attack != 8)
+            return Fail("Tinyfin must add both stats of the owner's highest-Health hand minion to the left-most unit");
+        var noHandBoard = new List<CombatUnit> { Unit("TINYFIN_NO_HAND", 3, 4, "Beast") };
+        tinyfin.ApplyStartOfCombat(noHandBoard, new List<MinionData>());
+        if (noHandBoard[0].Attack != 3 || noHandBoard[0].Health != 4)
+            return Fail("Tinyfin must fail closed when the owner has no hand minion");
+
+        var dramalocBoard = new List<CombatUnit>
+        {
+            Unit("DRAMALOC_MURLOC_1", 2, 3, "鱼人"),
+            Unit("DRAMALOC_PIRATE", 4, 4, "Pirate"),
+            Unit("DRAMALOC_MURLOC_2", 5, 6, "Murloc"),
+        };
+        var dramalocHand = new List<MinionData>
+        {
+            new MinionData { CardId = "HAND_ATTACK_1", Attack = 7, Health = 2 },
+            new MinionData { CardId = "HAND_ATTACK_2", Attack = 3, Health = 20 },
+        };
+        registry.Resolve(new[] { DramalocStickerId })
+            .ApplyStartOfCombat(dramalocBoard, dramalocHand);
+        if (dramalocBoard[0].Attack != 9 || dramalocBoard[1].Attack != 4
+            || dramalocBoard[2].Attack != 12)
+            return Fail("Dramaloc must add the owner's highest hand Attack only to Murlocs");
+
+        return 0;
+    }
+
+    private static CombatUnit Unit(string cardId, int attack, int health, string tribe)
+    {
+        return new CombatUnit
+        {
+            CardId = cardId,
+            Attack = attack,
+            Health = health,
+            MaxHealth = health,
+            Alive = true,
+            MinionTypes = new List<string> { tribe },
+        };
     }
 
     private static bool HasPositiveTargetOnlyScore(
@@ -217,8 +317,58 @@ internal static class ActiveTrinketEffectsHarness
         var attackerResult = simulator.Simulate(attackerTypeless, unbuffedEnemy, anvil, noEffects);
         var defenderResult = simulator.Simulate(unbuffedEnemy, defenderTypeless, noEffects, anvil);
 
-        if (!attackerResult.PlayerWon || defenderResult.PlayerWon)
-            return Fail("CombatSimulator must route Anvil only to the matching attacker or defender context");
+        var tinyfinBoard = new List<MinionData>
+        {
+            new MinionData { CardId = "TEST_TINYFIN_TARGET", Attack = 1, Health = 1, Tier = 1 },
+        };
+        var tinyfinEnemy = new List<MinionData>
+        {
+            new MinionData { CardId = "TEST_TINYFIN_ENEMY", Attack = 5, Health = 5, Tier = 1 },
+        };
+        var tinyfinHand = new List<MinionData>
+        {
+            new MinionData { CardId = "TEST_TINYFIN_HAND", Attack = 10, Health = 10, Tier = 1 },
+        };
+        var tinyfinResult = simulator.Simulate(
+            tinyfinBoard, tinyfinEnemy, playerHand: tinyfinHand,
+            playerTrinkets: registry.Resolve(new[] { TinyfinOnesieId }));
+
+        if (!attackerResult.PlayerWon || defenderResult.PlayerWon || !tinyfinResult.PlayerWon)
+            return Fail("CombatSimulator must route each board and hand only to its owner's trinket context");
+
+        return 0;
+    }
+
+    private static int TestProductionExtractionBoundary()
+    {
+        string sourcePath = Path.Combine(
+            Directory.GetCurrentDirectory(), "src", "BobCoach", "GameStateExtractor.cs");
+        string source = File.ReadAllText(sourcePath);
+        int activeIndex = source.IndexOf(
+            "ExtractActiveTrinkets(entities, state);", StringComparison.Ordinal);
+        int goldIndex = source.IndexOf("TrackGold(state, entities)", StringComparison.Ordinal);
+        if (activeIndex < 0 || goldIndex < 0 || activeIndex >= goldIndex)
+            return Fail("active trinkets must be merged before gold tracking and resource calculation");
+
+        const string exactClassifier = "TrinketEffectRegistry.IsStatGrantingTavernSpell(";
+        int classifierCalls = source.Split(
+            new[] { exactClassifier }, StringSplitOptions.None).Length - 1;
+        if (classifierCalls != 2)
+            return Fail("shop and hand stat-spell classification must share the exact CardId registry");
+
+        int methodStart = source.IndexOf(
+            "private void ExtractActiveTrinkets", StringComparison.Ordinal);
+        int methodEnd = source.IndexOf(
+            "private List<Engine.TrinketOption> ExtractTrinketOffer", StringComparison.Ordinal);
+        if (methodStart < 0 || methodEnd <= methodStart)
+            return Fail("active-trinket extraction method could not be audited");
+        string method = source.Substring(methodStart, methodEnd - methodStart);
+        if (!method.Contains("e.IsBattlegroundsTrinket && e.IsInPlay")
+            || method.Contains("HasLocalTrinketFact")
+            || !method.Contains("UnknownCardIds")
+            || !method.Contains("_unknownTrinketDiagnosticTracker.ShouldReport(cardId)")
+            || !method.Contains("ExtractorLog(\"DIAG ActiveTrinket: unknown CardId=\" + cardId)"))
+            return Fail("unknown equipped CardIds must reach exact once-per-game extractor diagnostics without fact filtering");
 
         return 0;
     }

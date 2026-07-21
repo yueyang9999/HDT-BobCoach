@@ -146,8 +146,8 @@ namespace BobCoach.Engine
             }
 
             // ── Phase 1: 战斗开始时 — 英雄技能优先 → 随从交替左→右 → 饰品 ──
-            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits);
-            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits);
+            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits, ctx.AttackerHand);
+            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits, ctx.DefenderHand);
             PhaseStartOfCombat(atkUnits, defUnits, ctx);
             ctx.ProcessEvents();
 
