@@ -8,6 +8,21 @@ Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (H
 
 当前公开测试版本为 `0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。
 
+## 下载与安装
+
+Windows 10 和 Windows 11 使用同一个 64 位安装包：
+
+| 你的系统 | 下载 | 验证状态 |
+| --- | --- | --- |
+| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 已完成实机验收 |
+| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+
+[下载 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+
+**不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
+
+第一次安装请打开 **[中文安装教程（新手从这里开始）](docs/user/INSTALL.md)**。安装包可以直接解压，但解压后仍需按教程运行 `INSTALL.ps1`，不能只把 ZIP 或 DLL 放进 HDT 目录。
+
 ## 系统要求
 
 - 已实机验证：Windows 11 24H2 x64
@@ -18,18 +33,17 @@ Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (H
 
 插件安装后不需要 Node.js、管理员权限或在线依赖安装。HDT 和 Hearthstone 需要由用户自行合法安装。
 
-## 安装
+## 安装摘要
 
-1. 从 [Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 下载同一版本的 `BobCoach-0.2.0-beta.1-win-x64.zip` 和 `BobCoach-0.2.0-beta.1-win-x64.zip.sha256`。
-2. 关闭 HDT。
-3. 核对 ZIP 的 SHA-256，解压到普通本地目录。
-4. 在解压目录运行：
+1. 关闭 HDT。
+2. 核对 ZIP 的 SHA-256，并完整解压到普通本地目录。
+3. 在解压目录运行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 ```
 
-安装器会验证包内哈希、DLL 版本和 x64 架构，只写入 `%APPDATA%\HearthstoneDeckTracker\Plugins`。HDT 程序目录下的 `Plugins` 不是用户插件安装位置，安装器会拒绝该路径。完整步骤见 [安装说明](docs/user/INSTALL.md)。升级、回滚和卸载分别见 [UPGRADE](docs/user/UPGRADE.md)、[ROLLBACK](docs/user/ROLLBACK.md) 和 [UNINSTALL](docs/user/UNINSTALL.md)。
+安装器会验证包内哈希、DLL 版本和 x64 架构，只写入 `%APPDATA%\HearthstoneDeckTracker\Plugins`。HDT 程序目录下的 `Plugins` 不是用户插件安装位置，安装器会拒绝该路径。看到 `PASS installed` 或 `PASS upgraded` 才表示安装完成。升级、回滚和卸载分别见 [升级教程](docs/user/UPGRADE.md)、[回退教程](docs/user/ROLLBACK.md) 和 [卸载教程](docs/user/UNINSTALL.md)。
 
 ## 隐私与联网
 

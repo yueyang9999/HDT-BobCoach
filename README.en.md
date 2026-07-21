@@ -8,6 +8,21 @@ Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hea
 
 The current public beta is `0.2.0-beta.1`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
 
+## Download and Install
+
+Windows 10 and Windows 11 use the same 64-bit installer package:
+
+| Your system | Download | Validation status |
+| --- | --- | --- |
+| Windows 11 24H2 x64 | [Download Bob Coach 0.2.0-beta.1](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | physically verified |
+| Windows 10 22H2 x64 | [Download the same Bob Coach 0.2.0-beta.1 package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | Technically compatible; not completed dedicated physical validation |
+
+[Download the SHA-256 checksum file](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+
+**Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
+
+First-time users should follow the [Chinese installation guide](docs/user/INSTALL.md). The package can be extracted normally, but installation is not complete until `INSTALL.ps1` has been run as described in the guide.
+
 ## System Requirements
 
 - Verified on physical hardware: Windows 11 24H2 x64
@@ -18,18 +33,17 @@ The current public beta is `0.2.0-beta.1`. Official installers are provided only
 
 After installation, the plugin does not require Node.js, administrator privileges, or online dependency installation. Users must legally install HDT and Hearthstone themselves.
 
-## Installation
+## Installation Summary
 
-1. Download `BobCoach-0.2.0-beta.1-win-x64.zip` and `BobCoach-0.2.0-beta.1-win-x64.zip.sha256` for the same version from [Releases](https://github.com/yueyang9999/HDT-BobCoach/releases).
-2. Close HDT.
-3. Verify the ZIP's SHA-256 and extract it to a normal local directory.
-4. Run the following command from the extracted directory:
+1. Close HDT.
+2. Verify the ZIP's SHA-256 and extract all files to a normal local directory.
+3. Run the following command from the extracted directory:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 ```
 
-The installer verifies package hashes, the DLL version, and the x64 architecture. It writes only to `%APPDATA%\HearthstoneDeckTracker\Plugins`. The `Plugins` directory under the HDT program directory is not the user plugin location and is rejected by the installer. See the [installation guide](docs/user/INSTALL.md) for complete instructions. See [UPGRADE](docs/user/UPGRADE.md), [ROLLBACK](docs/user/ROLLBACK.md), and [UNINSTALL](docs/user/UNINSTALL.md) for the corresponding procedures.
+The installer verifies package hashes, the DLL version, and the x64 architecture. It writes only to `%APPDATA%\HearthstoneDeckTracker\Plugins`. The `Plugins` directory under the HDT program directory is not the user plugin location and is rejected by the installer. Installation is complete only after `PASS installed` or `PASS upgraded` appears. See [UPGRADE](docs/user/UPGRADE.md), [ROLLBACK](docs/user/ROLLBACK.md), and [UNINSTALL](docs/user/UNINSTALL.md) for the corresponding procedures.
 
 ## Privacy and Network Access
 
