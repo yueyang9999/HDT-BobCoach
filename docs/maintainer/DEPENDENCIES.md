@@ -14,7 +14,11 @@
 
 ## 外部事实来源
 
-插件可在严格边界内读取用户本机 HDT/Hearthstone 数据，并可访问两个只读 HTTPS 来源：Firestone/Zero to Heroes 聚合统计和 HearthstoneJSON 精确 Build 事实。它们不作为发布包数据源；请求失败不能影响本地基线，未验证数据不能进入生产评分或 UI 排序。
+当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计，Firestone/Zero to Heroes 只作为历史评估背景。生产插件没有外部饰品统计运行路径，也不读取、不迁移、不删除既有历史缓存。
+
+代码保留来源无关的纯校验器，以及仅允许 HearthstoneJSON 域名的受限通用读取器；它们不是当前生产插件驱动的数据依赖，测试仅使用合成数据。任何未来外部统计适配器必须重新设计并单独审批，且不得影响本地识别、规则与推荐基线。
+
+已装备饰品效果不是外部数据依赖。输入仅来自 HDT 已知的 `ActiveTrinkets` 状态，已知效果按版本化本地 `CardId` 规则处理；未知 ID 保守忽略效果并记录诊断。报价推荐的默认关闭显示开关只控制渲染，不控制已装备效果链。饰品规则测试只使用合成状态和本地固定 ID，不下载或复刻第三方统计。
 
 Hearthstone、HDT、HearthDb、HearthstoneJSON 与 Firestone/Zero to Heroes 的名称、数据和权利不因本仓库 MIT 许可证而重新授权。完整来源和限制见根目录 `DATA_SOURCES.md` 与 `NOTICE`。
 

@@ -6,10 +6,15 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const plugin = fs.readFileSync(path.join(root, "src", "BobCoach", "BobCoachPlugin.cs"), "utf8");
 const project = fs.readFileSync(path.join(root, "src", "BobCoach", "BobCoach.csproj"), "utf8");
+const updater = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "TrinketStatsUpdater.cs"), "utf8");
+const fetcher = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "TrinketStatsFetcher.cs"), "utf8");
+const extractor = fs.readFileSync(path.join(root, "src", "BobCoach", "GameStateExtractor.cs"), "utf8");
 
 const forbiddenPluginPaths = [
     "new NodeEngineBridge(",
-    "_trinketStatsUpdater?.RequestCheck(",
+    "_trinketStatsUpdater",
+    "new Engine.TrinketStatsUpdater(",
+    "SetCurrentBuild(build)",
 ];
 for (const token of forbiddenPluginPaths) {
     if (plugin.includes(token)) {
@@ -39,9 +44,10 @@ for (const source of requiredValidationSources) {
         process.exit(1);
     }
 }
-if (!plugin.includes("new Engine.TrinketStatsUpdater(")
-    || !plugin.includes("_trinketStatsUpdater?.SetCurrentBuild(build)")) {
-    console.error("FAIL production plugin must retain Build-driven external data validation");
+if (!plugin.includes("private const bool TrinketRecommendationsVisible = false;")
+    || !plugin.includes("bool trinketShouldDisplay = TrinketRecommendationsVisible && trinketShouldShow;")
+    || !plugin.includes("if (trinketShouldDisplay)")) {
+    console.error("FAIL trinket recommendations must use one testable default-off display gate");
     process.exit(1);
 }
 if (plugin.includes("_trinketStatsUpdater.Active") || plugin.includes("TrinketStatRecord")) {
@@ -49,7 +55,53 @@ if (plugin.includes("_trinketStatsUpdater.Active") || plugin.includes("TrinketSt
     process.exit(1);
 }
 
-console.log("PASS installable DLL keeps external validation without requiring Node");
+for (const token of [
+    "static.zerotoheroes.com",
+    "overview-from-hourly",
+    "FirestoneUrl",
+    "ParseFirestone",
+    "RequestCheck(",
+    "ScheduleRetry(",
+    "new Timer(",
+    "Task.Run(",
+    "new TrinketStatsStore(",
+    "new TrinketStatsFetcher(",
+]) {
+    if (updater.includes(token)) {
+        console.error(`FAIL disabled statistics coordinator still contains runtime I/O path: ${token}`);
+        process.exit(1);
+    }
+}
+if (!updater.includes("TrinketStatsStatus.SourceUnavailable")
+    || !updater.includes('"no-authorized-external-source"')) {
+    console.error("FAIL disabled statistics coordinator must expose the no-authorized-source state");
+    process.exit(1);
+}
+if (fetcher.includes("static.zerotoheroes.com")
+    || fetcher.includes("trinket-stats-readonly")) {
+    console.error("FAIL generic fetcher still embeds the retired Firestone host or identity");
+    process.exit(1);
+}
+
+console.log("PASS installable DLL preserves isolated validation with no external-stat runtime path");
+
+const extractActiveIndex = extractor.indexOf("ExtractActiveTrinkets(entities, state);");
+const trackGoldIndex = extractor.indexOf("int trackedGold = TrackGold(state, entities);");
+if (extractActiveIndex < 0 || trackGoldIndex < 0 || extractActiveIndex > trackGoldIndex
+    || !extractor.includes("state.ActiveTrinketContext = TrinketEffectResolver.Resolve(")
+    || !extractor.includes("state.EffectiveRules = state.ActiveTrinketContext.ApplyTo(")) {
+    console.error("FAIL equipped-trinket hard rules must be resolved and merged before gold tracking");
+    process.exit(1);
+}
+if (!extractor.includes("e.IsBattlegroundsTrinket && e.IsInPlay && !string.IsNullOrEmpty(e.CardId)")
+    || !extractor.includes("UnknownTrinketDiagnosticTracker")
+    || extractor.includes("StatPairPattern")
+    || extractor.includes("private static bool GrantsStats(")) {
+    console.error("FAIL active trinkets and stat spells must use exact fail-closed local registries with diagnostics");
+    process.exit(1);
+}
+
+console.log("PASS equipped-trinket hard rules are active before resource accounting");
 
 const watcher = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "PowerLogWatcher.cs"), "utf8");
 const logConfigEnsurer = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "LogConfigEnsurer.cs"), "utf8");

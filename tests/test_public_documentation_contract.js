@@ -11,7 +11,10 @@ const englishReadme = read("README.en.md");
 const installGuide = read("docs/user/INSTALL.md");
 const docsIndex = read("docs/README.md");
 const dataSources = read("DATA_SOURCES.md");
+const privacy = read("PRIVACY.md");
 const notice = read("NOTICE");
+const architecture = read("docs/maintainer/ARCHITECTURE.md");
+const dependencies = read("docs/maintainer/DEPENDENCIES.md");
 const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
 const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
 
@@ -61,13 +64,84 @@ for (const link of [
 }
 
 for (const text of [
-    "https://static.zerotoheroes.com/api/bgs/trinket-stats/last-patch/overview-from-hourly.gz.json",
     "https://api.hearthstonejson.com/v1/<build>/enUS/cards.json",
-    "公开应用许可待书面确认",
+    "历史评估背景",
+    "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计",
+    "不读取、不迁移、不删除既有历史缓存",
+    "重新设计并单独审批",
     "当前不接入、不请求、不抓取、不打包、不再分发 HSReplay 数据",
     "2026-07-21",
 ]) {
     assert.ok(dataSources.includes(text), `data source registry must contain ${text}`);
+}
+for (const [name, content] of [
+    ["README.md", chineseReadme],
+    ["README.en.md", englishReadme],
+    ["DATA_SOURCES.md", dataSources],
+    ["PRIVACY.md", privacy],
+    ["NOTICE", notice],
+    ["docs/maintainer/ARCHITECTURE.md", architecture],
+    ["docs/maintainer/DEPENDENCIES.md", dependencies],
+]) {
+    for (const retiredEndpoint of [
+        "static.zerotoheroes.com",
+        "/api/bgs/trinket-stats/last-patch/overview-from-hourly.gz.json",
+    ]) {
+        assert.ok(!content.includes(retiredEndpoint), `${name} must not publish retired Firestone endpoint ${retiredEndpoint}`);
+    }
+}
+
+for (const [name, content, statement] of [
+    ["README.md", chineseReadme, "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计"],
+    ["README.en.md", englishReadme, "does not request, cache, or display Firestone/Zero to Heroes trinket statistics"],
+    ["PRIVACY.md", privacy, "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计"],
+    ["NOTICE", notice, "historical evaluation context"],
+    ["docs/maintainer/ARCHITECTURE.md", architecture, "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计"],
+    ["docs/maintainer/DEPENDENCIES.md", dependencies, "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计"],
+]) {
+    assert.ok(content.includes(statement), `${name} must document the retired Firestone runtime boundary`);
+}
+
+for (const [name, content, statements] of [
+    [
+        "README.md",
+        chineseReadme,
+        ["不显示饰品报价选择提示", "显示开关只控制渲染", "版本化本地 `CardId` 规则"],
+    ],
+    [
+        "README.en.md",
+        englishReadme,
+        ["does not display trinket-offer choice prompts", "display switch controls rendering only", "versioned local `CardId` rules"],
+    ],
+    [
+        "DATA_SOURCES.md",
+        dataSources,
+        ["GameState.ActiveTrinkets", "EffectiveGameRules", "FeatureExtractor", "ActionScoring", "CombatSimulator", "未知 ID", "合成状态"],
+    ],
+    [
+        "PRIVACY.md",
+        privacy,
+        ["`GameState.ActiveTrinkets`", "版本化本地 `CardId` 规则", "只控制渲染"],
+    ],
+    [
+        "NOTICE",
+        notice,
+        ["does not display or prioritize trinket-offer choice", "equipped-trinket effects", "versioned local CardId rules"],
+    ],
+    [
+        "docs/maintainer/ARCHITECTURE.md",
+        architecture,
+        ["GameState.ActiveTrinkets", "TrinketEffectRegistry", "ActiveTrinketContext", "EffectiveGameRules", "FeatureExtractor", "ActionScoring", "CombatSimulator"],
+    ],
+    [
+        "docs/maintainer/DEPENDENCIES.md",
+        dependencies,
+        ["版本化本地 `CardId` 规则", "未知 ID", "合成状态"],
+    ],
+]) {
+    for (const statement of statements) {
+        assert.ok(content.includes(statement), `${name} must document independent equipped-trinket behavior: ${statement}`);
+    }
 }
 
 assert.ok(notice.includes("v0.2.0-beta.1"), "NOTICE must acknowledge the existing public release");

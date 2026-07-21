@@ -884,7 +884,9 @@ namespace BobCoach.Engine
                             oppData?.TavernTier ?? 1,
                             playerHeroCardId: nextState.HeroCardId,
                             opponentHeroCardId: oppData?.HeroCardId,
-                            playerHand: nextState.HandMinions);
+                            playerHand: nextState.HandMinions,
+                            playerTrinkets: nextState.ActiveTrinketContext,
+                            opponentTrinkets: ActiveTrinketContext.Empty);
                         estimatedDamage = combatResult.PlayerWon ? 0 : combatResult.DamageDealtToPlayer;
                     }
                     else
@@ -1635,6 +1637,8 @@ namespace BobCoach.Engine
 
                 // Track1(0709): EffectValue 有界加法项(治VF不读文字效果盲区; 仅随从, 链末端不被放大)
                 score += EffectValueBonus(shopCard, state, dominantTribe);
+                score += (state.ActiveTrinketContext ?? ActiveTrinketContext.Empty)
+                    .GetCardSynergyScore(shopCard);
 
                 ranked.Add(new RankedBuy { Index = i, Score = score });
             }
@@ -1991,6 +1995,8 @@ namespace BobCoach.Engine
 
                 // Track1(0709): EffectValue 有界加法项(治VF不读文字效果盲区; 仅随从, 链末端不被放大)
                 score += EffectValueBonus(shopCard, state, dominantTribe);
+                score += (state.ActiveTrinketContext ?? ActiveTrinketContext.Empty)
+                    .GetCardSynergyScore(shopCard);
 
                 // ── P1 影子: GEV 金币等价值(与VF主Score并行输出, 不改现网) ──
                 // synergy: 主导部落匹配(免锁, 单帧重放也有效) → +1.5。
@@ -2292,7 +2298,10 @@ namespace BobCoach.Engine
             }
 
             // 虚妄神像: 2张即三连 → 对子即可三连, 大幅加分
-            if (!isSpell && rules.GoldenCopyRequirement != 3
+            int goldenRequirement = (state.ActiveTrinketContext
+                ?? rules.ActiveTrinkets ?? ActiveTrinketContext.Empty)
+                .GetGoldenCopyRequirement(shopCard, rules.GoldenCopyRequirement);
+            if (!isSpell && goldenRequirement != 3
                 && TripleRuleEvaluator.CompletesGolden(state, shopCardId, rules))
             {
                 mult *= 2.5;

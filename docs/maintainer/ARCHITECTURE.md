@@ -19,7 +19,25 @@ HDT-BobCoach 是运行在用户已安装 Hearthstone Deck Tracker (HDT) 中的 x
 
 核心决策在本机运行。插件可读取本地 HDT/游戏状态、`Power.log`、`log.config` 和 `%APPDATA%\bob-coach` 的自身数据。写入 `log.config` 必须经过 HDT 内可见的变更预览和明确确认。
 
-已披露的只读 HTTPS 候选校验路径仅限 Firestone/Zero to Heroes 聚合饰品统计及 HearthstoneJSON 精确 Build 事实。请求失败不能阻断本地基线；未验证数据不能进入生产评分或 UI 排序。详见根目录的 `PRIVACY.md` 与 `DATA_SOURCES.md`。
+当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计。`BobCoachPlugin` 不创建或驱动外部饰品统计 updater；无已授权来源时只暴露 `SourceUnavailable` 状态，既有历史缓存不读取、不迁移、不删除。
+
+饰品报价推荐与已装备效果是两条独立调用链。报价候选的识别、本地评估、推荐服务、面板和渲染代码仍保留，但首发不显示报价选择提示，也不让该提示抢占其他推荐；`TrinketRecommendationsVisible` 只控制最终渲染，不得作为已装备效果服务的启停条件。
+
+已装备效果采用来源无关的本地边界：
+
+```text
+GameState.ActiveTrinkets (exact CardId list)
+    -> TrinketEffectRegistry
+    -> ActiveTrinketContext
+        -> EffectiveGameRules
+        -> FeatureExtractor
+        -> ActionScoring
+        -> CombatSimulator
+```
+
+`GameStateExtractor` 从 HDT 状态取得 `GameState.ActiveTrinkets`（精确 `CardId` 列表），注册表只按精确、版本化的本地 `CardId` 规则解析。硬规则必须在行动枚举和资源计算前进入 `EffectiveGameRules`；协同修正进入特征与行动评分；战斗开始和召唤类效果进入双方隔离的战斗上下文。未知 ID 只记录限频诊断并保守忽略未知效果，不得用名称或模糊文本猜测合法性、费用或评分。
+
+这条已装备效果链不依赖 Firestone 统计、报价推荐结果或历史缓存，测试只使用合成状态和固定 ID。`TrinketStatsVerifier` 另行保留来源无关的纯校验边界；`TrinketStatsFetcher` 只保留 HearthstoneJSON 的受限通用能力，但生产插件当前没有外部饰品统计运行路径。未来适配器必须重新设计并单独审批。详见根目录的 `PRIVACY.md` 与 `DATA_SOURCES.md`。
 
 ## 目录职责
 

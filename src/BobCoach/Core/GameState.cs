@@ -84,6 +84,7 @@ namespace BobCoach.Engine
         public string AnomalyId = "";       // 兼容字段: 当前主畸变ID
         public AnomalyContext AnomalyContext = AnomalyContext.Empty;
         public EffectiveGameRules EffectiveRules = EffectiveGameRules.Default;
+        public ActiveTrinketContext ActiveTrinketContext = ActiveTrinketContext.Empty;
         public int PlayerId = 1;
         public int Gold;
         public int MaxGold;
@@ -228,6 +229,7 @@ namespace BobCoach.Engine
         public string CardText = "";  // 卡牌描述文本, 用于顺劈/超杀关键词检测
         public string Tribe = "";  // 单部落或逗号分隔多部落(如"龙,海盗")
         public bool IsSpell;
+        public bool GrantsStats;
         public int Cost = -1; // -1=未知；法术>=0为已解析费用，随从购买价由有效规则计算
 
         /// <summary>部落匹配: 支持逗号分隔多部落字段</summary>

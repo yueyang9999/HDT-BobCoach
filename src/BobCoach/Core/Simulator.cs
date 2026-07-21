@@ -105,11 +105,15 @@ namespace BobCoach.Engine
                     bought.Golden, copyRule.SourceId));
             }
 
-            if (!isSpell && (rules.GoldenCopyRequirement != 3
+            var trinkets = state.ActiveTrinketContext
+                ?? rules.ActiveTrinkets ?? ActiveTrinketContext.Empty;
+            int goldenRequirement = trinkets.GetGoldenCopyRequirement(
+                bought, rules.GoldenCopyRequirement);
+            if (!isSpell && (goldenRequirement != 3
                     || !TripleRuleEvaluator.GrantsStandardDiscover(rules))
                 && TripleRuleEvaluator.CountOwnedCopies(state, bought.CardId)
-                    >= rules.GoldenCopyRequirement)
-                ResolveGoldenOverride(state, bought, rules);
+                    >= goldenRequirement)
+                ResolveGoldenOverride(state, bought, rules, goldenRequirement);
 
             state.FirstPurchaseUsedThisTurn = true;
             if (!isSpell) state.FirstMinionPurchaseUsedThisTurn = true;
@@ -118,9 +122,9 @@ namespace BobCoach.Engine
         }
 
         private static void ResolveGoldenOverride(
-            GameState state, MinionData bought, EffectiveGameRules rules)
+            GameState state, MinionData bought, EffectiveGameRules rules, int requirement)
         {
-            int remaining = rules.GoldenCopyRequirement;
+            int remaining = requirement;
             remaining -= RemoveNormalCopies(state.BoardMinions, bought.CardId, remaining);
             if (remaining > 0)
                 RemoveNormalCopies(state.HandMinions, bought.CardId, remaining);
@@ -387,6 +391,7 @@ namespace BobCoach.Engine
                 AnomalyId = src.AnomalyId,
                 AnomalyContext = src.AnomalyContext ?? AnomalyContext.Empty,
                 EffectiveRules = src.EffectiveRules ?? EffectiveGameRules.Default,
+                ActiveTrinketContext = src.ActiveTrinketContext ?? ActiveTrinketContext.Empty,
                 HeroCardId = src.HeroCardId,
                 HeroName = src.HeroName,
                 HeroPowerCost = src.HeroPowerCost,

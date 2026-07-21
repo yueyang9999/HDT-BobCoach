@@ -36,8 +36,6 @@ namespace BobCoach
         private DecisionMode _decisionMode;
         private Engine.PowerLogWatcher _powerLogWatcher;
         private bool _powerLogEventsSubscribed;
-        private Engine.TrinketStatsUpdater _trinketStatsUpdater;
-
         private bool _inBattlegrounds;
         private bool _engineReady;
         private string _lastStateHash;
@@ -48,6 +46,7 @@ namespace BobCoach
         // 零副作用只读采集T6/T9饰品报价+引擎评分, 为未来B解冻(~300条)积累样本。类初始化读一次, 关时零帧开销。
         private static readonly bool _trinketShadowEnabled =
             Environment.GetEnvironmentVariable("BOBCOACH_TRINKET_SHADOW") == "1";
+        private const bool TrinketRecommendationsVisible = false;
         private string _lastRenderedHash;
         private string _lastRenderedPlanHash;  // 防重复dispatch
         private bool _suggestionsActive;
@@ -210,15 +209,6 @@ namespace BobCoach
                 GameEvents.OnTurnStart.Add(OnTurnStart);
                 GameEvents.OnInMenu.Add(OnInMenu);
 
-                try
-                {
-                    var bobDir = BobCoachDataPaths.Root;
-                    System.IO.Directory.CreateDirectory(bobDir);
-                    _trinketStatsUpdater = new Engine.TrinketStatsUpdater(
-                        System.IO.Path.Combine(bobDir, "data", "trinket-stats"), Log);
-                }
-                catch { }
-
                 Log("BobCoach ready.");
             }
             catch (Exception ex)
@@ -234,7 +224,6 @@ namespace BobCoach
             ClearSuggestions();
             try { UnsubscribePowerLogWatcherEvents(); } catch { }
             try { _powerLogWatcher?.StopWatching(); } catch { }
-            try { _trinketStatsUpdater?.Dispose(); } catch { }
             Log("BobCoach unloaded");
         }
 
@@ -2072,16 +2061,17 @@ namespace BobCoach
                     var trinketPs = _trinketPanelState;
                     bool trinketOfferExists = state.TrinketOffer != null && state.TrinketOffer.Count > 0;
                     bool trinketShouldShow = trinketPs.IsVisible || (trinketOfferExists && trinketPs.Phase == PanelPhase.Idle && state.Turn != _lastTrinketHideTurn);
+                    bool trinketShouldDisplay = TrinketRecommendationsVisible && trinketShouldShow;
                     bool hasTrinketHints = plan.TrinketHints != null && plan.TrinketHints.Count > 0;
 
-                    if (trinketShouldShow != _lastTrinketShowState)
+                    if (trinketShouldDisplay != _lastTrinketShowState)
                     {
                         Log(string.Format("UI Trinket: {0} (phase={1} offer={2} hints={3})",
-                            trinketShouldShow ? "SHOW" : "HIDE", trinketPs.Phase,
+                            trinketShouldDisplay ? "SHOW" : "HIDE", trinketPs.Phase,
                             state.TrinketOffer?.Count ?? 0, hasTrinketHints));
-                        _lastTrinketShowState = trinketShouldShow;
+                        _lastTrinketShowState = trinketShouldDisplay;
                     }
-                    if (trinketShouldShow)
+                    if (trinketShouldDisplay)
                     {
                         if (HasScheduledTrinketPlaceholder(state))
                             _renderer.ShowTrinketLoading(state.Turn == 6 ? "小饰品候选读取中" : "大饰品候选读取中");
@@ -3217,7 +3207,6 @@ namespace BobCoach
             try
             {
                 Log("Current game BuildNumber=" + build);
-                _trinketStatsUpdater?.SetCurrentBuild(build);
             }
             catch (Exception ex) { Log("Build update error: " + ex.Message); }
         }

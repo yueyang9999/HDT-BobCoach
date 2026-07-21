@@ -22,7 +22,6 @@ namespace BobCoach.Engine
     {
         private static readonly HashSet<string> AllowedHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "static.zerotoheroes.com",
             "api.hearthstonejson.com",
         };
 
@@ -36,7 +35,7 @@ namespace BobCoach.Engine
                 AllowAutoRedirect = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
             });
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("BobCoach/0.2 trinket-stats-readonly");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("BobCoach/0.2 external-validation-readonly");
         }
 
         public async Task<ExternalFetchResult> FetchAsync(

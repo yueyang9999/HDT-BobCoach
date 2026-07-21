@@ -14,6 +14,7 @@ namespace BobCoach.Engine
         public string CardId { get; set; }
         public CardEffectCardType CardType { get; set; }
         public string TextZhCn { get; set; }
+        public string TextEnUs { get; set; }
         public IReadOnlyList<int> ScriptData { get; set; }
         public int Attack { get; set; }
         public int Health { get; set; }

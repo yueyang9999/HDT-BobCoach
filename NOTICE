@@ -24,8 +24,17 @@ Runtime relationships
   HearthSim under the MIT License. Bob Coach does not bundle HearthDb.dll.
 - Newtonsoft.Json and other HDT-provided assemblies are runtime dependencies
   supplied by the user's HDT installation and are not bundled by Bob Coach.
-- HearthstoneJSON/hsdata, Gamerhub, and Firestone/Zero to Heroes data remain
-  subject to their own rights and terms. See DATA_SOURCES.md.
+- Firestone/Zero to Heroes is named only as historical evaluation context.
+  The current public build does not request, cache, display, bundle, or
+  redistribute its trinket statistics. Historical user caches are not read,
+  migrated, or deleted. See DATA_SOURCES.md.
+- The initial public build does not display or prioritize trinket-offer choice
+  prompts. Its
+  equipped-trinket effects are original Bob Coach logic driven by HDT match
+  state and versioned local CardId rules, without Firestone statistics.
+- HearthstoneJSON/hsdata and Gamerhub data remain subject to their own rights
+  and terms. The production plugin currently does not drive an external
+  trinket-statistics request path.
 - Bob Coach does not currently integrate with, fetch, scrape, bundle, or
   redistribute HSReplay data. Any future integration requires a separate
   review of the applicable terms and permissions.
