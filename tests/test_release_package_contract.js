@@ -46,10 +46,20 @@ function packageFiles(source, label) {
   return [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
 }
 
+function commandTimeoutDefault(source, label) {
+  const match = source.match(/\[int\]\$CommandTimeoutSeconds\s*=\s*(\d+)/);
+  if (!match) {
+    errors.push(`missing ${label} CommandTimeoutSeconds default`);
+    return null;
+  }
+  return Number.parseInt(match[1], 10);
+}
+
 const installer = read('tools/release/INSTALL.ps1');
 const uninstaller = read('tools/release/UNINSTALL.ps1');
 const builder = read('tools/release/build_offline_package.ps1');
 const lifecycle = read('tools/release/verify_offline_package_lifecycle.ps1');
+const lifecycleConsumerTest = read('tests/test_offline_package_lifecycle_consumer.ps1');
 const readme = read('tools/release/README_OFFLINE.md');
 
 for (const [source, label] of [[installer, 'installer'], [builder, 'builder']]) {
@@ -100,6 +110,14 @@ for (const phase of ['Install', 'Upgrade', 'Rollback', 'Uninstall', 'Reinstall']
   if (!new RegExp(`Invoke-LifecycleStep[^\\r\\n]+\\"${phase}\\"`).test(lifecycle)) {
     errors.push(`missing lifecycle ${phase.toLowerCase()} phase`);
   }
+}
+const lifecycleTimeout = commandTimeoutDefault(lifecycle, 'lifecycle verifier');
+const lifecycleConsumerTimeout = commandTimeoutDefault(lifecycleConsumerTest, 'lifecycle consumer test');
+if (lifecycleTimeout !== null && lifecycleTimeout < 120) {
+  errors.push(`lifecycle verifier timeout must be at least 120 seconds, got ${lifecycleTimeout}`);
+}
+if (lifecycleTimeout !== null && lifecycleConsumerTimeout !== null && lifecycleConsumerTimeout !== lifecycleTimeout) {
+  errors.push(`lifecycle consumer test timeout ${lifecycleConsumerTimeout} must match verifier timeout ${lifecycleTimeout}`);
 }
 for (const token of ['0.2.0-beta.1', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
