@@ -17,9 +17,11 @@
 
 所有用户功能永久免费。任何自愿赞赏都不得解锁功能、提高推荐质量、提供早期访问、移除限制或形成付费支持等级。
 
-未来如配置外部赞赏页面，必须完全自愿、与功能和排名无关、只在游戏和 HDT overlay 外出现，并遵守平台自身的支付、退款、身份和税务规则。当前没有真实赞赏链接，因此不创建 `.github/FUNDING.yml`。
+当前未发布收款地址、收款二维码或真实赞赏链接，因此不创建 `.github/FUNDING.yml`，也不提交占位链接或个人收款码。
 
-赞赏页面只能使用原创 Bob Coach 品牌，不得使用 Blizzard、HearthSim、HDT、Firestone、Zero to Heroes 或 Gamerhub 的 Logo，也不得暗示其背书。
+未来如配置外部赞赏页面，必须完全自愿、与功能和排名无关，并且只在游戏和 HDT overlay 外出现。真实外部赞赏入口发布前，必须单独复核收款主体、隐私展示、链接替换与撤销方式、支付与退款规则，以及身份和税务要求。
+
+赞赏页面只能使用原创 Bob Coach 品牌，不得使用 Blizzard、HearthSim、HDT、Firestone、Zero to Heroes、Gamerhub 或 HSReplay 的 Logo，也不得暗示其背书。
 
 ## 敏感问题
 

@@ -4,7 +4,7 @@ Bob Coach Third-Party Notice
 Bob Coach is an independent, community-developed teaching assistant for
 Hearthstone Battlegrounds. It is not affiliated with, endorsed by, sponsored
 by, or approved by Blizzard Entertainment, HearthSim, Hearthstone Deck
-Tracker, Firestone, Zero to Heroes, or Gamerhub.
+Tracker, Firestone, Zero to Heroes, Gamerhub, or HSReplay.
 
 The root MIT LICENSE applies only to original Bob Coach code and original
 project material for which contributors have the right to grant that license.
@@ -26,6 +26,9 @@ Runtime relationships
   supplied by the user's HDT installation and are not bundled by Bob Coach.
 - HearthstoneJSON/hsdata, Gamerhub, and Firestone/Zero to Heroes data remain
   subject to their own rights and terms. See DATA_SOURCES.md.
+- Bob Coach does not currently integrate with, fetch, scrape, bundle, or
+  redistribute HSReplay data. Any future integration requires a separate
+  review of the applicable terms and permissions.
 
 Release restriction
 -------------------
@@ -39,5 +42,6 @@ authorized. Clean-checkout reproducibility, compatibility,
 artifact validation, third-party review, and explicit owner authorization must
 be complete before any public release, upload, or distribution.
 
-All product names and trademarks are used only to identify compatibility and
-data provenance. No trademark license or endorsement is implied.
+All product names and trademarks are used only to identify compatibility,
+data provenance, or non-use boundaries. No trademark license or endorsement
+is implied.

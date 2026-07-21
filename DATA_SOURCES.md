@@ -17,8 +17,9 @@
 | 用户已安装的 HDT、HearthDb 和 Hearthstone | 运行时宿主、内存中的卡牌/实体事实、本地 `Power.log` 与 `log.config` | 不打包、不上传；用户自行安装和使用 |
 | Firestone / Zero to Heroes | 只读聚合饰品统计候选校验 | HTTPS 运行时请求；不把响应打包或再分发，失败不阻断本地基线 |
 | HearthstoneJSON / HearthSim hsdata | 精确游戏 Build 的运行时事实校验 | HTTPS 运行时请求；不把响应打包或再分发，未验证数据不得进入生产评分或 UI 排序 |
+| HSReplay | 当前未接入 | 不请求、不抓取、不打包、不再分发；未来接入前必须单独复核其条款和许可 |
 
-Hearthstone、HDT、HearthDb、HearthstoneJSON、Firestone/Zero to Heroes 的名称、数据和商标受其各自权利与条款约束。项目不主张关联、赞助或背书。
+Hearthstone、HDT、HearthDb、HearthstoneJSON、Firestone/Zero to Heroes 和 HSReplay 的名称、数据和商标受其各自权利与条款约束。项目不主张与这些第三方存在关联、赞助或背书；列出 HSReplay 仅用于说明当前未使用边界。
 
 ## 维护要求
 
