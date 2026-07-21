@@ -1,12 +1,12 @@
 # 故障排查
 
-GitHub Release 尚未获授权发布。先确认使用的是项目所有者明确授权的完整测试包，或未来已授权的 Release ZIP。
+先确认使用的是本仓库 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供的完整 ZIP，并核对同版本 `.zip.sha256`；源码、CI 产物和第三方附件都不是官方安装包。
 
 ## 安装器提示完整性、清单或哈希失败
 
 - 完全退出 HDT。
 - 确认解压目录是完整包根目录，不要替换、删改或混合其中的文件。
-- 对已授权正式包重新核对 `BobCoach-<version>-win-x64.zip.sha256`，再解压到新目录。
+- 重新核对 Release 提供的 `BobCoach-<version>-win-x64.zip.sha256`，再解压到新目录。
 - 如果 Windows 标记 ZIP 或 DLL 来自其他计算机，先在“属性”中解除锁定，然后重新解压。
 - 不要修改脚本、删除哈希行、关闭安全软件或绕过验证。
 

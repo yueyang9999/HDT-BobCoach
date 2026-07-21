@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Do not attach full Power.log files, replays, account identifiers, tokens, secrets, or unredacted absolute paths. GitHub Releases are not currently authorized; do not report an unauthorized package as an official release.
+        Do not attach full Power.log files, replays, account identifiers, tokens, secrets, or unredacted absolute paths. Official packages come only from this repository's GitHub Releases; source archives, CI artifacts, and third-party attachments are not official packages.
   - type: input
     id: version
     attributes:

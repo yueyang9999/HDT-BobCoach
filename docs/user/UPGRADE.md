@@ -1,6 +1,6 @@
 # 升级
 
-GitHub Release 尚未获授权发布。本流程仅适用于明确授权的测试包或未来授权的正式包。
+新版本只从本仓库 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 下载。不要使用源码、CI 产物或第三方转发文件升级。
 
 1. 完全退出 HDT。
 2. 为新包验证来源和 SHA-256，完整解压，不要从两个版本混合文件。

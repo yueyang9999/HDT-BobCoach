@@ -1,6 +1,6 @@
 # 卸载
 
-GitHub Release 尚未获授权发布。本流程适用于已获授权安装的本地插件。
+本流程适用于从本仓库 GitHub Releases 安装的 Bob Coach。默认卸载保留用户数据和回退备份。
 
 先完全退出 HDT，再运行：
 

@@ -2,9 +2,11 @@
 
 ## 授权边界
 
-源码仓库已公开。GitHub Release 尚未获得授权，维护者不得创建 Release、上传 ZIP、推送包哈希或将 CI 产物宣称为用户可安装版本。
+每个 GitHub Release 都必须针对最终提交和候选工件取得项目所有者的单独明确授权。未获授权时，维护者不得创建 Release、上传 ZIP、推送包哈希或将 CI 产物宣称为用户可安装版本。
 
 ## 发布前条件
+
+先按 [更新版本验证流程](UPDATE_VALIDATION.md) 判定变更等级并完成对应的自动化测试和 Windows VM 矩阵，然后检查：
 
 1. 干净 checkout 完成 restore、Release x64 构建和全部自动化测试。
 2. `tools/build/validate_repository.ps1`、包身份和精确文件白名单检查通过。

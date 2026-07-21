@@ -2,9 +2,9 @@
 
 ## 获取帮助
 
-源码仓库已公开，GitHub Release 尚未获得授权。不要将源码、CI 产物或未经项目所有者明确授权的文件当作官方安装包。
+官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。不要将源码、CI 产物或第三方附件当作官方安装包。
 
-对于已授权测试渠道取得的包，可通过 GitHub Issues 提交最小复现，并提供：
+使用官方 Release 包时，可通过 GitHub Issues 提交最小复现，并提供：
 
 - Bob Coach 提交或版本；
 - Windows 与 HDT 版本；

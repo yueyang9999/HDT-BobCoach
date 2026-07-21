@@ -1,6 +1,6 @@
 # Bob Coach 隐私说明
 
-> 状态：源码仓库已公开。GitHub Release 尚未获得授权，本说明不表示存在可公开安装的发布包。
+> 本说明适用于本仓库 GitHub Releases 提供的 Bob Coach 安装包。源码、CI 产物和第三方附件不属于官方安装包。
 
 ## 概述
 
