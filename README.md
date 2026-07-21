@@ -1,5 +1,7 @@
 # HDT-BobCoach
 
+[中文](README.md) | [English](README.en.md)
+
 [![CI](https://github.com/yueyang9999/HDT-BobCoach/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yueyang9999/HDT-BobCoach/actions/workflows/ci.yml)
 
 Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (HDT) 教练插件。它在本机读取 HDT 已知的对局状态，提供选牌、阵容、站位和战斗决策辅助。
@@ -33,6 +35,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 
 对局、日志、回放和用户画像均保存在本机，不会自动上传。插件存在两个只读外部数据请求，用于校验聚合饰品统计与当前游戏 Build 的卡牌事实；请求失败不会阻断本地推荐，未验证数据不会进入生产评分或 UI 排序。完整边界见 [PRIVACY.md](PRIVACY.md) 和 [DATA_SOURCES.md](DATA_SOURCES.md)。
 
+## 数据来源与第三方权利
+
+当前只读运行时来源为 Firestone/Zero to Heroes 的聚合饰品统计，以及 HearthstoneJSON/HearthSim hsdata 的游戏事实。Bob Coach 当前未接入、请求、抓取、打包或再分发 HSReplay 数据。第三方数据、统计、软件、游戏内容和商标仍受各自权利与条款约束，详见 [DATA_SOURCES.md](DATA_SOURCES.md) 和 [NOTICE](NOTICE)。
+
 ## 构建与测试
 
 仓库不包含 HDT 二进制。构建需要本机安装 .NET Framework 4.7.2 Developer Pack，并提供 HDT `1.53.5` 目录：
@@ -50,12 +56,12 @@ Node.js 只驱动无第三方依赖的合同测试，不属于插件运行时。
 
 ## 支持与赞赏
 
-问题请通过 GitHub Issues 提交最小复现，不要公开上传完整 `Power.log`、回放、账号信息、token 或未脱敏绝对路径。所有用户功能永久免费；赞赏必须完全自愿，不解锁功能，也不会出现在 Hearthstone 或 HDT overlay 内。当前尚未配置真实赞赏链接，详见 [SUPPORT.md](SUPPORT.md)。
+问题请通过 GitHub Issues 提交最小复现，不要公开上传完整 `Power.log`、回放、账号信息、token 或未脱敏绝对路径。所有用户功能永久免费；赞赏必须完全自愿，不解锁功能，也不会出现在 Hearthstone 或 HDT overlay 内。当前未发布收款地址、二维码或真实赞赏链接，详见 [SUPPORT.md](SUPPORT.md)。
 
 ## 免责声明
 
-Bob Coach 是独立社区项目，与 Blizzard Entertainment、HearthSim、HDT、Firestone、Zero to Heroes 或 Gamerhub 无隶属、赞助或背书关系。第三方名称仅用于说明兼容性与数据来源。详见 [NOTICE](NOTICE)。
+Bob Coach 是独立社区项目，与 Blizzard Entertainment、HearthSim、HDT、Firestone、Zero to Heroes、Gamerhub 或 HSReplay 无隶属、赞助或背书关系。第三方名称仅用于说明兼容性、数据来源或未使用边界。详见 [NOTICE](NOTICE)。
 
 ## License
 
-本项目原创代码以 [MIT License](LICENSE) 发布；第三方软件、游戏内容、商标和数据不因本仓库许可证而被重新授权。
+本项目原创代码和有权许可的原创材料以 [MIT License](LICENSE) 发布；第三方软件、数据、统计、游戏内容和商标不因本仓库许可证而被重新授权。
