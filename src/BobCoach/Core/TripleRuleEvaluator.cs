@@ -19,6 +19,12 @@ namespace BobCoach.Engine
             if (string.IsNullOrEmpty(shopCardId)) return false;
             var effectiveRules = rules ?? EffectiveGameRules.Default;
             int requirement = Math.Max(2, effectiveRules.GoldenCopyRequirement);
+            var shopCard = FindCard(state != null ? state.ShopMinions : null, shopCardId)
+                ?? FindCard(state != null ? state.BoardMinions : null, shopCardId)
+                ?? FindCard(state != null ? state.HandMinions : null, shopCardId);
+            var trinkets = state != null && state.ActiveTrinketContext != null
+                ? state.ActiveTrinketContext : effectiveRules.ActiveTrinkets;
+            requirement = trinkets.GetGoldenCopyRequirement(shopCard, requirement);
             return CountOwnedCopies(state, shopCardId) >= requirement - 1;
         }
 
@@ -40,6 +46,15 @@ namespace BobCoach.Engine
                     count++;
             }
             return count;
+        }
+
+        private static MinionData FindCard(IEnumerable<MinionData> cards, string cardId)
+        {
+            if (cards == null) return null;
+            foreach (var card in cards)
+                if (card != null && string.Equals(card.CardId, cardId, StringComparison.Ordinal))
+                    return card;
+            return null;
         }
     }
 }

@@ -2,16 +2,16 @@
 
 ## 当前状态
 
-当前公开测试版本为 `0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。不要把仓库源码、CI 产物或第三方转发文件当作官方安装包。
+当前公开测试版本为 `0.2.0-beta.2`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。不要把仓库源码、CI 产物或第三方转发文件当作官方安装包。
 
 Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 | 你的系统 | 下载 | 验证状态 |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 已完成实机验收 |
-| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.2 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | 已完成实机验收 |
+| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.2 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
 
-[下载 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+[下载 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip.sha256)
 
 **不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
 

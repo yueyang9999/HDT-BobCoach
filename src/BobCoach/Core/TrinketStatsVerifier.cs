@@ -16,10 +16,10 @@ namespace BobCoach.Engine
                 return Reject(TrinketStatsStatus.BuildMismatch, "exact-build-hsjson-unavailable", candidate);
             if (candidate.GameBuild != context.CurrentBuild)
                 return Reject(TrinketStatsStatus.BuildMismatch, "candidate-build-mismatch", candidate);
-            if (!string.Equals(candidate.Source, "firestone", StringComparison.OrdinalIgnoreCase))
-                return Reject(TrinketStatsStatus.Quarantined, "source-not-firestone", candidate);
-            if (!string.Equals(candidate.TimePeriod, "last-patch", StringComparison.Ordinal))
-                return Reject(TrinketStatsStatus.Quarantined, "time-period-not-last-patch", candidate);
+            if (string.IsNullOrWhiteSpace(candidate.Source))
+                return Reject(TrinketStatsStatus.Quarantined, "source-missing", candidate);
+            if (string.IsNullOrWhiteSpace(candidate.TimePeriod))
+                return Reject(TrinketStatsStatus.Quarantined, "time-period-missing", candidate);
             if (candidate.LastUpdateDateUtc == DateTime.MinValue)
                 return Reject(TrinketStatsStatus.Quarantined, "last-update-missing", candidate);
 

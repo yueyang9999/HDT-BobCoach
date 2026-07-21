@@ -8,7 +8,7 @@
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
 
-The current public beta is `0.2.0-beta.1`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
+The current public beta is `0.2.0-beta.2`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
 
 ## Download and Install
 
@@ -16,10 +16,10 @@ Windows 10 and Windows 11 use the same 64-bit installer package:
 
 | Your system | Download | Validation status |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [Download Bob Coach 0.2.0-beta.1](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | physically verified |
-| Windows 10 22H2 x64 | [Download the same Bob Coach 0.2.0-beta.1 package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | Technically compatible; not completed dedicated physical validation |
+| Windows 11 24H2 x64 | [Download Bob Coach 0.2.0-beta.2](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | physically verified |
+| Windows 10 22H2 x64 | [Download the same Bob Coach 0.2.0-beta.2 package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | Technically compatible; not completed dedicated physical validation |
 
-[Download the SHA-256 checksum file](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+[Download the SHA-256 checksum file](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip.sha256)
 
 **Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
 
@@ -49,11 +49,11 @@ The installer verifies package hashes, the DLL version, and the x64 architecture
 
 ## Privacy and Network Access
 
-Matches, logs, replays, and user profiles remain on the local computer and are not uploaded automatically. The plugin makes two read-only external data requests to validate aggregate trinket statistics and card facts for the current game build. Request failures do not block local recommendations, and unverified data does not enter production scoring or UI ordering. See [PRIVACY.md](PRIVACY.md) and [DATA_SOURCES.md](DATA_SOURCES.md) for the complete boundaries.
+Matches, logs, replays, and user profiles remain on the local computer and are not uploaded automatically. The current public build does not request, cache, or display Firestone/Zero to Heroes trinket statistics, and it does not read, migrate, or delete historical caches that an earlier build may have left behind. The initial release does not display trinket-offer choice prompts or let them preempt other recommendations; the display switch controls rendering only. After the player equips a trinket, Bob Coach still recognizes it from HDT match state and applies deterministic effects through versioned local `CardId` rules to later buy, sell, refresh, tavern-upgrade, composition, and combat decisions. See [PRIVACY.md](PRIVACY.md) and [DATA_SOURCES.md](DATA_SOURCES.md) for the complete boundaries.
 
 ## Data Sources and Third-Party Rights
 
-The current read-only runtime sources are aggregate trinket statistics from Firestone/Zero to Heroes and game facts from HearthstoneJSON/HearthSim hsdata. Bob Coach does not currently integrate, request, scrape, package, or redistribute HSReplay data. Third-party data, statistics, software, game content, and trademarks remain subject to their respective rights and terms. See [DATA_SOURCES.md](DATA_SOURCES.md) and [NOTICE](NOTICE).
+Firestone/Zero to Heroes is retained only as historical evaluation context, not as a current runtime data source. The code retains source-independent validation and a restricted HearthstoneJSON/HearthSim hsdata adapter boundary, but the production plugin does not drive an external trinket-statistics request path. Bob Coach does not currently integrate, request, scrape, package, or redistribute HSReplay data. Third-party data, statistics, software, game content, and trademarks remain subject to their respective rights and terms. See [DATA_SOURCES.md](DATA_SOURCES.md) and [NOTICE](NOTICE).
 
 ## Build and Test
 

@@ -37,7 +37,12 @@ namespace BobCoach.Engine
         {
             if (state == null || card == null) return int.MaxValue;
             if (card.IsSpell)
-                return card.Cost >= 0 ? card.Cost : int.MaxValue;
+            {
+                int baseCost = card.Cost >= 0 ? card.Cost : int.MaxValue;
+                var trinkets = state.ActiveTrinketContext
+                    ?? (rules != null ? rules.ActiveTrinkets : ActiveTrinketContext.Empty);
+                return trinkets.AdjustPurchaseCost(card, baseCost);
+            }
             if (card.Tier <= 0) return int.MaxValue;
 
             rules = rules ?? EffectiveGameRules.Default;

@@ -46,7 +46,29 @@ namespace BobCoach.Engine
         public CombatResult Simulate(List<MinionData> playerBoard, List<MinionData> opponentBoard,
             int playerTier = 1, int opponentTier = 1, int turn = 1, int alivePlayerCount = 8,
             string playerHeroCardId = null, string opponentHeroCardId = null,
-            List<MinionData> playerHand = null, List<MinionData> opponentHand = null)
+            List<MinionData> playerHand = null, List<MinionData> opponentHand = null,
+            ActiveTrinketContext playerTrinkets = null, ActiveTrinketContext opponentTrinkets = null)
+        {
+            return SimulateCore(playerBoard, opponentBoard, playerTier, opponentTier, turn,
+                alivePlayerCount, playerHeroCardId, opponentHeroCardId, playerHand, opponentHand,
+                playerTrinkets ?? ActiveTrinketContext.Empty,
+                opponentTrinkets ?? ActiveTrinketContext.Empty);
+        }
+
+        /// <summary>Simulates combat with local equipped effects isolated by owner.</summary>
+        public CombatResult Simulate(List<MinionData> playerBoard, List<MinionData> opponentBoard,
+            ActiveTrinketContext playerTrinkets, ActiveTrinketContext opponentTrinkets)
+        {
+            return SimulateCore(playerBoard, opponentBoard, 1, 1, 1, 8, null, null, null, null,
+                playerTrinkets ?? ActiveTrinketContext.Empty,
+                opponentTrinkets ?? ActiveTrinketContext.Empty);
+        }
+
+        private CombatResult SimulateCore(List<MinionData> playerBoard, List<MinionData> opponentBoard,
+            int playerTier, int opponentTier, int turn, int alivePlayerCount,
+            string playerHeroCardId, string opponentHeroCardId,
+            List<MinionData> playerHand, List<MinionData> opponentHand,
+            ActiveTrinketContext playerTrinkets, ActiveTrinketContext opponentTrinkets)
         {
             var result = new CombatResult();
 
@@ -69,7 +91,8 @@ namespace BobCoach.Engine
             var defUnits = BuildUnits(opponentBoard);
 
             // ── 构建战斗上下文(事件队列+辅助方法) ──
-            var ctx = new CombatContext(atkUnits, defUnits, _rng, playerHand, opponentHand);
+            var ctx = new CombatContext(atkUnits, defUnits, _rng, playerHand, opponentHand,
+                playerTrinkets, opponentTrinkets);
 
             // 注入英雄技能处理器
             if (!string.IsNullOrEmpty(playerHeroCardId))
@@ -579,6 +602,10 @@ namespace BobCoach.Engine
             }
 
             // Phase 1e: 饰品战斗效果
+            // Equipped trinkets resolve after hero, board, and hand start-of-combat effects.
+            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits, ctx.AttackerHand);
+            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits, ctx.DefenderHand);
+
             if (ctx.AttackerTrinketHandlers != null)
             {
                 foreach (var handler in ctx.AttackerTrinketHandlers)

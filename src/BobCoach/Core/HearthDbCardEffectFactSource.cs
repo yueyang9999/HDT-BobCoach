@@ -30,6 +30,7 @@ namespace BobCoach.Engine
                     CardId = cardId,
                     CardType = type,
                     TextZhCn = card.GetLocText(HearthDb.Enums.Locale.zhCN) ?? "",
+                    TextEnUs = card.GetLocText(HearthDb.Enums.Locale.enUS) ?? "",
                     ScriptData = Array.AsReadOnly(new[]
                     {
                         card.Entity.GetTag(HearthDb.Enums.GameTag.TAG_SCRIPT_DATA_NUM_1),

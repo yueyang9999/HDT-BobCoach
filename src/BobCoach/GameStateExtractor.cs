@@ -44,6 +44,8 @@ namespace BobCoach
             new SecondHeroPowerDiscoverTracker();
         private readonly TeammateGoldTransferTracker _teammateGoldTransferTracker =
             new TeammateGoldTransferTracker();
+        private readonly UnknownTrinketDiagnosticTracker _unknownTrinketDiagnosticTracker =
+            new UnknownTrinketDiagnosticTracker();
 
         // 英雄技能引擎引用 — 用于正确判断Passive/Active
         private HeroPowerEngine _heroPowerEngine;
@@ -236,6 +238,7 @@ namespace BobCoach
             _sharedCardVoteTracker.Reset();
             _secondHeroPowerDiscoverTracker.Reset();
             _teammateGoldTransferTracker.Reset();
+            _unknownTrinketDiagnosticTracker.Reset();
             _prevTavernTier = 0;
             _prevHandIdsForGold = null;
             _prevShopIdsForGold = null;
@@ -515,6 +518,10 @@ namespace BobCoach
                     state.Opponents).ToList();
                 state.ShopMinions = ExtractShopMinions(entities, turn);
 
+                // Equipped effects are independent from quote recommendations and must be merged
+                // before resource tracking so hard cost rules affect observed purchases.
+                ExtractActiveTrinkets(entities, state);
+
                 // 金币: 必须在 ShopMinions/BoardMinions 赋值之后计算 —— TrackGold 的购买/升本/售出
                 // 检测依赖 state.ShopMinions.Count / state.BoardMinions.Count。此前 TrackGold 在它们
                 // 赋值前调用, 读到的恒为空 List → 购买检测从不触发 → 升本/买怪不扣费、gold 卡死
@@ -542,7 +549,6 @@ namespace BobCoach
                 state.FreeRefreshCount = CountFreeRefresh(entities);
                 state.HeroOptions = ExtractHeroOptions(entities, turn);
                 state.TrinketOffer = ExtractTrinketOffer(entities, turn);
-                state.ActiveTrinkets = _equippedTrinketIds.ToList();
                 UpdateTimewarpedNewRecruitState(entities, state);
                 state.ReplenishingShopActive = HasReplenishingShopEffect(state);
                 // 构建已知实体ID集合供发现提取排除
@@ -1154,6 +1160,7 @@ namespace BobCoach
                     Venomous = e.HasTag(GameTag.VENOMOUS),
                     Tribe = string.Join(",", GetTribes(e)),
                     IsSpell = isSpell,
+				GrantsStats = isSpell && TrinketEffectRegistry.IsStatGrantingTavernSpell(e.CardId),
                     Cost = cost,
                     IsFrozen = e.HasTag(GameTag.UNTOUCHABLE),
                 });
@@ -1254,6 +1261,7 @@ namespace BobCoach
                 Venomous = e.HasTag(GameTag.VENOMOUS),
                 Tribe = tribes.Count > 0 ? string.Join(",", tribes) : "",
                 IsSpell = isSpell,
+                GrantsStats = isSpell && TrinketEffectRegistry.IsStatGrantingTavernSpell(e.CardId),
                 Cost = cost,
                 IsFrozen = e.HasTag(GameTag.UNTOUCHABLE) || e.HasTag(GameTag.CANT_BE_TARGETED_BY_ABILITIES)
                     || e.HasTag(GameTag.DORMANT) || e.HasTag(GameTag.CANT_PLAY)
@@ -1300,16 +1308,26 @@ namespace BobCoach
         public int TrinketRoundResolvedTurn { get { return _trinketRoundResolvedTurn; } }
         private HashSet<string> _equippedTrinketIds = new HashSet<string>(); // 已装备(inPlay)饰品CardId — 可靠的completed来源
 
-        private List<Engine.TrinketOption> ExtractTrinketOffer(List<Entity> entities, int turn)
+        private void ExtractActiveTrinkets(List<Entity> entities, Engine.GameState state)
         {
-            // 每帧先记录已装备(inPlay)饰品CardId — 这是可靠的"已选完"信号。
-            // (旧逻辑bug: completed靠NewRound时offer集合提取, 含null→过滤恒失效; 已装备饰品inPlay的CardId才是确定的)
             foreach (var e in entities)
             {
-                if (e.IsBattlegroundsTrinket && e.IsInPlay && HasLocalTrinketFact(e.CardId))
+                if (e.IsBattlegroundsTrinket && e.IsInPlay && !string.IsNullOrEmpty(e.CardId))
                     _equippedTrinketIds.Add(e.CardId);
             }
 
+            state.ActiveTrinkets = _equippedTrinketIds.ToList();
+            state.ActiveTrinketContext = TrinketEffectResolver.Resolve(state.ActiveTrinkets);
+            foreach (string cardId in state.ActiveTrinketContext.UnknownCardIds)
+            {
+                if (_unknownTrinketDiagnosticTracker.ShouldReport(cardId))
+                    ExtractorLog("DIAG ActiveTrinket: unknown CardId=" + cardId);
+            }
+            state.EffectiveRules = state.ActiveTrinketContext.ApplyTo(state.EffectiveRules);
+        }
+
+        private List<Engine.TrinketOption> ExtractTrinketOffer(List<Entity> entities, int turn)
+        {
             int offerCount = entities.Count(e => e.IsBattlegroundsTrinket && !e.IsInHand && !e.IsInPlay
                 && HasLocalTrinketFact(e.CardId) && !_equippedTrinketIds.Contains(e.CardId));
 

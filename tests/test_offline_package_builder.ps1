@@ -23,7 +23,7 @@ if ([string]::IsNullOrWhiteSpace($hdtDirectory)) {
 $testRoot = Join-Path $env:TEMP ("bobcoach-offline-builder-test-" + [Guid]::NewGuid().ToString("N"))
 Assert-SafeTestRoot $testRoot
 
-$packageName = "BobCoach-0.2.0-beta.1-win-x64"
+$packageName = "BobCoach-0.2.0-beta.2-win-x64"
 $zipName = "$packageName.zip"
 $previewPackageName = "BobCoach-0.2.0-beta.1-current-season-preview-20260719-win-x64"
 $previewZipName = "$previewPackageName.zip"
@@ -59,10 +59,10 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
 
     $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PackageRoot "manifest.json") | ConvertFrom-Json
     Assert-Equal 1 ([int]$manifest.schemaVersion) "manifest schema"
-    Assert-Equal "0.2.0-beta.1" ([string]$manifest.packageVersion) "manifest package version"
+    Assert-Equal "0.2.0-beta.2" ([string]$manifest.packageVersion) "manifest package version"
     Assert-Equal "0.2.0.0" ([string]$manifest.assemblyVersion) "manifest assembly version"
     Assert-Equal "0.2.0.0" ([string]$manifest.fileVersion) "manifest file version"
-    Assert-Equal "0.2.0-beta.1" ([string]$manifest.informationalVersion) "manifest informational version"
+    Assert-Equal "0.2.0-beta.2" ([string]$manifest.informationalVersion) "manifest informational version"
     Assert-Equal ".NETFramework,Version=v4.7.2" ([string]$manifest.targetFramework) "manifest framework"
     Assert-Equal "win-x64" ([string]$manifest.runtimeIdentifier) "manifest RID"
     Assert-ExactStrings $expectedFiles @($manifest.files) "manifest files"
@@ -172,6 +172,17 @@ try {
         "-ApprovedCandidateSha256", $approvedCandidateSha256
     )
     Assert-True ($mixedPreviewApprovedBuild.ExitCode -ne 0) "preview and approved candidate modes rejected"
+
+    $retiredPreviewBuild = Invoke-TestPowerShell $builder @(
+        "-HdtDirectory", $hdtDirectory,
+        "-OutputDirectory", $outputDirectory,
+        "-CurrentSeasonPreview",
+        "-CandidateDllPath", $approvedCandidateDll
+    )
+    Assert-True ($retiredPreviewBuild.ExitCode -ne 0) "beta.2 preview build rejected"
+    Assert-True ((@($retiredPreviewBuild.Output) -join "`n").Contains(
+        "CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts"
+    )) "beta.2 preview rejection explains historical boundary"
 
     $wrongApprovedHash = "0" * 64
     $wrongApprovedBuild = Invoke-TestPowerShell $builder @(

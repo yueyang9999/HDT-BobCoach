@@ -53,7 +53,8 @@ namespace BobCoach.Engine
             int? sharedTimewarpMarkBudget,
             bool carryTimewarpMarksToGreater,
             IList<string> sourceIds,
-            IList<string> conflicts)
+            IList<string> conflicts,
+            ActiveTrinketContext activeTrinkets = null)
         {
             MinionPurchaseCostOverride = minionPurchaseCostOverride;
             FirstMinionPurchaseCost = firstMinionPurchaseCost;
@@ -91,6 +92,7 @@ namespace BobCoach.Engine
             CarryTimewarpMarksToGreater = carryTimewarpMarksToGreater;
             _sourceIds = new ReadOnlyCollection<string>(new List<string>(sourceIds ?? new string[0]));
             _conflicts = new ReadOnlyCollection<string>(new List<string>(conflicts ?? new string[0]));
+            ActiveTrinkets = activeTrinkets ?? ActiveTrinketContext.Empty;
         }
 
         public int? MinionPurchaseCostOverride { get; private set; }
@@ -130,6 +132,22 @@ namespace BobCoach.Engine
         public bool CarryTimewarpMarksToGreater { get; private set; }
         public IList<string> SourceIds { get { return _sourceIds; } }
         public IList<string> Conflicts { get { return _conflicts; } }
+        public ActiveTrinketContext ActiveTrinkets { get; private set; }
         public static EffectiveGameRules Default { get { return DefaultRules; } }
+
+        internal EffectiveGameRules WithActiveTrinkets(ActiveTrinketContext context)
+        {
+            return new EffectiveGameRules(
+                MinionPurchaseCostOverride, FirstMinionPurchaseCost, ManualRefreshAllowed,
+                RefreshCostOverride, RefreshAfterPurchase, MaxTavernTier, GoldenCopyRequirement,
+                GoldenRewardOverride, StartArmorDelta, FirstPurchaseExtraCopy, UpgradePrize,
+                PortalInBottleAtTurnStart, SharedYoggWheel, SharedCardVote, CardPoolRules.BuddyPool,
+                AllHeroesOverride, SecondHeroPowerDiscover, TeammateGoldTransfer,
+                StartResourceExpectations, ScheduledGrants, SecondaryHeroPowers, TimewarpVisits,
+                TimewarpOfferRules, TimewarpPoolMergeRules, UnscheduledRandomTimewarpVisitCount,
+                LesserTimewarpEnabled, TimewarpMarkDelta, SharedTimewarpMarkBudget,
+                CarryTimewarpMarksToGreater, SourceIds, Conflicts,
+                context ?? ActiveTrinketContext.Empty);
+        }
     }
 }

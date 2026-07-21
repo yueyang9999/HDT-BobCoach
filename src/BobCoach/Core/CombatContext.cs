@@ -103,9 +103,13 @@ namespace BobCoach.Engine
         // 手牌随从（供START_OF_COMBAT等效果查询/召唤）
         public List<MinionData> AttackerHand = new List<MinionData>();
         public List<MinionData> DefenderHand = new List<MinionData>();
+        public ActiveTrinketContext AttackerTrinkets { get; private set; }
+        public ActiveTrinketContext DefenderTrinkets { get; private set; }
 
         public CombatContext(List<CombatUnit> atkUnits, List<CombatUnit> defUnits, Random rng,
-            List<MinionData> attackerHand = null, List<MinionData> defenderHand = null)
+            List<MinionData> attackerHand = null, List<MinionData> defenderHand = null,
+            ActiveTrinketContext attackerTrinkets = null,
+            ActiveTrinketContext defenderTrinkets = null)
         {
             AttackerSide = atkUnits;
             DefenderSide = defUnits;
@@ -114,6 +118,8 @@ namespace BobCoach.Engine
             DeathCount = 0;
             AttackerHand = attackerHand ?? new List<MinionData>();
             DefenderHand = defenderHand ?? new List<MinionData>();
+            AttackerTrinkets = attackerTrinkets ?? ActiveTrinketContext.Empty;
+            DefenderTrinkets = defenderTrinkets ?? ActiveTrinketContext.Empty;
 
             // 初始化allUnits引用
             foreach (var u in atkUnits) AllUnits.Add(u);
@@ -188,6 +194,10 @@ namespace BobCoach.Engine
             }
 
             side.Insert(insertPos, token);
+            if (ReferenceEquals(side, AttackerSide))
+                AttackerTrinkets.ApplySummon(token);
+            else if (ReferenceEquals(side, DefenderSide))
+                DefenderTrinkets.ApplySummon(token);
             token.Position = insertPos;
             AllUnits.Add(token);
             LastSummoned = token;
@@ -332,6 +342,7 @@ namespace BobCoach.Engine
             if (unit.Reborn && !unit.RebornUsed)
             {
                 var capturedUnit = unit;
+                var capturedRebornSide = deathSide;
                 EventQueue.Push(new CombatEvent
                 {
                     Type = "REBORN",
@@ -341,6 +352,7 @@ namespace BobCoach.Engine
                         if (!capturedUnit.Alive && capturedUnit.Reborn && !capturedUnit.RebornUsed)
                         {
                             capturedUnit.Alive = true;
+                            capturedUnit.Attack = capturedUnit.BaseAttack;
                             capturedUnit.Health = 1;
                             capturedUnit.MaxHealth = 1;
                             capturedUnit.RebornUsed = true;
@@ -348,6 +360,15 @@ namespace BobCoach.Engine
                             capturedUnit.Taunt = false;
                             capturedUnit.Stealthed = false;
                             capturedUnit.WindfuryAttacksLeft = capturedUnit.MegaWindfury ? 4 : 1;
+                            capturedUnit.DeathrattleTriggered = false;
+                            capturedUnit.AvengeTriggered = false;
+                            capturedUnit.DeathCountWitnessed = 0;
+                            capturedUnit.KilledBy = null;
+
+                            if (ReferenceEquals(capturedRebornSide, AttackerSide))
+                                AttackerTrinkets.ApplySummon(capturedUnit);
+                            else if (ReferenceEquals(capturedRebornSide, DefenderSide))
+                                DefenderTrinkets.ApplySummon(capturedUnit);
                         }
                     },
                     Data = new Dictionary<string, object> { { "cardId", unit.CardId } }

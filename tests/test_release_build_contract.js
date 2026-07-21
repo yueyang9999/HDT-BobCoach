@@ -42,9 +42,9 @@ const compileItems = [...project.matchAll(/<Compile Include="([^"]+)"/g)]
 const compileDigest = crypto.createHash("sha256")
     .update(`${compileItems.join("\n")}\n`, "utf8")
     .digest("hex");
-assert.strictEqual(compileItems.length, 168, "unexpected compile item count");
+assert.strictEqual(compileItems.length, 171, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "e322984e4301ba5b99123090316273220b59fdc0c1043aa362cf015047f15623",
+    "7b728d39f8c72182a8179bbc6784276ea89f991cad98f648b05609784472d259",
     "compile set changed");
 
 for (const token of [

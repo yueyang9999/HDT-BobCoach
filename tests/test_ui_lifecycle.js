@@ -379,23 +379,45 @@ function warn(name, msg) {
             return "Dispatcher定时器未消费Power.log评估请求 — 标志仍只能等待不保证到来的HDT OnUpdate";
     });
 
-    test("[0713][Deploy] 正式DLL保留外部校验但不接管评分UI", () => {
-        const build = readFile("src/BobCoach/build_vs.ps1");
+    test("[0713][Deploy] 正式DLL保留隔离校验但不创建外部统计运行路径", () => {
+        const build = readFile("tools/build/build_release.ps1");
         const project = readFile("src/BobCoach/BobCoach.csproj");
         const plugin = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const updater = readFile("src/BobCoach/Core/TrinketStatsUpdater.cs");
         for (const name of ["TrinketStatsModels.cs", "TrinketStatsVerifier.cs", "TrinketStatsFetcher.cs", "TrinketStatsStore.cs", "TrinketStatsUpdater.cs"]) {
             if (!project.includes(`<Compile Include="Core\\${name}"`))
                 return "正式DLL漏编译外部校验模块: " + name;
         }
-        if (!plugin.includes("new Engine.TrinketStatsUpdater(")
-            || !plugin.includes("_trinketStatsUpdater?.SetCurrentBuild(build)"))
-            return "生产插件未保留Build驱动的外部数据校验链";
+        if (plugin.includes("_trinketStatsUpdater")
+            || plugin.includes("new Engine.TrinketStatsUpdater(")
+            || plugin.includes("SetCurrentBuild(build)"))
+            return "生产插件仍创建或驱动外部饰品统计更新器";
         if (plugin.includes("_trinketStatsUpdater.Active") || plugin.includes("TrinketStatRecord"))
             return "外部校验数据已越界接入生产评分/UI";
+        for (const token of ["FirestoneUrl", "ParseFirestone", "RequestCheck(", "ScheduleRetry(", "new Timer(", "Task.Run(", "new TrinketStatsStore(", "new TrinketStatsFetcher("]) {
+            if (updater.includes(token))
+                return "禁用协调器仍包含联网、缓存、解析或重试入口: " + token;
+        }
         for (const token of ["hdt-bridge.js", 'Join-Path $repoRoot "simulation"', 'Join-Path $repoRoot "data"']) {
             if (build.includes(token))
                 return "正式构建仍部署非DLL运行内容: " + token;
         }
+    });
+
+    test("[0721][TrinketUI] 饰品本地链路保留但显示经单一默认关闭开关", () => {
+        const plugin = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!plugin.includes("private const bool TrinketRecommendationsVisible = false;"))
+            return "缺少单一、可测试且默认关闭的饰品推荐显示开关";
+        if (!plugin.includes("_engine.EvaluateTrinkets(state)"))
+            return "饰品本地评估链被删除";
+        if (!plugin.includes("OnPowerLogTrinketChoiceActive"))
+            return "饰品候选识别生命周期被删除";
+        if (!plugin.includes("bool trinketShouldDisplay = TrinketRecommendationsVisible && trinketShouldShow;")
+            || !plugin.includes("if (trinketShouldDisplay)"))
+            return "最终饰品 UI 输出未使用默认关闭开关";
+        if (!plugin.includes("_renderer.ShowTrinketHints(plan.TrinketHints)")
+            || !plugin.includes("_renderer.ClearTrinketHints()"))
+            return "饰品渲染实现未完整保留";
     });
 
     test("[07071603] EntityChoices 分发用原始 line + 入口正则去前缀 (ExtractContent 剥前缀根因)", () => {

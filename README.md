@@ -8,7 +8,7 @@
 
 Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (HDT) 教练插件。它在本机读取 HDT 已知的对局状态，提供选牌、阵容、站位和战斗决策辅助。
 
-当前公开测试版本为 `0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。
+当前公开测试版本为 `0.2.0-beta.2`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。
 
 ## 下载与安装
 
@@ -16,10 +16,10 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 | 你的系统 | 下载 | 验证状态 |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 已完成实机验收 |
-| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.2 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | 已完成实机验收 |
+| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.2 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
 
-[下载 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+[下载 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip.sha256)
 
 **不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
 
@@ -49,11 +49,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 
 ## 隐私与联网
 
-对局、日志、回放和用户画像均保存在本机，不会自动上传。插件存在两个只读外部数据请求，用于校验聚合饰品统计与当前游戏 Build 的卡牌事实；请求失败不会阻断本地推荐，未验证数据不会进入生产评分或 UI 排序。完整边界见 [PRIVACY.md](PRIVACY.md) 和 [DATA_SOURCES.md](DATA_SOURCES.md)。
+对局、日志、回放和用户画像均保存在本机，不会自动上传。当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计，也不读取、不迁移、不删除早期版本可能留下的历史缓存。首发不显示饰品报价选择提示，也不让该提示抢占其他推荐；这个显示开关只控制渲染。玩家装备饰品后，Bob Coach 仍从 HDT 对局状态识别饰品，并通过版本化本地 `CardId` 规则将确定性效果用于之后的购买、出售、刷新、升本、阵容和战斗决策。当前本地规则集覆盖 8 个精确 CardId，包括费用、金色合成、召唤协同和战斗开始效果；未知 ID 保守忽略效果。完整边界见 [PRIVACY.md](PRIVACY.md) 和 [DATA_SOURCES.md](DATA_SOURCES.md)。
 
 ## 数据来源与第三方权利
 
-当前只读运行时来源为 Firestone/Zero to Heroes 的聚合饰品统计，以及 HearthstoneJSON/HearthSim hsdata 的游戏事实。Bob Coach 当前未接入、请求、抓取、打包或再分发 HSReplay 数据。第三方数据、统计、软件、游戏内容和商标仍受各自权利与条款约束，详见 [DATA_SOURCES.md](DATA_SOURCES.md) 和 [NOTICE](NOTICE)。
+Firestone/Zero to Heroes 仅作为历史评估背景记录，不是当前运行时数据来源。代码保留来源无关的外部数据校验能力和 HearthstoneJSON/HearthSim hsdata 的受限适配边界，但生产插件当前不驱动外部饰品统计请求。Bob Coach 当前未接入、请求、抓取、打包或再分发 HSReplay 数据。第三方数据、统计、软件、游戏内容和商标仍受各自权利与条款约束，详见 [DATA_SOURCES.md](DATA_SOURCES.md) 和 [NOTICE](NOTICE)。
 
 ## 构建与测试
 

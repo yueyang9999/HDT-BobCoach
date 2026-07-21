@@ -121,6 +121,9 @@ namespace BobCoach.Engine
                 f[F_BOARD_POWER] = ComputeBoardPowerEarly(state.BoardMinions);
             else
                 f[F_BOARD_POWER] = ComputeBoardPower(state.BoardMinions);
+            f[F_BOARD_POWER] += (float)Math.Min(1.0,
+                (state.ActiveTrinketContext ?? ActiveTrinketContext.Empty)
+                    .GetBoardSynergyScore(state.BoardMinions));
             f[F_HAND_POWER] = ComputeBoardPower(state.HandMinions) * 0.6f;  // 手牌不在场上, 战力打折
             f[F_HAS_TRIPLE] = HasTripleReady(state) ? 1f : 0f;
             f[F_TRIPLE_REWARD] = ComputeTripleProbability(state);
@@ -277,9 +280,9 @@ namespace BobCoach.Engine
         {
             if (state.BoardMinions == null || state.HandMinions == null) return false;
             var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
-            int oneAway = Math.Max(1, rules.GoldenCopyRequirement - 1);
             foreach (var cardId in GetOwnedNormalCardIds(state))
-                if (TripleRuleEvaluator.CountOwnedCopies(state, cardId) >= oneAway)
+                if (TripleRuleEvaluator.CountOwnedCopies(state, cardId) >=
+                    GetGoldenCopyRequirement(state, cardId, rules) - 1)
                     return true;
             return false;
         }
@@ -366,10 +369,10 @@ namespace BobCoach.Engine
         {
             if (state.BoardMinions == null || state.HandMinions == null) return 0f;
             var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
-            int oneAway = Math.Max(1, rules.GoldenCopyRequirement - 1);
             int candidates = 0;
             foreach (var cardId in GetOwnedNormalCardIds(state))
-                if (TripleRuleEvaluator.CountOwnedCopies(state, cardId) >= oneAway)
+                if (TripleRuleEvaluator.CountOwnedCopies(state, cardId) >=
+                    GetGoldenCopyRequirement(state, cardId, rules) - 1)
                     candidates++;
             return Math.Min(1f, candidates / 3f);
         }
@@ -379,13 +382,13 @@ namespace BobCoach.Engine
             if (_probCalc == null) return 0f;
             if (state.BoardMinions == null || state.HandMinions == null) return 0f;
             var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
-            int oneAway = Math.Max(1, rules.GoldenCopyRequirement - 1);
             // B13修复: 遍历所有差一张合金候选，取最高概率
             float bestProb = 0f;
             int budget = state.Gold;
             foreach (var cardId in GetOwnedNormalCardIds(state))
             {
-                if (TripleRuleEvaluator.CountOwnedCopies(state, cardId) >= oneAway)
+                if (TripleRuleEvaluator.CountOwnedCopies(state, cardId) >=
+                    GetGoldenCopyRequirement(state, cardId, rules) - 1)
                 {
                     float prob = (float)_probCalc.ProbCompleteTripleThisTurn(state, cardId, budget);
                     if (prob > bestProb) bestProb = prob;
@@ -407,6 +410,24 @@ namespace BobCoach.Engine
                     if (card != null && !card.Golden && !card.IsSpell
                         && !string.IsNullOrEmpty(card.CardId)) ids.Add(card.CardId);
             return ids;
+        }
+
+        private static int GetGoldenCopyRequirement(
+            GameState state, string cardId, EffectiveGameRules rules)
+        {
+            MinionData card = FindOwnedCard(state, cardId);
+            var trinkets = state.ActiveTrinketContext
+                ?? rules.ActiveTrinkets ?? ActiveTrinketContext.Empty;
+            return trinkets.GetGoldenCopyRequirement(card, rules.GoldenCopyRequirement);
+        }
+
+        private static MinionData FindOwnedCard(GameState state, string cardId)
+        {
+            foreach (var card in state.BoardMinions)
+                if (card != null && card.CardId == cardId) return card;
+            foreach (var card in state.HandMinions)
+                if (card != null && card.CardId == cardId) return card;
+            return null;
         }
 
         private float ComputeLevelDiff(GameState state)

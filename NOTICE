@@ -24,8 +24,20 @@ Runtime relationships
   HearthSim under the MIT License. Bob Coach does not bundle HearthDb.dll.
 - Newtonsoft.Json and other HDT-provided assemblies are runtime dependencies
   supplied by the user's HDT installation and are not bundled by Bob Coach.
-- HearthstoneJSON/hsdata, Gamerhub, and Firestone/Zero to Heroes data remain
-  subject to their own rights and terms. See DATA_SOURCES.md.
+- Firestone/Zero to Heroes is named only as historical evaluation context.
+  The current public build does not request, cache, display, bundle, or
+  redistribute its trinket statistics. Historical user caches are not read,
+  migrated, or deleted. See DATA_SOURCES.md.
+- The initial public build does not display or prioritize trinket-offer choice
+  prompts. Its
+  equipped-trinket effects are original Bob Coach logic driven by HDT match
+  state and versioned local CardId rules, without Firestone statistics. The
+  `hdt-1.53.5-hearthdb-2026-07-22` ruleset covers eight exact CardIds audited
+  against a maintainer-provided HearthDb snapshot; that snapshot is not copied
+  into the repository or release package, and tests use synthetic state only.
+- HearthstoneJSON/hsdata and Gamerhub data remain subject to their own rights
+  and terms. The production plugin currently does not drive an external
+  trinket-statistics request path.
 - Bob Coach does not currently integrate with, fetch, scrape, bundle, or
   redistribute HSReplay data. Any future integration requires a separate
   review of the applicable terms and permissions.
@@ -37,10 +49,10 @@ The formal plugin DLL contains no JSON data resources. Historical datasets,
 raw third-party responses, development reports, logs, replays, profiles, and
 user-local HearthDb content are excluded from the offline package.
 
-The source repository is public and v0.2.0-beta.1 has been published as a
-GitHub Release. Every future GitHub Release, upload, or public distribution
-still requires separate explicit owner authorization after the applicable
-validation and third-party review are complete.
+The source repository is public. v0.2.0-beta.1 is the historical public beta,
+and v0.2.0-beta.2 is the current release line. Every GitHub Release, upload,
+or public distribution still requires separate explicit owner authorization
+after the applicable validation and third-party review are complete.
 
 All product names and trademarks are used only to identify compatibility,
 data provenance, or non-use boundaries. No trademark license or endorsement
