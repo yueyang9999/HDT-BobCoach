@@ -9,7 +9,7 @@ namespace BobCoach.Engine
     {
         internal static readonly ActiveTrinketContext Empty = new ActiveTrinketContext(
             new List<string>(), new List<string>(), false, false, false, false,
-            false, false, false, false);
+            false, false, false, false, false, false, false, false, false, false, false);
 
         private readonly bool _designerEyepatch;
         private readonly bool _cowrieNecklace;
@@ -19,6 +19,13 @@ namespace BobCoach.Engine
         private readonly bool _stegodonPortrait;
         private readonly bool _tinyfinOnesie;
         private readonly bool _dramalocSticker;
+        private readonly bool _eternalPortrait;
+        private readonly bool _rivendarePortrait;
+        private readonly bool _holyMallet;
+        private readonly bool _trainingCertificate;
+        private readonly bool _valorousMedallion;
+        private readonly bool _greaterValorousMedallion;
+        private readonly bool _balefulIncense;
 
         internal ActiveTrinketContext(
             IList<string> resolvedCardIds,
@@ -30,7 +37,14 @@ namespace BobCoach.Engine
             bool emeraldDreamcatcher,
             bool stegodonPortrait,
             bool tinyfinOnesie,
-            bool dramalocSticker)
+            bool dramalocSticker,
+            bool eternalPortrait,
+            bool rivendarePortrait,
+            bool holyMallet,
+            bool trainingCertificate,
+            bool valorousMedallion,
+            bool greaterValorousMedallion,
+            bool balefulIncense)
         {
             ResolvedCardIds = new ReadOnlyCollection<string>(
                 new List<string>(resolvedCardIds ?? new List<string>()));
@@ -44,6 +58,13 @@ namespace BobCoach.Engine
             _stegodonPortrait = stegodonPortrait;
             _tinyfinOnesie = tinyfinOnesie;
             _dramalocSticker = dramalocSticker;
+            _eternalPortrait = eternalPortrait;
+            _rivendarePortrait = rivendarePortrait;
+            _holyMallet = holyMallet;
+            _trainingCertificate = trainingCertificate;
+            _valorousMedallion = valorousMedallion;
+            _greaterValorousMedallion = greaterValorousMedallion;
+            _balefulIncense = balefulIncense;
         }
 
         public ReadOnlyCollection<string> ResolvedCardIds { get; private set; }
@@ -174,6 +195,125 @@ namespace BobCoach.Engine
                     if (HasMinionType(unit, "Murloc", "鱼人")) unit.Attack += highestHandAttack;
                 }
             }
+
+            if (_eternalPortrait)
+            {
+                foreach (var unit in ownerBoard)
+                {
+                    if (!HasExactCardId(unit, "BG25_008", "BG25_008_G")) continue;
+                    unit.Taunt = true;
+                    unit.Reborn = true;
+                }
+            }
+
+            if (_rivendarePortrait)
+            {
+                foreach (var unit in ownerBoard)
+                {
+                    if (!HasExactCardId(unit, "BG25_354", "BG25_354_G")) continue;
+                    unit.Health *= 2;
+                    unit.MaxHealth *= 2;
+                }
+            }
+
+            if (_holyMallet)
+            {
+                CombatUnit left = FirstUnit(ownerBoard);
+                CombatUnit right = LastUnit(ownerBoard);
+                if (left != null) left.DivineShield = true;
+                if (right != null && !ReferenceEquals(left, right)) right.DivineShield = true;
+            }
+
+            if (_trainingCertificate)
+            {
+                int first = -1;
+                int second = -1;
+                for (int i = 0; i < ownerBoard.Count; i++)
+                {
+                    CombatUnit unit = ownerBoard[i];
+                    if (unit == null) continue;
+                    if (first < 0 || unit.Attack < ownerBoard[first].Attack)
+                    {
+                        second = first;
+                        first = i;
+                    }
+                    else if (second < 0 || unit.Attack < ownerBoard[second].Attack)
+                    {
+                        second = i;
+                    }
+                }
+                DoubleStats(first >= 0 ? ownerBoard[first] : null);
+                DoubleStats(second >= 0 ? ownerBoard[second] : null);
+            }
+
+            if (_valorousMedallion || _greaterValorousMedallion)
+            {
+                int statGain = (_valorousMedallion ? 2 : 0)
+                    + (_greaterValorousMedallion ? 6 : 0);
+                foreach (var unit in ownerBoard) AddStats(unit, statGain, statGain);
+            }
+
+            if (_balefulIncense)
+            {
+                CombatUnit leftUndead = FirstMinionType(ownerBoard, "Undead", "亡灵");
+                CombatUnit rightUndead = LastMinionType(ownerBoard, "Undead", "亡灵");
+                if (leftUndead != null) leftUndead.Reborn = true;
+                if (rightUndead != null && !ReferenceEquals(leftUndead, rightUndead))
+                    rightUndead.Reborn = true;
+            }
+        }
+
+        private static bool HasExactCardId(CombatUnit unit, string normalCardId, string goldenCardId)
+        {
+            return unit != null
+                && (string.Equals(unit.CardId, normalCardId, StringComparison.Ordinal)
+                    || string.Equals(unit.CardId, goldenCardId, StringComparison.Ordinal));
+        }
+
+        private static CombatUnit FirstUnit(IList<CombatUnit> board)
+        {
+            for (int i = 0; i < board.Count; i++)
+                if (board[i] != null) return board[i];
+            return null;
+        }
+
+        private static CombatUnit LastUnit(IList<CombatUnit> board)
+        {
+            for (int i = board.Count - 1; i >= 0; i--)
+                if (board[i] != null) return board[i];
+            return null;
+        }
+
+        private static CombatUnit FirstMinionType(
+            IList<CombatUnit> board, string english, string chinese)
+        {
+            for (int i = 0; i < board.Count; i++)
+                if (HasMinionType(board[i], english, chinese)) return board[i];
+            return null;
+        }
+
+        private static CombatUnit LastMinionType(
+            IList<CombatUnit> board, string english, string chinese)
+        {
+            for (int i = board.Count - 1; i >= 0; i--)
+                if (HasMinionType(board[i], english, chinese)) return board[i];
+            return null;
+        }
+
+        private static void DoubleStats(CombatUnit unit)
+        {
+            if (unit == null) return;
+            unit.Attack *= 2;
+            unit.Health *= 2;
+            unit.MaxHealth *= 2;
+        }
+
+        private static void AddStats(CombatUnit unit, int attack, int health)
+        {
+            if (unit == null) return;
+            unit.Attack += attack;
+            unit.Health += health;
+            unit.MaxHealth += health;
         }
 
         private static bool HasTribe(string tribeField, string english, string chinese)

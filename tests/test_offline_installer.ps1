@@ -150,7 +150,7 @@ try {
             $env:APPDATA = $previousAppData
         }
     } finally {
-        if (!$runningProcess.HasExited) { Stop-Process -Id $runningProcess.Id -Force }
+        Stop-TestHdtProcess $runningProcess
     }
 
     Write-Host "PASS offline installer install, integrity, upgrade, rollback, and HDT process contracts"

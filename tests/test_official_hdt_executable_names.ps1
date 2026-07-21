@@ -343,7 +343,7 @@ try {
         Assert-True ($runningUninstall.ExitCode -ne 0) "running official HDT blocks uninstall"
         Assert-True (Test-Path -LiteralPath (Join-Path $runningPlugins "BobCoach.dll") -PathType Leaf) "running official HDT uninstall writes nothing"
     } finally {
-        if (!$runningProcess.HasExited) { Stop-Process -Id $runningProcess.Id -Force }
+        Stop-TestHdtProcess $runningProcess
     }
 
     Write-Host "PASS installer WhatIf, readonly lifecycle, failure recovery, AppData path, and process contracts"

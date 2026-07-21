@@ -100,8 +100,18 @@ function Start-TestHdtProcess(
         if ($null -ne $live -and $live.ProcessName -eq $expectedProcessName) { return $process }
         Start-Sleep -Milliseconds 100
     }
-    if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
+    Stop-TestHdtProcess $process
     throw "Test HDT process did not start"
+}
+
+function Stop-TestHdtProcess([Diagnostics.Process]$Process) {
+    if ($null -eq $Process) { return }
+    if (!$Process.HasExited) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction Stop
+    }
+    if (!$Process.WaitForExit(5000)) {
+        throw "Test HDT process did not stop within 5 seconds: $($Process.Id)"
+    }
 }
 
 function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
