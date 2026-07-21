@@ -8,7 +8,7 @@
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
 
-The current public beta is `0.2.0-beta.1`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
+The current public beta is `0.2.0-beta.2`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
 
 ## Download and Install
 
@@ -16,10 +16,10 @@ Windows 10 and Windows 11 use the same 64-bit installer package:
 
 | Your system | Download | Validation status |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [Download Bob Coach 0.2.0-beta.1](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | physically verified |
-| Windows 10 22H2 x64 | [Download the same Bob Coach 0.2.0-beta.1 package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | Technically compatible; not completed dedicated physical validation |
+| Windows 11 24H2 x64 | [Download Bob Coach 0.2.0-beta.2](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | physically verified |
+| Windows 10 22H2 x64 | [Download the same Bob Coach 0.2.0-beta.2 package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | Technically compatible; not completed dedicated physical validation |
 
-[Download the SHA-256 checksum file](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+[Download the SHA-256 checksum file](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip.sha256)
 
 **Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
 

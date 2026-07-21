@@ -87,6 +87,7 @@ for (const [token, label] of [
   ['SHA256SUMS.txt', 'builder package hashes'],
   ['$zipPath.sha256', 'builder external ZIP hash'],
   ['Get-PluginFacts $stagedPluginPath', 'builder staged DLL validation'],
+  ['CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts', 'builder retired preview gate'],
 ]) requireText(builder, token, label);
 
 forbid(installer, /Invoke-WebRequest|Start-BitsTransfer|WebClient|HttpClient/i, 'installer network access');
@@ -101,7 +102,7 @@ for (const phase of ['Install', 'Upgrade', 'Rollback', 'Uninstall', 'Reinstall']
     errors.push(`missing lifecycle ${phase.toLowerCase()} phase`);
   }
 }
-for (const token of ['0.2.0-beta.1', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
+for (const token of ['0.2.0-beta.2', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
 

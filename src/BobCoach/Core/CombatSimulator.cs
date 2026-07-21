@@ -146,8 +146,6 @@ namespace BobCoach.Engine
             }
 
             // ── Phase 1: 战斗开始时 — 英雄技能优先 → 随从交替左→右 → 饰品 ──
-            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits, ctx.AttackerHand);
-            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits, ctx.DefenderHand);
             PhaseStartOfCombat(atkUnits, defUnits, ctx);
             ctx.ProcessEvents();
 
@@ -604,6 +602,10 @@ namespace BobCoach.Engine
             }
 
             // Phase 1e: 饰品战斗效果
+            // Equipped trinkets resolve after hero, board, and hand start-of-combat effects.
+            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits, ctx.AttackerHand);
+            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits, ctx.DefenderHand);
+
             if (ctx.AttackerTrinketHandlers != null)
             {
                 foreach (var handler in ctx.AttackerTrinketHandlers)

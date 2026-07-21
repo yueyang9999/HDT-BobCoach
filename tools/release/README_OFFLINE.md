@@ -1,9 +1,9 @@
-# Bob教练 HDT 插件 0.2.0-beta.1
+# Bob教练 HDT 插件 0.2.0-beta.2
 
 {{PREVIEW_NOTICE}}
 > `CURRENT SEASON PREVIEW / NOT FINAL BETA / NOT A FORMAL RELEASE`
 >
-> 本包是当前赛季抢先验证版，不是最终 Beta，不可冒充正式版。它只供受控的普通用户安装和当前赛季真实对局验证，不代表完整 P0 发布矩阵已经通过，也不得未经授权上传或公开发布。
+> 本段仅适用于历史 `0.2.0-beta.1` 当前赛季抢先验证包；该包不是最终 Beta，不可冒充正式版。它只供受控的普通用户安装和当前赛季真实对局验证，不代表完整 P0 发布矩阵已经通过，也不得未经授权上传或公开发布。
 {{/PREVIEW_NOTICE}}
 
 Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.53.5 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
@@ -31,13 +31,13 @@ Get-FileHash .\BobCoach-0.2.0-beta.1-current-season-preview-20260719-win-x64.zip
 3. 如果 ZIP 或 DLL 的“属性”窗口显示“此文件来自其他计算机，可能被阻止”，先对原始 ZIP 选择“解除锁定”，再重新解压。也可以在 ZIP 所在目录运行：
 
 ```powershell
-Unblock-File -LiteralPath .\BobCoach-0.2.0-beta.1-win-x64.zip
+Unblock-File -LiteralPath .\BobCoach-0.2.0-beta.2-win-x64.zip
 ```
 
 可在 PowerShell 中核对下载 ZIP 的 SHA-256：
 
 ```powershell
-Get-FileHash .\BobCoach-0.2.0-beta.1-win-x64.zip -Algorithm SHA256
+Get-FileHash .\BobCoach-0.2.0-beta.2-win-x64.zip -Algorithm SHA256
 ```
 
 结果应与随 ZIP 提供的同名 `.zip.sha256` 文件一致。

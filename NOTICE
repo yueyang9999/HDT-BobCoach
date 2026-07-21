@@ -49,10 +49,10 @@ The formal plugin DLL contains no JSON data resources. Historical datasets,
 raw third-party responses, development reports, logs, replays, profiles, and
 user-local HearthDb content are excluded from the offline package.
 
-The source repository is public and v0.2.0-beta.1 has been published as a
-GitHub Release. Every future GitHub Release, upload, or public distribution
-still requires separate explicit owner authorization after the applicable
-validation and third-party review are complete.
+The source repository is public. v0.2.0-beta.1 is the historical public beta,
+and v0.2.0-beta.2 is the current release line. Every GitHub Release, upload,
+or public distribution still requires separate explicit owner authorization
+after the applicable validation and third-party review are complete.
 
 All product names and trademarks are used only to identify compatibility,
 data provenance, or non-use boundaries. No trademark license or endorsement

@@ -34,6 +34,8 @@ internal static class ActiveTrinketEffectsHarness
         if (TestCombatEffectsAndContextIsolation(registry) != 0) return 1;
         if (TestExpandedStartOfCombatEffects(registry) != 0) return 1;
         if (TestCombatSimulatorContextWiring(registry) != 0) return 1;
+        if (TestRebornUsesOwnerSummonEffects(registry) != 0) return 1;
+        if (TestCombatSimulatorStartOfCombatOrdering(registry) != 0) return 1;
         if (TestEyepatchPurchaseGoldenResolution(registry) != 0) return 1;
         if (TestSimulationCopyAndOfferIsolation(registry) != 0) return 1;
         if (TestProductionExtractionBoundary() != 0) return 1;
@@ -335,6 +337,105 @@ internal static class ActiveTrinketEffectsHarness
 
         if (!attackerResult.PlayerWon || defenderResult.PlayerWon || !tinyfinResult.PlayerWon)
             return Fail("CombatSimulator must route each board and hand only to its owner's trinket context");
+
+        return 0;
+    }
+
+    private static int TestCombatSimulatorStartOfCombatOrdering(TrinketEffectRegistry registry)
+    {
+        var playerBoard = new List<MinionData>
+        {
+            new MinionData
+            {
+                CardId = "BG25_040", Attack = 9, Health = 1, Tier = 1, Tribe = "龙",
+            },
+            new MinionData
+            {
+                CardId = "TEST_ORDER_TYPELESS", Attack = 10, Health = 1, Tier = 1,
+            },
+        };
+        var opponentBoard = new List<MinionData>
+        {
+            new MinionData
+            {
+                CardId = "TEST_ORDER_OPPONENT", Attack = 20, Health = 12, Tier = 1,
+            },
+        };
+
+        var result = new CombatSimulator().Simulate(
+            playerBoard, opponentBoard,
+            registry.Resolve(new[] { EmeraldDreamcatcherId }),
+            registry.Resolve(new string[0]));
+
+        if (result.PlayerWon || result.PlayerSurvivors != 0 || result.OpponentSurvivors != 0)
+            return Fail("equipped trinket start-of-combat effects must resolve after minion effects");
+
+        return 0;
+    }
+
+    private static int TestRebornUsesOwnerSummonEffects(TrinketEffectRegistry registry)
+    {
+        var slamma = registry.Resolve(new[] { SlammaStickerId });
+        var rebornBeast = new CombatUnit
+        {
+            CardId = "TEST_REBORN_BEAST",
+            Attack = 12,
+            BaseAttack = 4,
+            Health = 0,
+            MaxHealth = 12,
+            BaseHealth = 1,
+            Alive = false,
+            Reborn = true,
+            DivineShield = true,
+            Taunt = true,
+            Stealthed = true,
+            WindfuryAttacksLeft = 0,
+            DeathrattleTriggered = true,
+            AvengeTriggered = true,
+            KilledBy = new CombatUnit(),
+            MinionTypes = new List<string> { "Beast" },
+        };
+        var context = new CombatContext(
+            new List<CombatUnit> { rebornBeast },
+            new List<CombatUnit> { Unit("TEST_REBORN_OPPONENT", 1, 1, "Pirate") },
+            new Random(1), attackerTrinkets: slamma);
+        context.OnDeath(rebornBeast);
+        context.ProcessEvents();
+
+        var playerBoard = new List<MinionData>
+        {
+            new MinionData
+            {
+                CardId = "TEST_REBORN_COMBAT_BEAST", Attack = 4, Health = 1,
+                Tier = 1, Tribe = "Beast", Reborn = true,
+            },
+            new MinionData
+            {
+                CardId = "TEST_REBORN_SUPPORT", Attack = 0, Health = 100,
+                Tier = 1, Taunt = true,
+            },
+        };
+        var opponentBoard = new List<MinionData>
+        {
+            new MinionData
+            {
+                CardId = "TEST_REBORN_COMBAT_OPPONENT", Attack = 1, Health = 9, Tier = 1,
+            },
+        };
+        var simulator = new CombatSimulator();
+        var withSlamma = simulator.Simulate(
+            playerBoard, opponentBoard, slamma, registry.Resolve(new string[0]));
+        var withoutSlamma = simulator.Simulate(
+            playerBoard, opponentBoard,
+            registry.Resolve(new string[0]), registry.Resolve(new string[0]));
+
+        if (!rebornBeast.Alive || !rebornBeast.RebornUsed
+            || rebornBeast.Attack != 8 || rebornBeast.Health != 1 || rebornBeast.MaxHealth != 1
+            || rebornBeast.DivineShield || rebornBeast.Taunt || rebornBeast.Stealthed
+            || rebornBeast.WindfuryAttacksLeft != 1 || rebornBeast.KilledBy != null
+            || rebornBeast.DeathrattleTriggered || rebornBeast.AvengeTriggered
+            || !withSlamma.PlayerWon || withoutSlamma.PlayerWon)
+            return Fail("Reborn Beasts must reset combat state and trigger their owner's summon effect exactly once");
 
         return 0;
     }

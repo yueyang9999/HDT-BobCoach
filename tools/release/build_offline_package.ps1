@@ -154,6 +154,10 @@ if ($approvedCandidateParameterCount -ne 0 -and $approvedCandidateParameterCount
 $hasApprovedCandidate = $approvedCandidateParameterCount -eq $approvedCandidateParameterNames.Count
 
 if (!(Test-Path -LiteralPath $identityPath -PathType Leaf)) { throw "Release identity missing: $identityPath" }
+$identity = Get-Content -Raw -Encoding UTF8 -LiteralPath $identityPath | ConvertFrom-Json
+if ($CurrentSeasonPreview -and $identity.packageVersion -ne "0.2.0-beta.1") {
+    throw "CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts"
+}
 if ($CurrentSeasonPreview) {
     if ($hasApprovedCandidate) {
         throw "Approved candidate parameters are not valid with CurrentSeasonPreview"
@@ -193,8 +197,7 @@ if ($CurrentSeasonPreview) {
         throw "Release builder missing: $releaseBuilder"
     }
 }
-$identity = Get-Content -Raw -Encoding UTF8 -LiteralPath $identityPath | ConvertFrom-Json
-if ($identity.packageVersion -ne "0.2.0-beta.1" -or $identity.assemblyVersion -ne "0.2.0.0" -or
+if ($identity.packageVersion -ne "0.2.0-beta.2" -or $identity.assemblyVersion -ne "0.2.0.0" -or
     $identity.targetFramework -ne "net472" -or $identity.runtimeIdentifier -ne "win-x64" -or
     $identity.hdtBaselineVersion -ne "1.53.5.7354") {
     throw "Unsupported release identity"

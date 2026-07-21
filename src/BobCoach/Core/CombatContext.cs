@@ -342,6 +342,7 @@ namespace BobCoach.Engine
             if (unit.Reborn && !unit.RebornUsed)
             {
                 var capturedUnit = unit;
+                var capturedRebornSide = deathSide;
                 EventQueue.Push(new CombatEvent
                 {
                     Type = "REBORN",
@@ -351,6 +352,7 @@ namespace BobCoach.Engine
                         if (!capturedUnit.Alive && capturedUnit.Reborn && !capturedUnit.RebornUsed)
                         {
                             capturedUnit.Alive = true;
+                            capturedUnit.Attack = capturedUnit.BaseAttack;
                             capturedUnit.Health = 1;
                             capturedUnit.MaxHealth = 1;
                             capturedUnit.RebornUsed = true;
@@ -358,6 +360,15 @@ namespace BobCoach.Engine
                             capturedUnit.Taunt = false;
                             capturedUnit.Stealthed = false;
                             capturedUnit.WindfuryAttacksLeft = capturedUnit.MegaWindfury ? 4 : 1;
+                            capturedUnit.DeathrattleTriggered = false;
+                            capturedUnit.AvengeTriggered = false;
+                            capturedUnit.DeathCountWitnessed = 0;
+                            capturedUnit.KilledBy = null;
+
+                            if (ReferenceEquals(capturedRebornSide, AttackerSide))
+                                AttackerTrinkets.ApplySummon(capturedUnit);
+                            else if (ReferenceEquals(capturedRebornSide, DefenderSide))
+                                DefenderTrinkets.ApplySummon(capturedUnit);
                         }
                     },
                     Data = new Dictionary<string, object> { { "cardId", unit.CardId } }

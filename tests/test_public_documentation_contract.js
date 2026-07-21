@@ -15,8 +15,8 @@ const privacy = read("PRIVACY.md");
 const notice = read("NOTICE");
 const architecture = read("docs/maintainer/ARCHITECTURE.md");
 const dependencies = read("docs/maintainer/DEPENDENCIES.md");
-const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
-const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
+const packageName = "BobCoach-0.2.0-beta.2-win-x64.zip";
+const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/${packageName}`;
 
 for (const [name, content] of [
     ["README.md", chineseReadme],
@@ -145,6 +145,7 @@ for (const [name, content, statements] of [
 }
 
 assert.ok(notice.includes("v0.2.0-beta.1"), "NOTICE must acknowledge the existing public release");
+assert.ok(notice.includes("v0.2.0-beta.2"), "NOTICE must acknowledge the current public release");
 assert.ok(notice.includes("separate explicit owner authorization"), "NOTICE must require authorization for each future release");
 assert.ok(!notice.includes("GitHub Release publication is not authorized"), "NOTICE must not retain the obsolete release statement");
 
