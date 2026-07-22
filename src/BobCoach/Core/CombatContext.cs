@@ -204,6 +204,37 @@ namespace BobCoach.Engine
             return token;
         }
 
+        private CombatUnit ReinsertReborn(List<CombatUnit> side, CombatUnit unit, int preferredPosition)
+        {
+            if (side == null || unit == null) return null;
+
+            int existingIndex = side.IndexOf(unit);
+            if (existingIndex >= 0)
+                side.RemoveAt(existingIndex);
+            if (side.Count >= 7)
+            {
+                TriggerCram(side);
+                return null;
+            }
+
+            int insertPos = Math.Max(0, Math.Min(preferredPosition, side.Count));
+            side.Insert(insertPos, unit);
+            for (int i = 0; i < side.Count; i++)
+                side[i].Position = i;
+
+            if (!AllUnits.Contains(unit))
+                AllUnits.Add(unit);
+            if (ReferenceEquals(side, AttackerSide))
+                AttackerTrinkets.ApplySummon(unit);
+            else if (ReferenceEquals(side, DefenderSide))
+                DefenderTrinkets.ApplySummon(unit);
+
+            LastSummonerPos = insertPos;
+            SummonerOffset = 0;
+            LastSummoned = unit;
+            return unit;
+        }
+
         /// <summary>
         /// 从手牌召唤随从到场上（本场战斗临时，consumed从手牌移除）。
         /// </summary>
@@ -343,6 +374,7 @@ namespace BobCoach.Engine
             {
                 var capturedUnit = unit;
                 var capturedRebornSide = deathSide;
+                var capturedRebornPosition = unit.Position;
                 EventQueue.Push(new CombatEvent
                 {
                     Type = "REBORN",
@@ -351,6 +383,15 @@ namespace BobCoach.Engine
                     {
                         if (!capturedUnit.Alive && capturedUnit.Reborn && !capturedUnit.RebornUsed)
                         {
+                            if (capturedRebornSide == null
+                                || (!capturedRebornSide.Contains(capturedUnit) && capturedRebornSide.Count >= 7))
+                            {
+                                capturedUnit.RebornUsed = true;
+                                if (capturedRebornSide != null)
+                                    TriggerCram(capturedRebornSide);
+                                return;
+                            }
+
                             capturedUnit.Alive = true;
                             capturedUnit.Attack = capturedUnit.BaseAttack;
                             capturedUnit.Health = 1;
@@ -365,10 +406,7 @@ namespace BobCoach.Engine
                             capturedUnit.DeathCountWitnessed = 0;
                             capturedUnit.KilledBy = null;
 
-                            if (ReferenceEquals(capturedRebornSide, AttackerSide))
-                                AttackerTrinkets.ApplySummon(capturedUnit);
-                            else if (ReferenceEquals(capturedRebornSide, DefenderSide))
-                                DefenderTrinkets.ApplySummon(capturedUnit);
+                            ReinsertReborn(capturedRebornSide, capturedUnit, capturedRebornPosition);
                         }
                     },
                     Data = new Dictionary<string, object> { { "cardId", unit.CardId } }

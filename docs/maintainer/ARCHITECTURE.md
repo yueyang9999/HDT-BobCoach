@@ -21,6 +21,8 @@ HDT-BobCoach 是运行在用户已安装 Hearthstone Deck Tracker (HDT) 中的 x
 
 当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计。`BobCoachPlugin` 不创建或驱动外部饰品统计 updater；无已授权来源时只暴露 `SourceUnavailable` 状态，既有历史缓存不读取、不迁移、不删除。
 
+发布线为 `0.2.0-beta.2`；`0.2.0-beta.1` preview 只作为历史包审计边界保留。当前离线包构建器拒绝 `-CurrentSeasonPreview`，不会用 beta.2 身份、DLL 或 hash 重建 beta.1 preview。
+
 饰品报价推荐与已装备效果是两条独立调用链。报价候选的识别、本地评估、推荐服务、面板和渲染代码仍保留，但首发不显示报价选择提示，也不让该提示抢占其他推荐；`TrinketRecommendationsVisible` 只控制最终渲染，不得作为已装备效果服务的启停条件。
 
 已装备效果采用来源无关的本地边界：
@@ -37,7 +39,9 @@ GameState.ActiveTrinkets (exact CardId list)
 
 `GameStateExtractor` 从 HDT 状态取得 `GameState.ActiveTrinkets`（精确 `CardId` 列表），注册表只按精确、版本化的本地 `CardId` 规则解析。硬规则必须在行动枚举和资源计算前进入 `EffectiveGameRules`；协同修正进入特征与行动评分；战斗开始和召唤类效果进入双方隔离的战斗上下文。未知 ID 只记录限频诊断并保守忽略未知效果，不得用名称或模糊文本猜测合法性、费用或评分。
 
-当前 `hdt-1.53.5-hearthdb-2026-07-22-r3` 规则集覆盖 16 个精确 ID。第一阶段包括 Designer Eyepatch (`BG30_MagicItem_439`)、Cowrie Necklace (`BG35_MagicItem_921`)、Ironforge Anvil (`BG30_MagicItem_403`)、Slamma Sticker (`BG30_MagicItem_540`)、Emerald Dreamcatcher (`BG30_MagicItem_542`)、Stegodon Portrait (`BG35_MagicItem_702`)、Tinyfin Onesie (`BG30_MagicItem_441`) 和 Dramaloc Sticker (`BG35_MagicItem_754`)；第二阶段增加 Eternal Portrait (`BG30_MagicItem_301`)、Rivendare Portrait (`BG30_MagicItem_310`)、Holy Mallet (`BG30_MagicItem_902`)、Training Certificate (`BG30_MagicItem_962`)、Valorous Medallion (`BG30_MagicItem_970`)、Greater Valorous Medallion (`BG30_MagicItem_970t`) 和 Baleful Incense (`BG32_MagicItem_360`)；第三阶段增加 Bartend-o-Tron 的 Oilcan (`BG30_MagicItem_705`)，将升本费用减少 3，并在 fallback 路径将费用下限钳制为 0，实时 HDT 费用不重复折扣。`ApplyStartOfCombat(ownerBoard, ownerHand)` 使用修改前快照或稳定战场顺序确定目标，并由 `CombatSimulator` 分别传入攻击方和防守方自己的战团与手牌，禁止跨方读取或应用效果。
+当前 `hdt-1.53.5-hearthdb-2026-07-22-r3` 规则集覆盖 16 个精确 ID（`BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`、`BG30_MagicItem_301`、`BG30_MagicItem_310`、`BG30_MagicItem_902`、`BG30_MagicItem_962`、`BG30_MagicItem_970`、`BG30_MagicItem_970t`、`BG32_MagicItem_360`、`BG30_MagicItem_705`），依据 HDT 1.53.5 / HearthDb build 245258 维护者快照审计。第三方或本地化名称不参与规则解析。`BG30_MagicItem_705` 将升本费用减少 3，并在 fallback 路径将费用下限钳制为 0，实时 HDT 费用不重复折扣。`ApplyStartOfCombat(ownerBoard, ownerHand)` 使用修改前快照或稳定战场顺序确定目标，并由 `CombatSimulator` 分别传入攻击方和防守方自己的战团与手牌，禁止跨方读取或应用效果。
+
+`PhaseStartOfCombat` 的顺序固定为：攻方优先英雄技能、守方优先英雄技能、攻方普通英雄技能、守方普通英雄技能、场上随从双方交替且各自从左到右、手牌效果双方交替、装备饰品、旧式饰品 handler。Reborn 不是原对象原地复活：死亡单位必须从战团移除后，以半血新状态按死亡前位置重新插入所属方；`AllUnits` 不重复登记，所属方 `ApplySummon` 恰好触发一次，且不得调用对手召唤效果。
 
 Karazhan Chess Set 暂不进入该规则集：复制随从必须经 `CombatContext.SpawnToken` 完成深复制、位置插入、`AllUnits` 登记和所属方召唤效果联动，不能仅向战团列表追加浅复制。后续应先为饰品开战效果提供受控战斗上下文接口，再补充满场、复制隔离和 Slamma 联动测试。
 

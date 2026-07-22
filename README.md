@@ -8,7 +8,7 @@
 
 Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (HDT) 教练插件。它在本机读取 HDT 已知的对局状态，提供选牌、阵容、站位和战斗决策辅助。
 
-当前公开测试版本为 `0.2.0-beta.2`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。
+当前公开测试版本为 `0.2.0-beta.2`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。历史 `0.2.0-beta.1` preview 只保留为旧包审计边界，当前构建器不会重建或伪造该 preview。
 
 ## 下载与安装
 
@@ -49,7 +49,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 
 ## 隐私与联网
 
-对局、日志、回放和用户画像均保存在本机，不会自动上传。当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计，也不读取、不迁移、不删除早期版本可能留下的历史缓存。首发不显示饰品报价选择提示，也不让该提示抢占其他推荐；这个显示开关只控制渲染。玩家装备饰品后，Bob Coach 仍从 HDT 对局状态识别饰品，并通过版本化本地 `CardId` 规则将确定性效果用于之后的购买、出售、刷新、升本、阵容和战斗决策。当前 `hdt-1.53.5-hearthdb-2026-07-22-r3` 本地规则集覆盖 16 个精确 CardId，包括费用、金色合成、召唤协同和战斗开始效果；其中 Oilcan (`BG30_MagicItem_705`) 将升本费用减少 3（实时 HDT 费用不重复折扣，缺失时使用费用下限为 0 的本地 fallback）；未知 ID 保守忽略效果。完整边界见 [PRIVACY.md](PRIVACY.md) 和 [DATA_SOURCES.md](DATA_SOURCES.md)。
+对局、日志、回放和用户画像均保存在本机，不会自动上传。当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计，也不读取、不迁移、不删除早期版本可能留下的历史缓存。首发不显示饰品报价选择提示，也不让该提示抢占其他推荐；这个显示开关只控制渲染。玩家装备饰品后，Bob Coach 仍从 HDT 对局状态识别饰品，并通过版本化本地 `CardId` 规则将确定性效果用于之后的购买、出售、刷新、升本、阵容和战斗决策。当前 `hdt-1.53.5-hearthdb-2026-07-22-r3` 本地规则集覆盖 16 个精确 CardId：`BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`、`BG30_MagicItem_301`、`BG30_MagicItem_310`、`BG30_MagicItem_902`、`BG30_MagicItem_962`、`BG30_MagicItem_970`、`BG30_MagicItem_970t`、`BG32_MagicItem_360`、`BG30_MagicItem_705`。规则依据 HDT 1.53.5 / HearthDb build 245258 维护者快照审计；未知 ID 保守忽略效果，不按本地化名称或模糊文本猜测规则。其中 Oilcan (`BG30_MagicItem_705`) 将升本费用减少 3（实时 HDT 费用不重复折扣，缺失时使用费用下限为 0 的本地 fallback）。完整边界见 [PRIVACY.md](PRIVACY.md) 和 [DATA_SOURCES.md](DATA_SOURCES.md)。
 
 ## 数据来源与第三方权利
 

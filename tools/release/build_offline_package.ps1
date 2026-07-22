@@ -31,9 +31,6 @@ $tempRoot = Join-Path $env:TEMP ("bobcoach-offline-package-" + [Guid]::NewGuid()
 $candidateDirectory = Join-Path $tempRoot "candidate"
 $stagingRoot = Join-Path $tempRoot "staging"
 $archiveRoot = Join-Path $tempRoot "archive"
-$ApprovedPreviewPluginSize = 650240
-$ApprovedPreviewPluginSha256 = "020C40CBC0927C230C74ED334995278D7D4669E16B4DEED38A92CD0F44804D37"
-
 $PackageFiles = @(
     "BobCoach.dll",
     "README_OFFLINE.md",
@@ -56,12 +53,6 @@ function Write-Utf8NoBom([string]$Path, [string]$Content) {
 function Assert-ExactSet([string[]]$Expected, [string[]]$Actual, [string]$Label) {
     $delta = @(Compare-Object @($Expected | Sort-Object) @($Actual | Sort-Object))
     if ($delta.Count -ne 0) { throw "$Label mismatch: delta=$($delta.Count)" }
-}
-
-function Assert-NoPreviewExternalHash([string]$Path, [string]$Stage) {
-    if (Test-Path -LiteralPath $Path) {
-        throw "Preview external hash residue detected $Stage; remove it explicitly: $Path"
-    }
 }
 
 function Resolve-ReadmeBlock([string]$Content, [string]$Name, [bool]$Include) {
@@ -155,47 +146,34 @@ $hasApprovedCandidate = $approvedCandidateParameterCount -eq $approvedCandidateP
 
 if (!(Test-Path -LiteralPath $identityPath -PathType Leaf)) { throw "Release identity missing: $identityPath" }
 $identity = Get-Content -Raw -Encoding UTF8 -LiteralPath $identityPath | ConvertFrom-Json
-if ($CurrentSeasonPreview -and $identity.packageVersion -ne "0.2.0-beta.1") {
+if ($CurrentSeasonPreview) {
     throw "CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts"
 }
-if ($CurrentSeasonPreview) {
-    if ($hasApprovedCandidate) {
-        throw "Approved candidate parameters are not valid with CurrentSeasonPreview"
+if (![string]::IsNullOrWhiteSpace($CandidateDllPath)) {
+    throw "CandidateDllPath is retired with CurrentSeasonPreview"
+}
+if ($hasApprovedCandidate) {
+    if ([string]::IsNullOrWhiteSpace($ApprovedCandidateDllPath)) {
+        throw "Approved candidate DLL path is empty"
     }
-    if ([string]::IsNullOrWhiteSpace($CandidateDllPath)) {
-        throw "CurrentSeasonPreview requires CandidateDllPath"
+    if ($ApprovedCandidateSize -le 0) {
+        throw "Approved candidate size must be positive"
     }
-    $resolvedCandidateDll = [IO.Path]::GetFullPath($CandidateDllPath)
-    if (!(Test-Path -LiteralPath $resolvedCandidateDll -PathType Leaf)) {
-        throw "Preview candidate DLL missing: $resolvedCandidateDll"
+    if ($ApprovedCandidateSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+        throw "Approved candidate SHA-256 is invalid"
     }
-} else {
-    if (![string]::IsNullOrWhiteSpace($CandidateDllPath)) {
-        throw "CandidateDllPath is only valid with CurrentSeasonPreview"
+    $resolvedApprovedCandidateDll = [IO.Path]::GetFullPath($ApprovedCandidateDllPath)
+    if (!(Test-Path -LiteralPath $resolvedApprovedCandidateDll -PathType Leaf)) {
+        throw "Approved candidate DLL missing: $resolvedApprovedCandidateDll"
     }
-    if ($hasApprovedCandidate) {
-        if ([string]::IsNullOrWhiteSpace($ApprovedCandidateDllPath)) {
-            throw "Approved candidate DLL path is empty"
-        }
-        if ($ApprovedCandidateSize -le 0) {
-            throw "Approved candidate size must be positive"
-        }
-        if ($ApprovedCandidateSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
-            throw "Approved candidate SHA-256 is invalid"
-        }
-        $resolvedApprovedCandidateDll = [IO.Path]::GetFullPath($ApprovedCandidateDllPath)
-        if (!(Test-Path -LiteralPath $resolvedApprovedCandidateDll -PathType Leaf)) {
-            throw "Approved candidate DLL missing: $resolvedApprovedCandidateDll"
-        }
-        $ApprovedCandidateSha256 = $ApprovedCandidateSha256.ToUpperInvariant()
-        $approvedSourceSize = (Get-Item -LiteralPath $resolvedApprovedCandidateDll).Length
-        $approvedSourceHash = (Get-FileHash -LiteralPath $resolvedApprovedCandidateDll -Algorithm SHA256).Hash
-        if ($approvedSourceSize -ne $ApprovedCandidateSize -or $approvedSourceHash -ne $ApprovedCandidateSha256) {
-            throw "Approved candidate source mismatch: bytes=$approvedSourceSize sha256=$approvedSourceHash"
-        }
-    } elseif (!(Test-Path -LiteralPath $releaseBuilder -PathType Leaf)) {
-        throw "Release builder missing: $releaseBuilder"
+    $ApprovedCandidateSha256 = $ApprovedCandidateSha256.ToUpperInvariant()
+    $approvedSourceSize = (Get-Item -LiteralPath $resolvedApprovedCandidateDll).Length
+    $approvedSourceHash = (Get-FileHash -LiteralPath $resolvedApprovedCandidateDll -Algorithm SHA256).Hash
+    if ($approvedSourceSize -ne $ApprovedCandidateSize -or $approvedSourceHash -ne $ApprovedCandidateSha256) {
+        throw "Approved candidate source mismatch: bytes=$approvedSourceSize sha256=$approvedSourceHash"
     }
+} elseif (!(Test-Path -LiteralPath $releaseBuilder -PathType Leaf)) {
+    throw "Release builder missing: $releaseBuilder"
 }
 if ($identity.packageVersion -ne "0.2.0-beta.2" -or $identity.assemblyVersion -ne "0.2.0.0" -or
     $identity.targetFramework -ne "net472" -or $identity.runtimeIdentifier -ne "win-x64" -or
@@ -203,11 +181,7 @@ if ($identity.packageVersion -ne "0.2.0-beta.2" -or $identity.assemblyVersion -n
     throw "Unsupported release identity"
 }
 
-$packageName = if ($CurrentSeasonPreview) {
-    "BobCoach-$($identity.packageVersion)-current-season-preview-20260719-$($identity.runtimeIdentifier)"
-} else {
-    "BobCoach-$($identity.packageVersion)-$($identity.runtimeIdentifier)"
-}
+$packageName = "BobCoach-$($identity.packageVersion)-$($identity.runtimeIdentifier)"
 $zipName = "$packageName.zip"
 $outputFullPath = [IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\')
 if (!(Test-Path -LiteralPath $outputFullPath)) {
@@ -215,11 +189,7 @@ if (!(Test-Path -LiteralPath $outputFullPath)) {
 }
 $zipPath = Join-Path $outputFullPath $zipName
 $externalHashPath = "$zipPath.sha256"
-if ($CurrentSeasonPreview) {
-    Assert-NoPreviewExternalHash $externalHashPath "initial"
-}
-$outputPaths = @($zipPath)
-if (!$CurrentSeasonPreview) { $outputPaths += $externalHashPath }
+$outputPaths = @($zipPath, $externalHashPath)
 foreach ($outputPath in $outputPaths) {
     if ((Test-Path -LiteralPath $outputPath) -and !$Force) {
         throw "Output already exists; pass -Force to replace: $outputPath"
@@ -231,9 +201,7 @@ try {
     New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $archiveRoot -Force | Out-Null
 
-    if ($CurrentSeasonPreview) {
-        $candidateDll = $resolvedCandidateDll
-    } elseif ($hasApprovedCandidate) {
+    if ($hasApprovedCandidate) {
         $candidateDll = $resolvedApprovedCandidateDll
     } else {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $releaseBuilder `
@@ -273,10 +241,6 @@ try {
     $stagedPluginPath = Join-Path $packageDirectory "BobCoach.dll"
     $pluginHash = (Get-FileHash -LiteralPath $stagedPluginPath -Algorithm SHA256).Hash
     $pluginSize = (Get-Item -LiteralPath $stagedPluginPath).Length
-    if ($CurrentSeasonPreview -and
-        ($pluginSize -ne $ApprovedPreviewPluginSize -or $pluginHash -ne $ApprovedPreviewPluginSha256)) {
-        throw "Preview candidate is not the approved artifact: bytes=$pluginSize sha256=$pluginHash"
-    }
     if ($hasApprovedCandidate -and
         ($pluginSize -ne $ApprovedCandidateSize -or $pluginHash -ne $ApprovedCandidateSha256)) {
         throw "Packaged approved candidate mismatch: bytes=$pluginSize sha256=$pluginHash"
@@ -366,26 +330,14 @@ try {
     }
 
     $zipHash = (Get-FileHash -LiteralPath $temporaryZip -Algorithm SHA256).Hash
-    if ($CurrentSeasonPreview) {
-        Assert-NoPreviewExternalHash $externalHashPath "before publication"
-    }
     Publish-FileAtomically $temporaryZip $zipPath
-    if (!$CurrentSeasonPreview) {
-        $temporaryHash = Join-Path $archiveRoot "$zipName.sha256"
-        Write-Utf8NoBom $temporaryHash ("{0}  {1}`n" -f $zipHash, $zipName)
-        Publish-FileAtomically $temporaryHash $externalHashPath
-    }
-    if ($CurrentSeasonPreview) {
-        Assert-NoPreviewExternalHash $externalHashPath "after publication"
-    }
+    $temporaryHash = Join-Path $archiveRoot "$zipName.sha256"
+    Write-Utf8NoBom $temporaryHash ("{0}  {1}`n" -f $zipHash, $zipName)
+    Publish-FileAtomically $temporaryHash $externalHashPath
 
     $publishedHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
     if ($publishedHash -ne $zipHash) { throw "Published ZIP hash mismatch" }
-    if ($CurrentSeasonPreview) {
-        Write-Host "PASS preview offline package zip=$zipPath bytes=$((Get-Item -LiteralPath $zipPath).Length)"
-    } else {
-        Write-Host "PASS offline package zip=$zipPath bytes=$((Get-Item -LiteralPath $zipPath).Length) sha256=$publishedHash"
-    }
+    Write-Host "PASS offline package zip=$zipPath bytes=$((Get-Item -LiteralPath $zipPath).Length) sha256=$publishedHash"
 } finally {
     if (Test-Path -LiteralPath $tempRoot) {
         $resolvedTemp = [IO.Path]::GetFullPath($tempRoot).TrimEnd('\')

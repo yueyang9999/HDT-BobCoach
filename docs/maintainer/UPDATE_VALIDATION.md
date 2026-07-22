@@ -111,3 +111,24 @@ git diff --check
 - 将 VM smoke 自动化为安装、启动、日志断言、正常关闭和默认卸载检查。
 
 优化不能削弱发布候选版本的 package suite、精确包白名单、hash、用户数据保留或必要 OS smoke 门禁。
+
+## 离线饰品数据审计
+
+来源无关的离线审计工具必须使用显式输入，不得设置用户缓存或仓库历史数据文件的默认路径。自动化验证只使用合成 fixture：
+
+```powershell
+node .\tools\build\audit_trinket_registry.js `
+  --registry <synthetic-registry.json> `
+  --authority <synthetic-authority.json>
+
+node .\tools\build\generate_trinket_stats_diff_report.js `
+  --active <synthetic-verified-snapshot.json> `
+  --shadow <synthetic-shadow.jsonl> `
+  --registry <synthetic-registry.json>
+```
+
+未提供 `--output` 时报告只写入 stdout；需要文件时必须显式传入 `--output <path>`。不得在发布验证中把这些工具指向实时用户 `%APPDATA%`、迁移或清理历史缓存，也不得把显式外部输入视为已获批准的数据源。对应契约由 `tests/test_offline_trinket_audit_tools.js` 覆盖。
+
+每次规则事实复核必须记录 HDT/HearthDb build，只接受精确、大小写敏感 `CardId` 和当前引擎可完整表达的语义；不能完整表达的饰品继续失败关闭。维护者快照、卡牌文本和原始第三方响应不得复制进 Git 或发布 ZIP。
+
+beta.2 包构建器不得携带 beta.1 preview DLL 的 size/hash。`tests/test_offline_package_builder.ps1` 必须同时验证正式 ZIP 白名单、hash、原子替换，以及 `-CurrentSeasonPreview` 仅返回历史边界错误。

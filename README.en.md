@@ -8,7 +8,7 @@
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
 
-The current public beta is `0.2.0-beta.2`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
+The current public beta is `0.2.0-beta.2`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers. The historical `0.2.0-beta.1` preview is retained only as a legacy package-audit boundary; the current builder does not recreate or fabricate that preview.
 
 ## Download and Install
 
@@ -49,7 +49,7 @@ The installer verifies package hashes, the DLL version, and the x64 architecture
 
 ## Privacy and Network Access
 
-Matches, logs, replays, and user profiles remain on the local computer and are not uploaded automatically. The current public build does not request, cache, or display Firestone/Zero to Heroes trinket statistics, and it does not read, migrate, or delete historical caches that an earlier build may have left behind. The initial release does not display trinket-offer choice prompts or let them preempt other recommendations; the display switch controls rendering only. After the player equips a trinket, Bob Coach still recognizes it from HDT match state and applies deterministic effects through versioned local `CardId` rules to later buy, sell, refresh, tavern-upgrade, composition, and combat decisions. See [PRIVACY.md](PRIVACY.md) and [DATA_SOURCES.md](DATA_SOURCES.md) for the complete boundaries.
+Matches, logs, replays, and user profiles remain on the local computer and are not uploaded automatically. The current public build does not request, cache, or display Firestone/Zero to Heroes trinket statistics, and it does not read, migrate, or delete historical caches that an earlier build may have left behind. The initial release does not display trinket-offer choice prompts or let them preempt other recommendations; the display switch controls rendering only. After the player equips a trinket, Bob Coach still recognizes it from HDT match state and applies deterministic effects through versioned local `CardId` rules to later buy, sell, refresh, tavern-upgrade, composition, and combat decisions. The current `hdt-1.53.5-hearthdb-2026-07-22-r3` ruleset covers exactly 16 audited CardIds from an HDT 1.53.5 / HearthDb build 245258 maintainer snapshot; unknown IDs fail closed and localized names or fuzzy text never infer a rule. See [PRIVACY.md](PRIVACY.md) and [DATA_SOURCES.md](DATA_SOURCES.md) for the complete boundaries.
 
 ## Data Sources and Third-Party Rights
 

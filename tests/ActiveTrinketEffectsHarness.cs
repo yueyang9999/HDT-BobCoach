@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.IO;
 using System.Linq;
 using BobCoach.Engine;
@@ -45,6 +46,8 @@ internal static class ActiveTrinketEffectsHarness
         if (TestPhase2StartOfCombatEffects(registry) != 0) return 1;
         if (TestCombatSimulatorContextWiring(registry) != 0) return 1;
         if (TestRebornUsesOwnerSummonEffects(registry) != 0) return 1;
+        if (TestRebornRequiresBoardSpace(registry) != 0) return 1;
+        if (TestExplicitStartOfCombatOrdering(registry) != 0) return 1;
         if (TestCombatSimulatorStartOfCombatOrdering(registry) != 0) return 1;
         if (TestEyepatchPurchaseGoldenResolution(registry) != 0) return 1;
         if (TestSimulationCopyAndOfferIsolation(registry) != 0) return 1;
@@ -570,6 +573,7 @@ internal static class ActiveTrinketEffectsHarness
             new List<CombatUnit> { Unit("TEST_REBORN_OPPONENT", 1, 1, "Pirate") },
             new Random(1), attackerTrinkets: slamma);
         context.OnDeath(rebornBeast);
+        context.AttackerSide.Remove(rebornBeast);
         context.ProcessEvents();
 
         var playerBoard = new List<MinionData>
@@ -600,12 +604,105 @@ internal static class ActiveTrinketEffectsHarness
             registry.Resolve(new string[0]), registry.Resolve(new string[0]));
 
         if (!rebornBeast.Alive || !rebornBeast.RebornUsed
+            || context.AttackerSide.Count != 1
+            || !ReferenceEquals(context.AttackerSide[0], rebornBeast)
+            || context.AllUnits.Count != 2
             || rebornBeast.Attack != 8 || rebornBeast.Health != 1 || rebornBeast.MaxHealth != 1
             || rebornBeast.DivineShield || rebornBeast.Taunt || rebornBeast.Stealthed
             || rebornBeast.WindfuryAttacksLeft != 1 || rebornBeast.KilledBy != null
             || rebornBeast.DeathrattleTriggered || rebornBeast.AvengeTriggered
             || !withSlamma.PlayerWon || withoutSlamma.PlayerWon)
             return Fail("Reborn Beasts must reset combat state and trigger their owner's summon effect exactly once");
+
+        return 0;
+    }
+
+    private static int TestRebornRequiresBoardSpace(TrinketEffectRegistry registry)
+    {
+        var reborn = Unit("TEST_REBORN_NO_SPACE", 4, 4, "Beast");
+        reborn.Reborn = true;
+        var attacker = new List<CombatUnit> { reborn };
+        for (int i = 0; i < 6; i++)
+            attacker.Add(Unit("TEST_REBORN_ALLY_" + i, 1, 1, "Beast"));
+        var context = new CombatContext(attacker,
+            new List<CombatUnit> { Unit("TEST_REBORN_NO_SPACE_OPPONENT", 1, 1, "Pirate") },
+            new Random(1), attackerTrinkets: registry.Resolve(new string[0]));
+
+        reborn.Alive = false;
+        context.OnDeath(reborn);
+        context.AttackerSide.Remove(reborn);
+        context.AttackerSide.Add(Unit("TEST_REBORN_SLOT_FILLER", 1, 1, "Beast"));
+        context.ProcessEvents();
+
+        if (reborn.Alive || context.AttackerSide.Contains(reborn) || !reborn.RebornUsed)
+            return Fail("Reborn must remain dead when its board slot is filled before resolution");
+
+        return 0;
+    }
+
+    private static int TestExplicitStartOfCombatOrdering(TrinketEffectRegistry registry)
+    {
+        var order = new List<string>();
+        var attackerBoardUnit = Unit("TEST_ORDER_ATTACKER_BOARD", 1, 1, "Dragon");
+        attackerBoardUnit.HasStartOfCombat = true;
+        var defenderBoardUnit = Unit("TEST_ORDER_DEFENDER_BOARD", 1, 1, "Pirate");
+        defenderBoardUnit.HasStartOfCombat = true;
+        var attacker = new List<CombatUnit> { attackerBoardUnit };
+        var defender = new List<CombatUnit> { defenderBoardUnit };
+        var attackerHand = new List<MinionData> { new MinionData { CardId = "TEST_ORDER_ATTACKER_HAND" } };
+        var defenderHand = new List<MinionData> { new MinionData { CardId = "TEST_ORDER_DEFENDER_HAND" } };
+        var context = new CombatContext(attacker, defender, new Random(1), attackerHand, defenderHand,
+            registry.Resolve(new[] { EmeraldDreamcatcherId }), registry.Resolve(new string[0]));
+
+        context.AttackerPriorityHeroPower = (ctx, own, enemy) => order.Add("attacker-hero-priority");
+        context.DefenderPriorityHeroPower = (ctx, own, enemy) => order.Add("defender-hero-priority");
+        context.AttackerHeroPower = (ctx, own, enemy) => order.Add("attacker-hero-normal");
+        context.DefenderHeroPower = (ctx, own, enemy) => order.Add("defender-hero-normal");
+        context.AttackerTrinketHandlers = new List<Action<CombatContext, List<CombatUnit>, List<CombatUnit>>>
+        {
+            (ctx, own, enemy) => order.Add("attacker-trinket")
+        };
+        context.DefenderTrinketHandlers = new List<Action<CombatContext, List<CombatUnit>, List<CombatUnit>>>
+        {
+            (ctx, own, enemy) => order.Add("defender-trinket")
+        };
+        CombatEffects.Register("TEST_ORDER_ATTACKER_BOARD", new CardHandlers
+        {
+            StartOfCombat = (ctx, own, enemy) => order.Add("attacker-board")
+        });
+        CombatEffects.Register("TEST_ORDER_DEFENDER_BOARD", new CardHandlers
+        {
+            StartOfCombat = (ctx, own, enemy) => order.Add("defender-board")
+        });
+        CombatEffects.Register("TEST_ORDER_ATTACKER_HAND", new CardHandlers
+        {
+            StartOfCombat = (ctx, own, enemy) => order.Add("attacker-hand")
+        });
+        CombatEffects.Register("TEST_ORDER_DEFENDER_HAND", new CardHandlers
+        {
+            StartOfCombat = (ctx, own, enemy) => order.Add("defender-hand")
+        });
+
+        var method = typeof(CombatSimulator).GetMethod("PhaseStartOfCombat",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        if (method == null) return Fail("PhaseStartOfCombat must remain testable for its explicit ordering contract");
+        method.Invoke(new CombatSimulator(), new object[] { attacker, defender, context });
+
+        var expected = new[]
+        {
+            "attacker-hero-priority", "defender-hero-priority",
+            "attacker-hero-normal", "defender-hero-normal",
+            "attacker-board", "defender-board",
+            "attacker-hand", "defender-hand",
+            "attacker-trinket", "defender-trinket",
+        };
+        if (order.Count != expected.Length)
+            return Fail("PhaseStartOfCombat must execute every registered stage exactly once");
+        for (int i = 0; i < expected.Length; i++)
+            if (!string.Equals(order[i], expected[i], StringComparison.Ordinal))
+                return Fail("PhaseStartOfCombat order must be priority hero, normal hero, board, hand, then trinket");
+        if (attackerBoardUnit.Attack != 1)
+            return Fail("ordering harness must not infer trinket order from mutated board stats");
 
         return 0;
     }

@@ -25,12 +25,6 @@ Assert-SafeTestRoot $testRoot
 
 $packageName = "BobCoach-0.2.0-beta.2-win-x64"
 $zipName = "$packageName.zip"
-$previewPackageName = "BobCoach-0.2.0-beta.1-current-season-preview-20260719-win-x64"
-$previewZipName = "$previewPackageName.zip"
-$approvedPreviewPluginSize = 650240
-$approvedPreviewPluginSha256 = "020C40CBC0927C230C74ED334995278D7D4669E16B4DEED38A92CD0F44804D37"
-$previewCandidateDll = $env:BOBCOACH_PREVIEW_CANDIDATE_DLL
-$previewIntegrationStatus = "skipped"
 $expectedFiles = @(
     "BobCoach.dll",
     "README_OFFLINE.md",
@@ -103,6 +97,9 @@ try {
     if (!(Test-Path -LiteralPath $builder -PathType Leaf)) {
         throw "Offline package builder missing: $builder"
     }
+    $builderSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $builder
+    Assert-False $builderSource.Contains("020C40CBC0927C230C74ED334995278D7D4669E16B4DEED38A92CD0F44804D37") "retired beta.1 preview hash omitted from active builder"
+    Assert-False $builderSource.Contains("ApprovedPreviewPluginSize") "retired beta.1 preview size omitted from active builder"
     if ([string]::IsNullOrWhiteSpace([string]$hdtDirectory) -or !(Test-Path -LiteralPath $hdtDirectory -PathType Container)) {
         throw "HDT test baseline missing; set BOBCOACH_HDT_DIR: $hdtDirectory"
     }
@@ -212,92 +209,6 @@ try {
     Assert-Equal $approvedCandidateSize (Get-Item -LiteralPath $approvedPackagedDll).Length "approved candidate packaged size"
     Assert-Equal $approvedCandidateSha256 (Get-FileHash -LiteralPath $approvedPackagedDll -Algorithm SHA256).Hash "approved candidate packaged hash"
 
-    if (![string]::IsNullOrWhiteSpace($previewCandidateDll)) {
-      if (!(Test-Path -LiteralPath $previewCandidateDll -PathType Leaf)) {
-          throw "Approved preview candidate missing: $previewCandidateDll"
-      }
-    Assert-Equal $approvedPreviewPluginSize (Get-Item -LiteralPath $previewCandidateDll).Length "approved preview candidate size"
-    Assert-Equal $approvedPreviewPluginSha256 (Get-FileHash -LiteralPath $previewCandidateDll -Algorithm SHA256).Hash "approved preview candidate hash"
-
-    $wrongCandidateDll = Join-Path $extractedPackageRoot "BobCoach.dll"
-    Assert-False ((Get-FileHash -LiteralPath $wrongCandidateDll -Algorithm SHA256).Hash -eq $approvedPreviewPluginSha256) "wrong preview candidate fixture differs"
-    $wrongCandidateBuild = Invoke-TestPowerShell $builder @(
-        "-HdtDirectory", $hdtDirectory,
-        "-OutputDirectory", $outputDirectory,
-        "-CurrentSeasonPreview",
-        "-CandidateDllPath", $wrongCandidateDll
-    )
-    Assert-True ($wrongCandidateBuild.ExitCode -ne 0) "unapproved preview candidate rejected"
-    $previewZipPath = Join-Path $outputDirectory $previewZipName
-    Assert-False (Test-Path -LiteralPath $previewZipPath) "unapproved preview candidate produces no ZIP"
-
-    $previewConflictOutput = Join-Path $testRoot "PreviewConflictOutput"
-    New-Item -ItemType Directory -Path $previewConflictOutput -Force | Out-Null
-    $previewConflictZip = Join-Path $previewConflictOutput $previewZipName
-    $previewConflictExternalHash = "$previewConflictZip.sha256"
-    Write-Utf8NoBom $previewConflictExternalHash "sentinel-preview-external-hash"
-    $previewConflictHashBefore = (Get-FileHash -LiteralPath $previewConflictExternalHash -Algorithm SHA256).Hash
-    $previewConflictCases = @(
-        [pscustomobject]@{ Label = "without Force"; Arguments = @() },
-        [pscustomobject]@{ Label = "with Force"; Arguments = @("-Force") }
-    )
-    foreach ($previewConflictCase in $previewConflictCases) {
-        $previewConflictArgs = @(
-            "-HdtDirectory", $hdtDirectory,
-            "-OutputDirectory", $previewConflictOutput,
-            "-CurrentSeasonPreview",
-            "-CandidateDllPath", $previewCandidateDll
-        ) + $previewConflictCase.Arguments
-        $previewConflictBuild = Invoke-TestPowerShell $builder $previewConflictArgs
-        Assert-True ($previewConflictBuild.ExitCode -ne 0) "preview residual external hash rejected $($previewConflictCase.Label)"
-        Assert-False (Test-Path -LiteralPath $previewConflictZip) "preview residual external hash produces no ZIP"
-        Assert-Equal $previewConflictHashBefore (Get-FileHash -LiteralPath $previewConflictExternalHash -Algorithm SHA256).Hash "preview residual external hash retained"
-    }
-
-    $previewBuild = Invoke-TestPowerShell $builder @(
-        "-HdtDirectory", $hdtDirectory,
-        "-OutputDirectory", $outputDirectory,
-        "-CurrentSeasonPreview",
-        "-CandidateDllPath", $previewCandidateDll
-    )
-    Assert-Equal 0 $previewBuild.ExitCode "preview package build exit"
-    Assert-True (Test-Path -LiteralPath $previewZipPath -PathType Leaf) "preview ZIP exists"
-    Assert-False (Test-Path -LiteralPath "$previewZipPath.sha256") "preview external hash omitted"
-
-    $previewArchive = [IO.Compression.ZipFile]::OpenRead($previewZipPath)
-    try {
-        $previewEntries = @($previewArchive.Entries | Where-Object { !$_.FullName.EndsWith("/") } | Select-Object -ExpandProperty FullName)
-        $expectedPreviewEntries = @($expectedFiles | ForEach-Object { "$previewPackageName/$_" } | Sort-Object)
-        Assert-ExactStrings $expectedPreviewEntries $previewEntries "preview ZIP entries"
-    } finally {
-        $previewArchive.Dispose()
-    }
-
-    $previewExtractRoot = Join-Path $testRoot "PreviewExtracted"
-    [IO.Compression.ZipFile]::ExtractToDirectory($previewZipPath, $previewExtractRoot)
-    $previewPackageRoot = Join-Path $previewExtractRoot $previewPackageName
-    Assert-ExtractedPackage $previewPackageRoot -SkipReflectionLoad
-    $previewPluginPath = Join-Path $previewPackageRoot "BobCoach.dll"
-    Assert-Equal $approvedPreviewPluginSize (Get-Item -LiteralPath $previewPluginPath).Length "preview approved DLL size"
-    Assert-Equal $approvedPreviewPluginSha256 (Get-FileHash -LiteralPath $previewPluginPath -Algorithm SHA256).Hash "preview approved DLL hash"
-    $previewManifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $previewPackageRoot "manifest.json") | ConvertFrom-Json
-    Assert-Equal $approvedPreviewPluginSize ([long]$previewManifest.pluginSize) "preview manifest approved DLL size"
-    Assert-Equal $approvedPreviewPluginSha256 ([string]$previewManifest.pluginSha256) "preview manifest approved DLL hash"
-    $previewReadme = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $previewPackageRoot "README_OFFLINE.md")
-    $unconditionalPreviewIdentity = -join @(0x672C, 0x5305, 0x662F, 0x5F53, 0x524D, 0x8D5B, 0x5B63, 0x62A2, 0x5148, 0x9A8C, 0x8BC1, 0x7248 | ForEach-Object { [char]$_ })
-    $directoryDependentIdentity = -join @(0x5F53, 0x89E3, 0x538B, 0x76EE, 0x5F55, 0x540D, 0x5305, 0x542B | ForEach-Object { [char]$_ })
-    Assert-True $previewReadme.Contains("CURRENT SEASON PREVIEW") "preview README identity"
-    Assert-True $previewReadme.Contains($unconditionalPreviewIdentity) "preview README unconditional identity"
-    Assert-False $previewReadme.Contains($directoryDependentIdentity) "preview README identity does not depend on directory name"
-    Assert-True $previewReadme.Contains("NOT FINAL BETA") "preview README non-final warning"
-    Assert-True $previewReadme.Contains("NOT A FORMAL RELEASE") "preview README release warning"
-    Assert-True $previewReadme.Contains($previewPackageName) "preview README package identity"
-    Assert-True ($previewReadme.Contains("PREVIEW ZIP HAS NO EXTERNAL SHA-256")) "preview README external hash boundary"
-      Assert-True $previewReadme.Contains("USER LOGIN REQUIRED") "preview README login boundary"
-      Assert-True $previewReadme.Contains("ONLINE BATTLEGROUNDS MATCH") "preview README online match step"
-      $previewIntegrationStatus = "verified"
-    }
-
     $zipHashBeforeRefusal = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
     $refusal = Invoke-TestPowerShell $builder @("-HdtDirectory", $hdtDirectory, "-OutputDirectory", $outputDirectory)
     Assert-True ($refusal.ExitCode -ne 0) "existing output requires Force"
@@ -309,7 +220,7 @@ try {
     $tempAfter = @(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter "bobcoach-offline-package-*" | Select-Object -ExpandProperty FullName)
     Assert-ExactStrings $tempBefore $tempAfter "package temp cleanup"
 
-    Write-Host "PASS offline package release ZIP whitelist, hashes, Force, and cleanup contracts previewIntegration=$previewIntegrationStatus"
+    Write-Host "PASS offline package release ZIP whitelist, hashes, retired preview boundary, Force, and cleanup contracts"
 } catch {
     Write-Host "FAIL offline package builder contracts"
     Write-Host $_.Exception.Message

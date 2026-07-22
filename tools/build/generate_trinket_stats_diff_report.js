@@ -1,16 +1,30 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
-const MIN_FIRESTONE_POINTS = 1000;
+
+const MIN_REFERENCE_POINTS = 1000;
+const SUPPORTED_OPTIONS = new Set(["--active", "--shadow", "--registry", "--output"]);
+
+function parseArgs(argv) {
+    const args = {};
+    for (let index = 0; index < argv.length; index += 2) {
+        const option = argv[index];
+        const value = argv[index + 1];
+        if (!SUPPORTED_OPTIONS.has(option)) throw new Error(`unknown option: ${option || "<empty>"}`);
+        if (!value || value.startsWith("--")) throw new Error(`missing value for option: ${option}`);
+        if (Object.prototype.hasOwnProperty.call(args, option)) throw new Error(`duplicate option: ${option}`);
+        args[option] = value;
+    }
+    return args;
+}
+
+function requireOption(args, option) {
+    if (!args[option]) throw new Error(`required option: ${option}`);
+    return args[option];
+}
 
 function readJson(file) {
     return JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
-}
-
-function readJsonLines(file) {
-    if (!fs.existsSync(file)) return [];
-    return parseJsonLines(fs.readFileSync(file, "utf8"));
 }
 
 function parseJsonLines(text) {
@@ -21,46 +35,47 @@ function parseJsonLines(text) {
 function averageRanks(items, compare, tieKey) {
     const sorted = items.slice().sort(compare);
     const ranks = new Map();
-    for (let i = 0; i < sorted.length;) {
-        let j = i + 1;
-        while (j < sorted.length && tieKey(sorted[j]) === tieKey(sorted[i])) j++;
-        const rank = ((i + 1) + j) / 2;
-        for (let k = i; k < j; k++) ranks.set(sorted[k].cardId, rank);
-        i = j;
+    for (let index = 0; index < sorted.length;) {
+        let end = index + 1;
+        while (end < sorted.length && tieKey(sorted[end]) === tieKey(sorted[index])) end++;
+        const rank = ((index + 1) + end) / 2;
+        for (let cursor = index; cursor < end; cursor++) ranks.set(sorted[cursor].cardId, rank);
+        index = end;
     }
     return ranks;
 }
 
-function spearman(items, rankA, rankB) {
+function correlation(items, rankA, rankB) {
     if (items.length < 2) return null;
-    const a = items.map(x => rankA.get(x.cardId));
-    const b = items.map(x => rankB.get(x.cardId));
-    const ma = a.reduce((s, x) => s + x, 0) / a.length;
-    const mb = b.reduce((s, x) => s + x, 0) / b.length;
-    let num = 0, da = 0, db = 0;
-    for (let i = 0; i < a.length; i++) {
-        const xa = a[i] - ma, xb = b[i] - mb;
-        num += xa * xb; da += xa * xa; db += xb * xb;
+    const a = items.map(item => rankA.get(item.cardId));
+    const b = items.map(item => rankB.get(item.cardId));
+    const meanA = a.reduce((sum, value) => sum + value, 0) / a.length;
+    const meanB = b.reduce((sum, value) => sum + value, 0) / b.length;
+    let numerator = 0;
+    let spreadA = 0;
+    let spreadB = 0;
+    for (let index = 0; index < a.length; index++) {
+        const deltaA = a[index] - meanA;
+        const deltaB = b[index] - meanB;
+        numerator += deltaA * deltaB;
+        spreadA += deltaA * deltaA;
+        spreadB += deltaB * deltaB;
     }
-    return da > 0 && db > 0 ? num / Math.sqrt(da * db) : null;
+    return spreadA > 0 && spreadB > 0 ? numerator / Math.sqrt(spreadA * spreadB) : null;
 }
-
-function pct(value) { return `${(value * 100).toFixed(1)}%`; }
-function num(value, digits = 2) { return Number(value).toFixed(digits); }
-function cell(value) { return String(value == null ? "" : value).replace(/\|/g, "\\|"); }
 
 function buildCatalog(registry, statMap) {
     const result = [];
-    for (const [kind, rows] of [["lesser", registry.lesser], ["greater", registry.greater]]) {
-        for (const row of rows) {
+    for (const kind of ["lesser", "greater"]) {
+        for (const row of Array.isArray(registry && registry[kind]) ? registry[kind] : []) {
             const stat = statMap.get(row.cardId);
             if (!stat) continue;
             result.push({
                 cardId: row.cardId,
-                name: row.name_cn || row.cardId,
+                name: row.name_cn || row.name || row.cardId,
                 kind,
-                rated: !row.unrated,
-                schemeScore: row.unrated ? 0 : Number(row.score || 0),
+                rated: row.unrated !== true,
+                schemeScore: row.unrated === true ? 0 : Number(row.score || 0),
                 placement: Number(stat.AveragePlacement),
                 pickRate: Number(stat.PickRate),
                 dataPoints: Number(stat.DataPoints),
@@ -71,131 +86,148 @@ function buildCatalog(registry, statMap) {
 }
 
 function rankCatalog(rows) {
-    const schemeCompare = (a, b) =>
-        Number(b.rated) - Number(a.rated) || b.schemeScore - a.schemeScore || a.cardId.localeCompare(b.cardId);
-    const fireCompare = (a, b) => a.placement - b.placement || a.cardId.localeCompare(b.cardId);
-    const schemeRanks = averageRanks(rows, schemeCompare, x => `${x.rated ? 1 : 0}:${x.schemeScore}`);
-    const fireRanks = averageRanks(rows, fireCompare, x => x.placement.toFixed(9));
-    return rows.map(x => ({
-        ...x,
-        schemeRank: schemeRanks.get(x.cardId),
-        fireRank: fireRanks.get(x.cardId),
-        rankGap: schemeRanks.get(x.cardId) - fireRanks.get(x.cardId),
+    const schemeRanks = averageRanks(rows,
+        (a, b) => Number(b.rated) - Number(a.rated) || b.schemeScore - a.schemeScore
+            || a.cardId.localeCompare(b.cardId),
+        item => `${item.rated ? 1 : 0}:${item.schemeScore}`);
+    const referenceRanks = averageRanks(rows,
+        (a, b) => a.placement - b.placement || a.cardId.localeCompare(b.cardId),
+        item => item.placement.toFixed(9));
+    return rows.map(item => ({
+        ...item,
+        schemeRank: schemeRanks.get(item.cardId),
+        referenceRank: referenceRanks.get(item.cardId),
+        rankGap: schemeRanks.get(item.cardId) - referenceRanks.get(item.cardId),
     }));
 }
 
-function offerTopByScheme(offers) {
-    return offers.slice().sort((a, b) =>
-        Number(!b.IsUnrated) - Number(!a.IsUnrated) || Number(b.score) - Number(a.score)
+function topByScheme(offers) {
+    return offers.slice().sort((a, b) => Number(!b.IsUnrated) - Number(!a.IsUnrated)
+        || Number(b.score) - Number(a.score)
         || String(a.CardId).localeCompare(String(b.CardId)))[0];
 }
 
-function offerTopByFirestone(offers, statMap) {
-    return offers.filter(x => statMap.has(x.CardId)
-        && statMap.get(x.CardId).DataPoints >= MIN_FIRESTONE_POINTS).sort((a, b) =>
-        statMap.get(a.CardId).AveragePlacement - statMap.get(b.CardId).AveragePlacement
-        || String(a.CardId).localeCompare(String(b.CardId)))[0];
+function topByReference(offers, statMap) {
+    return offers.filter(offer => statMap.has(offer.CardId)
+        && Number(statMap.get(offer.CardId).DataPoints) >= MIN_REFERENCE_POINTS)
+        .sort((a, b) => Number(statMap.get(a.CardId).AveragePlacement)
+            - Number(statMap.get(b.CardId).AveragePlacement)
+            || String(a.CardId).localeCompare(String(b.CardId)))[0];
+}
+
+function number(value, digits = 2) {
+    return Number(value).toFixed(digits);
+}
+
+function cell(value) {
+    return String(value == null ? "" : value).replace(/\|/g, "\\|");
 }
 
 function generateReport(active, registry, shadows, generatedAt = new Date()) {
-    if (!active || active.StatusReason !== "verified" || !Array.isArray(active.Stats))
-        throw new Error("refusing report: active trinket stats snapshot is not verified");
-    const statMap = new Map(active.Stats.map(x => [x.TrinketCardId, x]));
-    const catalog = buildCatalog(registry, statMap);
-    const reliableCatalog = catalog.filter(x => x.dataPoints >= MIN_FIRESTONE_POINTS);
-    const ranked = ["lesser", "greater"].flatMap(kind => rankCatalog(reliableCatalog.filter(x => x.kind === kind)));
-    const eligible = shadows.filter(x => x.schemaVersion === 2 && x.eligibleForCalibration === true
-        && x.completionStatus === "completed" && x.selectedCardId && Array.isArray(x.offers));
+    if (!active || active.StatusReason !== "verified" || !Array.isArray(active.Stats)) {
+        throw new Error("refusing report: reference trinket statistics snapshot is not verified");
+    }
+    if (!Array.isArray(shadows)) throw new Error("refusing report: shadow input must be JSON Lines");
 
-    const offerRows = eligible.map((sample, index) => {
-        const scheme = offerTopByScheme(sample.offers);
-        const fire = offerTopByFirestone(sample.offers, statMap);
-        const selectedStat = statMap.get(sample.selectedCardId);
-        const fireStat = fire && statMap.get(fire.CardId);
+    const statMap = new Map(active.Stats.map(row => [row.TrinketCardId, row]));
+    const catalog = buildCatalog(registry, statMap);
+    const reliableCatalog = catalog.filter(row => row.dataPoints >= MIN_REFERENCE_POINTS);
+    const ranked = ["lesser", "greater"].flatMap(kind =>
+        rankCatalog(reliableCatalog.filter(row => row.kind === kind)));
+    const eligibleShadows = shadows.filter(row => row.schemaVersion === 2
+        && row.eligibleForCalibration === true
+        && row.completionStatus === "completed"
+        && row.selectedCardId
+        && Array.isArray(row.offers)
+        && row.offers.length > 0);
+
+    const shadowComparisons = eligibleShadows.map(sample => {
+        const scheme = topByScheme(sample.offers);
+        const reference = topByReference(sample.offers, statMap);
         return {
-            index: index + 1,
             sample,
             scheme,
-            fire,
-            selected: sample.offers.find(x => x.CardId === sample.selectedCardId),
-            schemeFireAgree: !!fire && scheme.CardId === fire.CardId,
+            reference,
+            schemeReferenceAgree: Boolean(reference && scheme.CardId === reference.CardId),
             playerSchemeAgree: scheme.CardId === sample.selectedCardId,
-            playerFireAgree: !!fire && fire.CardId === sample.selectedCardId,
-            playerPlacementGap: selectedStat && fireStat
-                ? selectedStat.AveragePlacement - fireStat.AveragePlacement : null,
+            playerReferenceAgree: Boolean(reference && reference.CardId === sample.selectedCardId),
         };
     });
 
-    const lines = [];
-    lines.push("# P1.5 饰品统计离线差异报告", "");
-    lines.push(`生成时间：${generatedAt.toISOString()}`);
-    lines.push(`游戏 Build：${active.GameBuild}；Firestone 上游时间：${active.LastUpdateDateUtc}`);
-    lines.push(`Firestone：${active.Stats.length} 条，${Number(active.TotalDataPoints).toLocaleString("en-US")} 数据点；内容 SHA-256：\`${active.ContentSha256}\``);
-    lines.push(`可靠性门槛：单条至少 ${MIN_FIRESTONE_POINTS} 样本；${reliableCatalog.length}/${catalog.length} 条进入主排序，${catalog.length - reliableCatalog.length} 条低样本仅保留覆盖记录。`);
-    lines.push(`shadow：${eligible.length} 个有效选择批次（小饰品 ${eligible.filter(x => x.selectionContext === "scheduled_lesser").length}，大饰品 ${eligible.filter(x => x.selectionContext === "scheduled_greater").length}）。`, "");
-    lines.push("## 结论边界", "");
-    lines.push("- 本报告只做离线诊断，不修改生产评分或 UI 排序。", "- Firestone 平均名次受英雄、阵容、费用、玩家水平和选择倾向影响，不等于饰品的因果强度。", `- 主排序和shadow中的Firestone首选均排除少于 ${MIN_FIRESTONE_POINTS} 样本的条目。`, "- 全局比较使用 scheme B 注册表基础分；shadow 报价比较使用实战时已经计算并落盘的动态 scheme B 分数。", "- shadow 样本量仍小，只能定位冲突案例，不能据此拟合权重。", "");
+    const lines = [
+        "# Offline trinket statistics comparison",
+        "",
+        `Generated: ${generatedAt.toISOString()}`,
+        `Game build: ${active.GameBuild || "unknown"}`,
+        `Reference snapshot: ${active.Stats.length} records; ${Number(active.TotalDataPoints || 0).toLocaleString("en-US")} total data points`,
+        `Reference content SHA-256: ${active.ContentSha256 || "not-provided"}`,
+        `Reliability threshold: ${MIN_REFERENCE_POINTS} data points per trinket`,
+        "",
+        "This report is offline-only. It does not alter production scoring, recommendations, or UI behavior.",
+        "The reference snapshot is explicit caller-provided input and is not read from user caches.",
+        "",
+        "## Ranking agreement",
+        "",
+        "| Kind | Reliable records | Rated | Unrated | Spearman rho |",
+        "|---|---:|---:|---:|---:|",
+    ];
 
-    lines.push("## 全局排序一致性", "");
-    lines.push("| 类型 | 覆盖 | rated | unrated | Spearman ρ |", "|---|---:|---:|---:|---:|");
     for (const kind of ["lesser", "greater"]) {
-        const rows = ranked.filter(x => x.kind === kind);
-        const sr = averageRanks(rows, (a, b) => a.schemeRank - b.schemeRank, x => x.schemeRank);
-        const fr = averageRanks(rows, (a, b) => a.fireRank - b.fireRank, x => x.fireRank);
-        const rho = spearman(rows, sr, fr);
-        lines.push(`| ${kind === "lesser" ? "小饰品" : "大饰品"} | ${rows.length} | ${rows.filter(x => x.rated).length} | ${rows.filter(x => !x.rated).length} | ${rho == null ? "n/a" : num(rho, 3)} |`);
+        const rows = ranked.filter(row => row.kind === kind);
+        const schemeRanks = new Map(rows.map(row => [row.cardId, row.schemeRank]));
+        const referenceRanks = new Map(rows.map(row => [row.cardId, row.referenceRank]));
+        const rho = correlation(rows, schemeRanks, referenceRanks);
+        lines.push(`| ${kind} | ${rows.length} | ${rows.filter(row => row.rated).length} | ${rows.filter(row => !row.rated).length} | ${rho == null ? "n/a" : number(rho, 3)} |`);
     }
+
+    lines.push("", "## Largest rank gaps", "");
+    lines.push("| Trinket | Kind | Scheme rank | Reference rank | Rank gap | Placement | Pick rate | Data points |",
+        "|---|---|---:|---:|---:|---:|---:|---:|");
+    for (const row of ranked.slice().sort((a, b) => Math.abs(b.rankGap) - Math.abs(a.rankGap)).slice(0, 20)) {
+        lines.push(`| ${cell(row.name)} | ${row.kind} | ${number(row.schemeRank, 1)} | ${number(row.referenceRank, 1)} | ${number(row.rankGap, 1)} | ${number(row.placement, 3)} | ${number(row.pickRate * 100, 1)}% | ${row.dataPoints} |`);
+    }
+
+    const count = key => shadowComparisons.filter(row => row[key]).length;
+    lines.push("", "## Shadow offer comparison", "");
+    lines.push(`- Eligible completed offers: ${shadowComparisons.length}`);
+    lines.push(`- Local scheme and reference top choice agree: ${count("schemeReferenceAgree")}/${shadowComparisons.length}`);
+    lines.push(`- Player and local scheme agree: ${count("playerSchemeAgree")}/${shadowComparisons.length}`);
+    lines.push(`- Player and reference agree: ${count("playerReferenceAgree")}/${shadowComparisons.length}`);
     lines.push("");
-
-    for (const kind of ["lesser", "greater"]) {
-        const label = kind === "lesser" ? "小饰品" : "大饰品";
-        const rows = ranked.filter(x => x.kind === kind);
-        const under = rows.slice().sort((a, b) => b.rankGap - a.rankGap).slice(0, 10);
-        const over = rows.slice().sort((a, b) => a.rankGap - b.rankGap).slice(0, 10);
-        for (const [title, list] of [["Firestone明显强于scheme B", under], ["scheme B明显强于Firestone", over]]) {
-            lines.push(`### ${label}：${title}`, "");
-            lines.push("| 饰品 | rated | B分 | B排名 | Firestone排名 | 平均名次 | 选取率 | 样本 | 排名差(B-F) |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|");
-            for (const x of list) lines.push(`| ${cell(x.name)} | ${x.rated ? "是" : "否"} | ${num(x.schemeScore, 1)} | ${num(x.schemeRank, 1)} | ${num(x.fireRank, 1)} | ${num(x.placement, 3)} | ${pct(x.pickRate)} | ${x.dataPoints} | ${num(x.rankGap, 1)} |`);
-            lines.push("");
-        }
-    }
-
-    const count = key => offerRows.filter(x => x[key]).length;
-    const gaps = offerRows.map(x => x.playerPlacementGap).filter(x => x != null);
-    lines.push("## shadow 报价级对照", "");
-    lines.push(`- scheme B 与 Firestone 首选一致：${count("schemeFireAgree")}/${offerRows.length}`);
-    lines.push(`- 玩家实选与 scheme B 首选一致：${count("playerSchemeAgree")}/${offerRows.length}`);
-    lines.push(`- 玩家实选与 Firestone 首选一致：${count("playerFireAgree")}/${offerRows.length}`);
-    lines.push(`- 玩家实选相对报价内 Firestone 最优的平均名次差：${gaps.length ? num(gaps.reduce((a, b) => a + b, 0) / gaps.length, 3) : "n/a"}（正值表示群体平均名次更差）。`, "");
-    lines.push("| # | 类型/回合 | choice | scheme B首选 | Firestone首选 | 玩家实选 | B=F | 玩家=B | 玩家=F |", "|---:|---|---:|---|---|---|---:|---:|---:|");
-    for (const x of offerRows) {
-        const s = x.sample;
-        const type = s.selectionContext === "scheduled_lesser" ? "小" : "大";
-        const fireName = x.fire ? (x.fire.Name || x.fire.CardId) : "缺数据";
-        const selectedName = x.selected ? (x.selected.Name || x.selected.CardId) : s.selectedCardId;
-        lines.push(`| ${x.index} | ${type}/T${s.turn} | ${s.choiceId} | ${cell(x.scheme.Name || x.scheme.CardId)} (${num(x.scheme.score, 1)}) | ${cell(fireName)} | ${cell(selectedName)} | ${x.schemeFireAgree ? "✓" : ""} | ${x.playerSchemeAgree ? "✓" : ""} | ${x.playerFireAgree ? "✓" : ""} |`);
-    }
-    lines.push("", "## 下一步门禁", "", "1. 先人工复核排名差最大的饰品，区分注册表漏评、阵容条件差异与Firestone选择偏差。", "2. 在没有完成分层（至少大小饰品、MMR、选取率/样本量可靠性）前，不把平均名次直接换算成加分。", "3. 若进入评分实验，只允许离线回放或shadow候选分支；生产分支继续保持隔离，并设置有界影响上限和一键失效关闭。", "");
     return lines.join("\n");
 }
 
-function parseArgs(argv) {
-    const args = {};
-    for (let i = 0; i < argv.length; i += 2) args[argv[i]] = argv[i + 1];
-    return args;
+function run(argv) {
+    const args = parseArgs(argv);
+    const activePath = requireOption(args, "--active");
+    const shadowPath = requireOption(args, "--shadow");
+    const registryPath = requireOption(args, "--registry");
+    const report = generateReport(
+        readJson(activePath),
+        readJson(registryPath),
+        parseJsonLines(fs.readFileSync(shadowPath, "utf8")),
+    );
+    if (args["--output"]) {
+        fs.writeFileSync(args["--output"], report, "utf8");
+        process.stdout.write(`Trinket statistics comparison written: ${args["--output"]}\n`);
+    } else {
+        process.stdout.write(`${report}\n`);
+    }
 }
 
 if (require.main === module) {
-    const root = path.resolve(__dirname, "..");
-    const repoRoot = path.resolve(root, "..");
-    const args = parseArgs(process.argv.slice(2));
-    const activePath = args["--active"] || path.join(process.env.APPDATA || "", "bob-coach", "data", "trinket-stats", "active.json");
-    const shadowPath = args["--shadow"] || path.join(process.env.APPDATA || "", "bob-coach", "trinket_shadow.jsonl");
-    const registryPath = args["--registry"] || path.join(root, "data", "trinket_registry.json");
-    const outputPath = args["--output"] || path.join(repoRoot, "docs", "P1.5_饰品统计离线差异报告_2026-07-11.md");
-    const report = generateReport(readJson(activePath), readJson(registryPath), readJsonLines(shadowPath));
-    fs.writeFileSync(outputPath, report, "utf8");
-    console.log(`Trinket stats diff report written: ${outputPath}`);
+    try {
+        run(process.argv.slice(2));
+    } catch (error) {
+        process.stderr.write(`Error: ${error.message}\n`);
+        process.exitCode = 1;
+    }
 }
 
-module.exports = { generateReport, parseJsonLines, MIN_FIRESTONE_POINTS };
+module.exports = {
+    generateReport,
+    parseArgs,
+    parseJsonLines,
+    run,
+    MIN_REFERENCE_POINTS,
+};

@@ -16,6 +16,7 @@ foreach ($file in @(
     "test_public_documentation_contract.js",
     "test_ci_hdt_baseline_contract.js",
     "test_behavior_output_contract.js",
+    "test_offline_trinket_audit_tools.js",
     "test_repository_validator.js",
     "test_release_build_contract.js",
     "test_release_identity.js",

@@ -541,12 +541,12 @@ namespace BobCoach.Engine
         private void PhaseStartOfCombat(List<CombatUnit> atkUnits, List<CombatUnit> defUnits, CombatContext ctx)
         {
             // Phase 1a: 优先级英雄技能（伊利丹、塔维什 — 高于所有随从/饰品）
-            ProcessHeroStartOfCombat(atkUnits, defUnits, ctx, true);
-            ProcessHeroStartOfCombat(defUnits, atkUnits, ctx, false, true);
+            ProcessHeroStartOfCombat(atkUnits, defUnits, ctx, isDefender: false, isPriority: true);
+            ProcessHeroStartOfCombat(defUnits, atkUnits, ctx, isDefender: true, isPriority: true);
 
             // Phase 1b: 普通英雄技能
-            ProcessHeroStartOfCombat(atkUnits, defUnits, ctx, false);
-            ProcessHeroStartOfCombat(defUnits, atkUnits, ctx, true);
+            ProcessHeroStartOfCombat(atkUnits, defUnits, ctx, isDefender: false);
+            ProcessHeroStartOfCombat(defUnits, atkUnits, ctx, isDefender: true);
 
             // Phase 1c: 收集有 START_OF_COMBAT 的随从，按交替左→右排序
             var socAtk = atkUnits.Where(u => u.Alive && u.HasStartOfCombat).ToList();
