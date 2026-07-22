@@ -97,13 +97,13 @@ Run: `git diff --check` and `powershell.exe -NoProfile -ExecutionPolicy Bypass -
 
 Expected: both commands exit successfully with no whitespace or repository-policy violations.
 
-- [ ] **Step 3: Review and commit**
+- [x] **Step 3: Review and commit**
 
 Run: `git diff --stat; git diff -- docs/superpowers/plans/2026-07-22-github-repository-data-disclaimer.md tests/test_public_documentation_contract.js DATA_SOURCES.md README.md README.en.md PRIVACY.md NOTICE; git add docs/superpowers/plans/2026-07-22-github-repository-data-disclaimer.md tests/test_public_documentation_contract.js DATA_SOURCES.md README.md README.en.md PRIVACY.md NOTICE; git commit -m "docs: clarify GitHub repository data disclaimer"`
 
 Expected: one commit is created and contains only the plan, contract, and disclaimer documentation.
 
-- [ ] **Step 4: Push without force**
+- [x] **Step 4: Push without force**
 
 Run: `git push origin codex/add-bilingual-readme`
 
