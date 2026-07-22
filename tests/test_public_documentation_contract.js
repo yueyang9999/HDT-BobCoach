@@ -106,6 +106,26 @@ for (const [name, content, statements] of [
     [
         "README.md",
         chineseReadme,
+        ["GitHub 仓库中的代码、文档、规则快照、议题、PR、镜像、fork、评论和外部链接不等于官方数据、完整数据或最新数据"],
+    ],
+    [
+        "README.en.md",
+        englishReadme,
+        ["GitHub repository code, documentation, rule snapshots, issues, pull requests, mirrors, forks, comments, and external links are not official, complete, or current third-party data"],
+    ],
+    ["DATA_SOURCES.md", dataSources, ["GitHub 仓库数据免责声明"]],
+    ["PRIVACY.md", privacy, ["GitHub 仓库中的内容不代表运行时会读取用户 GitHub 账户、私有仓库或历史缓存"]],
+    ["NOTICE", notice, ["GitHub repository contents are not official third-party data"]],
+]) {
+    for (const statement of statements) {
+        assert.ok(content.includes(statement), `${name} must state: ${statement}`);
+    }
+}
+
+for (const [name, content, statements] of [
+    [
+        "README.md",
+        chineseReadme,
         ["不显示饰品报价选择提示", "显示开关只控制渲染", "版本化本地 `CardId` 规则"],
     ],
     [

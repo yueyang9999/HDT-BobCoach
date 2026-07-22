@@ -55,6 +55,8 @@ Matches, logs, replays, and user profiles remain on the local computer and are n
 
 Firestone/Zero to Heroes is retained only as historical evaluation context, not as a current runtime data source. The code retains source-independent validation and a restricted HearthstoneJSON/HearthSim hsdata adapter boundary, but the production plugin does not drive an external trinket-statistics request path. Bob Coach does not currently integrate, request, scrape, package, or redistribute HSReplay data. Third-party data, statistics, software, game content, and trademarks remain subject to their respective rights and terms. See [DATA_SOURCES.md](DATA_SOURCES.md) and [NOTICE](NOTICE).
 
+GitHub repository code, documentation, rule snapshots, issues, pull requests, mirrors, forks, comments, and external links are not official, complete, or current third-party data; they may be stale, incomplete, modified, unavailable, or inconsistent with the user's local HDT/HearthDb build. They do not automatically become runtime inputs, third-party authorization, or endorsement by any rights holder. For an installer, rely on the versioned `manifest.json`, the external ZIP SHA-256 checksum, and the version-specific data-source statement; GitHub-generated source archives, CI artifacts, and third-party attachments are not official installers.
+
 ## Build and Test
 
 The repository does not contain HDT binaries. Building requires the .NET Framework 4.7.2 Developer Pack and a local HDT `1.53.5` directory:

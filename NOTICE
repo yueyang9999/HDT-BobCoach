@@ -43,6 +43,15 @@ Runtime relationships
   redistribute HSReplay data. Any future integration requires a separate
   review of the applicable terms and permissions.
 
+GitHub repository contents are not official third-party data. Code,
+documentation, rule snapshots, issues, pull requests, mirrors, forks,
+comments, and external links may be stale, incomplete, modified, unavailable,
+or inconsistent with a user's local HDT/HearthDb build. They do not constitute
+runtime inputs, a complete or current dataset, authorization, or endorsement by
+Blizzard Entertainment, HearthSim, GitHub, or any other rights holder. Bob
+Coach does not automatically read a user's GitHub account, private
+repositories, tokens, issue/PR content, or local history caches.
+
 Release restriction
 -------------------
 

@@ -55,6 +55,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 
 Firestone/Zero to Heroes 仅作为历史评估背景记录，不是当前运行时数据来源。代码保留来源无关的外部数据校验能力和 HearthstoneJSON/HearthSim hsdata 的受限适配边界，但生产插件当前不驱动外部饰品统计请求。Bob Coach 当前未接入、请求、抓取、打包或再分发 HSReplay 数据。第三方数据、统计、软件、游戏内容和商标仍受各自权利与条款约束，详见 [DATA_SOURCES.md](DATA_SOURCES.md) 和 [NOTICE](NOTICE)。
 
+GitHub 仓库中的代码、文档、规则快照、议题、PR、镜像、fork、评论和外部链接不等于官方数据、完整数据或最新数据；内容可能过期、缺失、被修改，或与用户本机的 HDT/HearthDb build 不一致。它们不自动成为运行时数据源、第三方授权或任何权利人的背书。安装包请以对应版本的 `manifest.json`、外部 SHA-256 校验文件和版本化数据源声明为准；GitHub 自动生成的源码压缩包、CI 工件和第三方附件不是官方安装包。
+
 ## 构建与测试
 
 仓库不包含 HDT 二进制。构建需要本机安装 .NET Framework 4.7.2 Developer Pack，并提供 HDT `1.53.5` 目录：
