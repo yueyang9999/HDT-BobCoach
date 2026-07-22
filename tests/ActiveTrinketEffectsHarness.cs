@@ -22,6 +22,7 @@ internal static class ActiveTrinketEffectsHarness
     private const string ValorousMedallionId = "BG30_MagicItem_970";
     private const string GreaterValorousMedallionId = "BG30_MagicItem_970t";
     private const string BalefulIncenseId = "BG32_MagicItem_360";
+    private const string BartendOTronOilcanId = "BG30_MagicItem_705";
 
     private static int Main()
     {
@@ -29,7 +30,7 @@ internal static class ActiveTrinketEffectsHarness
 
         if (!string.Equals(
             TrinketEffectRegistry.RuleSetVersion,
-            "hdt-1.53.5-hearthdb-2026-07-22-r2",
+            "hdt-1.53.5-hearthdb-2026-07-22-r3",
             StringComparison.Ordinal))
             return Fail("equipped-trinket rules must expose their audited local ruleset version");
         if (TestExactResolutionAndDiagnostics(registry) != 0) return 1;
@@ -37,6 +38,7 @@ internal static class ActiveTrinketEffectsHarness
         if (TestUnknownDiagnosticDeduplication() != 0) return 1;
         if (TestGoldenRequirement(registry) != 0) return 1;
         if (TestTavernSpellCost(registry) != 0) return 1;
+        if (TestOilcanUpgradeRules(registry) != 0) return 1;
         if (TestSynergyScoring(registry) != 0) return 1;
         if (TestCombatEffectsAndContextIsolation(registry) != 0) return 1;
         if (TestExpandedStartOfCombatEffects(registry) != 0) return 1;
@@ -97,12 +99,13 @@ internal static class ActiveTrinketEffectsHarness
             ValorousMedallionId,
             GreaterValorousMedallionId,
             BalefulIncenseId,
+            BartendOTronOilcanId,
             EternalPortraitId,
             DesignerEyepatchId.ToLowerInvariant(),
             "UNKNOWN_ACTIVE_TRINKET",
         });
 
-        if (context.ResolvedCardIds.Count != 15
+        if (context.ResolvedCardIds.Count != 16
             || context.ResolvedCardIds[0] != DesignerEyepatchId
             || !context.ResolvedCardIds.Contains(CowrieNecklaceId)
             || !context.ResolvedCardIds.Contains(IronforgeAnvilId)
@@ -118,12 +121,70 @@ internal static class ActiveTrinketEffectsHarness
             || !context.ResolvedCardIds.Contains(ValorousMedallionId)
             || !context.ResolvedCardIds.Contains(GreaterValorousMedallionId)
             || !context.ResolvedCardIds.Contains(BalefulIncenseId)
+            || !context.ResolvedCardIds.Contains(BartendOTronOilcanId)
             || context.UnknownCardIds.Count != 2
             || !context.UnknownCardIds.Contains(DesignerEyepatchId.ToLowerInvariant())
             || !context.UnknownCardIds.Contains("UNKNOWN_ACTIVE_TRINKET"))
             return Fail("known effects must resolve by exact CardId and unknown IDs must be diagnostics only");
 
         return 0;
+    }
+
+    private static int TestOilcanUpgradeRules(TrinketEffectRegistry registry)
+    {
+        var oilcan = registry.Resolve(new[] { BartendOTronOilcanId });
+        var state = new GameState
+        {
+            GameActive = true,
+            Gold = 4,
+            TavernTier = 2,
+            Turn = 2,
+            LastUpgradeTurn = 2,
+            TavernUpgradeCost = -1,
+            ActiveTrinketContext = oilcan,
+            EffectiveRules = oilcan.ApplyTo(EffectiveGameRules.Default),
+            BoardMinions = new List<MinionData>(),
+            HandMinions = new List<MinionData>(),
+            ShopMinions = new List<MinionData>(),
+        };
+
+        if (contextHasNoUnknown(oilcan) == false)
+            return Fail("Oilcan must resolve as a known exact CardId");
+        if (GameRuleEvaluator.GetUpgradeCost(state, state.EffectiveRules) != 4)
+            return Fail("Oilcan must reduce the fallback upgrade cost by exactly 3");
+        if (!new ActionEnumerator().Enumerate(state).Any(action => action.Type == ActionType.Upgrade))
+            return Fail("ActionEnumerator must allow upgrade when gold meets Oilcan's discounted cost");
+
+        var simulated = new Simulator().Simulate(state, new GameAction { Type = ActionType.Upgrade });
+        if (simulated.TavernTier != 3 || simulated.Gold != 0)
+            return Fail("Simulator must deduct Oilcan's discounted upgrade cost and advance the tavern tier");
+
+        state.Turn = 10;
+        state.LastUpgradeTurn = 1;
+        if (GameRuleEvaluator.GetUpgradeCost(state, state.EffectiveRules) != 0)
+            return Fail("Oilcan fallback upgrade cost must clamp at zero");
+
+        state.TavernUpgradeCost = 5;
+        state.Gold = 4;
+        if (GameRuleEvaluator.GetUpgradeCost(state, state.EffectiveRules) != 5
+            || new ActionEnumerator().Enumerate(state).Any(action => action.Type == ActionType.Upgrade))
+            return Fail("Observed HDT upgrade cost must be treated as already effective without double discount");
+
+        string phaseSourcePath = Path.Combine(
+            Directory.GetCurrentDirectory(), "src", "BobCoach", "Core", "TurnPhaseEngine.cs");
+        string phaseSource = File.ReadAllText(phaseSourcePath);
+        if (!phaseSource.Contains("GameRuleEvaluator.GetUpgradeCost(state, rules)"))
+            return Fail("TurnPhaseEngine must use the shared effective upgrade-cost evaluator");
+
+        var wrongCase = registry.Resolve(new[] { BartendOTronOilcanId.ToLowerInvariant() });
+        if (wrongCase.ResolvedCardIds.Count != 0 || wrongCase.UnknownCardIds.Count != 1)
+            return Fail("Oilcan matching must remain exact and case-sensitive");
+        return 0;
+    }
+
+    private static bool contextHasNoUnknown(ActiveTrinketContext context)
+    {
+        return context != null && context.UnknownCardIds.Count == 0;
     }
 
     private static int TestGoldenRequirement(TrinketEffectRegistry registry)

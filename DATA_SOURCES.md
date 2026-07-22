@@ -32,8 +32,9 @@
 ## 已装备饰品的本地规则
 
 - **来源与输入：** HDT 已知的本机对局状态提供 `GameState.ActiveTrinkets`（精确 `CardId` 列表）；已知饰品只按精确、版本化的本地 `CardId` 规则匹配，不使用报价统计、名称匹配或模糊文本推断。
-- **规则事实版本：** `hdt-1.53.5-hearthdb-2026-07-22-r2`，依据维护者本机 HDT 1.53.5 / HearthDb build 245258 快照审计；仓库和发布包不复制该快照。
-- **当前精确覆盖：** `BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`、`BG30_MagicItem_301`、`BG30_MagicItem_310`、`BG30_MagicItem_902`、`BG30_MagicItem_962`、`BG30_MagicItem_970`、`BG30_MagicItem_970t`、`BG32_MagicItem_360`。
+- **规则事实版本：** `hdt-1.53.5-hearthdb-2026-07-22-r3`，依据维护者本机 HDT 1.53.5 / HearthDb build 245258 快照审计；仓库和发布包不复制该快照。
+- **当前精确覆盖：** `BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`、`BG30_MagicItem_301`、`BG30_MagicItem_310`、`BG30_MagicItem_902`、`BG30_MagicItem_962`、`BG30_MagicItem_970`、`BG30_MagicItem_970t`、`BG32_MagicItem_360`、`BG30_MagicItem_705`（Bartend-o-Tron 的 Oilcan）。
+- **第三阶段硬规则：** Oilcan 使酒馆升本费用减少 3，费用下限为 0。HDT 已提供的非负实时升本按钮费用视为已经包含游戏内折扣，不重复扣减；只有实时费用缺失时才对本地确定性 fallback 应用该折扣。
 - **第二阶段战斗规则：** Eternal Portrait 和 Rivendare Portrait 只按精确随从 ID 处理；Holy Mallet、Training Certificate、Valorous Medallion、Greater Valorous Medallion 与 Baleful Incense 按所属方战场顺序和修改前属性确定目标。生命变化同步当前生命与最大生命。
 - **处理边界：** `GameState.ActiveTrinkets` 经本地注册表解析后进入 `EffectiveGameRules`、`FeatureExtractor`、`ActionScoring` 和 `CombatSimulator`，用于确定装备后的费用、合法性、卡牌与阵容价值以及战斗效果。
 - **战斗隔离：** 战斗开始效果只读取对应一方的战团与手牌快照；攻击、生命、类型和位置选择不会跨到对手上下文。

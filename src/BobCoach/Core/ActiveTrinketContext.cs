@@ -9,7 +9,7 @@ namespace BobCoach.Engine
     {
         internal static readonly ActiveTrinketContext Empty = new ActiveTrinketContext(
             new List<string>(), new List<string>(), false, false, false, false,
-            false, false, false, false, false, false, false, false, false, false, false);
+            false, false, false, false, false, false, false, false, false, false, false, false);
 
         private readonly bool _designerEyepatch;
         private readonly bool _cowrieNecklace;
@@ -26,6 +26,7 @@ namespace BobCoach.Engine
         private readonly bool _valorousMedallion;
         private readonly bool _greaterValorousMedallion;
         private readonly bool _balefulIncense;
+        private readonly bool _bartendOTronOilcan;
 
         internal ActiveTrinketContext(
             IList<string> resolvedCardIds,
@@ -44,7 +45,8 @@ namespace BobCoach.Engine
             bool trainingCertificate,
             bool valorousMedallion,
             bool greaterValorousMedallion,
-            bool balefulIncense)
+            bool balefulIncense,
+            bool bartendOTronOilcan)
         {
             ResolvedCardIds = new ReadOnlyCollection<string>(
                 new List<string>(resolvedCardIds ?? new List<string>()));
@@ -65,10 +67,16 @@ namespace BobCoach.Engine
             _valorousMedallion = valorousMedallion;
             _greaterValorousMedallion = greaterValorousMedallion;
             _balefulIncense = balefulIncense;
+            _bartendOTronOilcan = bartendOTronOilcan;
         }
 
         public ReadOnlyCollection<string> ResolvedCardIds { get; private set; }
         public ReadOnlyCollection<string> UnknownCardIds { get; private set; }
+
+        internal int UpgradeCostDelta
+        {
+            get { return _bartendOTronOilcan ? -3 : 0; }
+        }
 
         public EffectiveGameRules ApplyTo(EffectiveGameRules rules)
         {

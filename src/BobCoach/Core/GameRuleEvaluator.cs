@@ -60,8 +60,14 @@ namespace BobCoach.Engine
             if (state.TavernTier >= rules.MaxTavernTier) return null;
             if (state.TavernUpgradeCost >= 0) return state.TavernUpgradeCost;
             if (state.TavernTier >= 6) return null;
-            return ActionEnumerator.GetUpgradeCost(
+            int fallbackCost = ActionEnumerator.GetUpgradeCost(
                 state.TavernTier, state.Turn, state.LastUpgradeTurn);
+            ActiveTrinketContext trinkets = state.ActiveTrinketContext;
+            if (trinkets == null
+                || (trinkets.ResolvedCardIds.Count == 0 && trinkets.UnknownCardIds.Count == 0))
+                trinkets = rules.ActiveTrinkets;
+            int delta = trinkets != null ? trinkets.UpgradeCostDelta : rules.UpgradeCostDelta;
+            return Math.Max(0, fallbackCost + delta);
         }
 
         public static int GetRefreshCost(
