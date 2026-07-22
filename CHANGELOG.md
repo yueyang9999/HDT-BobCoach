@@ -7,7 +7,7 @@ All notable changes are recorded here. The project follows Semantic Versioning f
 - Established the clean public product repository, CI, community files, and maintainer documentation.
 - Added deterministic repository validation and an official HDT dependency pin for CI.
 
-## 0.2.0-beta.2 - 2026-07-22
+## 0.2.0-beta.2 local release candidate (unpublished) - 2026-07-22
 
 - Retired all runtime requests, caching, parsing, and retry entry points for Firestone trinket data.
 - Hid trinket-offer recommendations by default without disabling equipped-trinket recognition or local effect evaluation.

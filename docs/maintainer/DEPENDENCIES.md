@@ -20,7 +20,7 @@
 
 已装备饰品效果不是外部数据依赖。输入仅来自 HDT 已知的 `ActiveTrinkets`、战团和手牌状态，已知效果按版本化本地 `CardId` 规则处理；未知 ID 保守忽略效果并记录诊断。当前 `hdt-1.53.5-hearthdb-2026-07-22-r3` 规则集的 16 个精确 ID 依据 HDT 1.53.5 / HearthDb build 245258 快照审计，快照不进入仓库或发布包；Oilcan (`BG30_MagicItem_705`) 的 3 金币升本折扣通过统一有效费用入口进入枚举、评分和模拟，实时 HDT 费用不重复折扣。报价推荐的默认关闭显示开关只控制渲染，不控制已装备效果链。饰品规则测试只使用合成状态和本地固定 ID，不下载或复刻第三方统计。
 
-beta.2 发布身份不用于重建历史 beta.1 preview。`tools/release/build_offline_package.ps1 -CurrentSeasonPreview` 仅保留给旧调用方返回明确的历史边界错误；它不携带 beta.1 的 DLL size/hash，也不允许从当前输入伪造旧包。
+源码版本 `0.2.0-beta.2` 目前只对应本地 release candidate；GitHub 唯一公开 Release 是 `v0.2.0-beta.1`，不得在文档或脚本中伪造 beta.2 公共下载资产。beta.2 身份不用于重建历史 beta.1 preview。`tools/release/build_offline_package.ps1 -CurrentSeasonPreview` 仅保留给旧调用方返回明确的历史边界错误；它不携带 beta.1 的 DLL size/hash，也不允许从当前输入伪造旧包。
 
 Hearthstone、HDT、HearthDb、HearthstoneJSON 与 Firestone/Zero to Heroes 的名称、数据和权利不因本仓库 MIT 许可证而重新授权。完整来源和限制见根目录 `DATA_SOURCES.md` 与 `NOTICE`。
 

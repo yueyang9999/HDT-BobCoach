@@ -2,16 +2,16 @@
 
 ## 当前状态
 
-当前公开测试版本为 `0.2.0-beta.2`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。不要把仓库源码、CI 产物或第三方转发文件当作官方安装包。
+当前最新公开版本为 `0.2.0-beta.1`。仓库当前源码版本为 `0.2.0-beta.2`，只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。不要把仓库源码、CI 产物、本地候选包或第三方转发文件当作已公开的官方安装包。
 
 Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 | 你的系统 | 下载 | 验证状态 |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.2 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | 已完成实机验收 |
-| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.2 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | beta.1 公开资产可用；beta.2 尚未完成最终实机 smoke |
+| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
 
-[下载 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/BobCoach-0.2.0-beta.2-win-x64.zip.sha256)
+[下载 beta.1 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
 
 **不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
 
@@ -19,7 +19,7 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 ## 要求
 
-- 已实机验证的 Windows 11 24H2 x64，或尚未完成专用实机验证的目标兼容环境 Windows 10 22H2 x64；
+- beta.2 最终实机 smoke 尚未完成的 Windows 11 24H2 x64，或尚未完成专用实机验证的目标兼容环境 Windows 10 22H2 x64；
 - Hearthstone Deck Tracker (HDT) `1.53.5` x64；
 - 系统提供的 .NET Framework 4.8 或 4.8.1 运行时；
 - 标准用户权限。

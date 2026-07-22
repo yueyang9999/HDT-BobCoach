@@ -1,5 +1,7 @@
 # BobCoach 0.2.0-beta.2 Release Candidate Implementation Plan
 
+> **Status correction (2026-07-22):** This historical execution record was written before GitHub publication was re-audited. `v0.2.0-beta.1` remains the only public Release; beta.2 is a local release candidate and has not been published. All beta.2 Release URLs and publication commands below are historical planned steps, not current instructions. The controlling plan is `2026-07-22-beta2-publication-truthfulness.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the approved Firestone trinket data-boundary and equipped-trinket rule changes as the reproducible `0.2.0-beta.2` prerelease.

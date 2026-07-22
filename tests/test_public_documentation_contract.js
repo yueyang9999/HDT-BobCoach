@@ -15,8 +15,9 @@ const privacy = read("PRIVACY.md");
 const notice = read("NOTICE");
 const architecture = read("docs/maintainer/ARCHITECTURE.md");
 const dependencies = read("docs/maintainer/DEPENDENCIES.md");
-const packageName = "BobCoach-0.2.0-beta.2-win-x64.zip";
-const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/${packageName}`;
+const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
+const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
+const unpublishedPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/";
 
 for (const [name, content] of [
     ["README.md", chineseReadme],
@@ -25,6 +26,7 @@ for (const [name, content] of [
 ]) {
     assert.ok(content.includes(packageName), `${name} must name the official package`);
     assert.ok(content.includes(packageUrl), `${name} must link directly to the official package`);
+    assert.ok(!content.includes(unpublishedPackageUrl), `${name} must not link to the unpublished beta.2 release`);
     assert.ok(content.includes("Windows 11 24H2 x64"), `${name} must identify Windows 11`);
     assert.ok(content.includes("Windows 10 22H2 x64"), `${name} must identify Windows 10`);
     assert.ok(content.includes("Source code (zip)"), `${name} must reject the generated ZIP source archive`);
@@ -35,9 +37,12 @@ assert.ok(
     chineseReadme.includes("[中文安装教程（新手从这里开始）](docs/user/INSTALL.md)"),
     "Chinese README must expose the beginner installation guide",
 );
-assert.ok(chineseReadme.includes("已完成实机验收"), "Chinese README must preserve Win11 verification status");
+assert.ok(chineseReadme.includes("尚未完成最终实机 smoke"), "Chinese README must state that beta.2 final Win11 smoke is pending");
 assert.ok(chineseReadme.includes("尚未完成专用实机验收"), "Chinese README must preserve Win10 limitation");
-assert.ok(englishReadme.includes("physically verified"), "English README must preserve Win11 verification status");
+assert.ok(
+    englishReadme.includes("final physical smoke validation is still pending"),
+    "English README must state that beta.2 final Win11 smoke is pending",
+);
 assert.ok(
     englishReadme.includes("not completed dedicated physical validation"),
     "English README must preserve Win10 limitation",
@@ -70,7 +75,7 @@ for (const text of [
     "不读取、不迁移、不删除既有历史缓存",
     "重新设计并单独审批",
     "当前不接入、不请求、不抓取、不打包、不再分发 HSReplay 数据",
-    "2026-07-21",
+    "2026-07-22",
 ]) {
     assert.ok(dataSources.includes(text), `data source registry must contain ${text}`);
 }
@@ -165,8 +170,16 @@ for (const [name, content, statements] of [
 }
 
 assert.ok(notice.includes("v0.2.0-beta.1"), "NOTICE must acknowledge the existing public release");
-assert.ok(notice.includes("v0.2.0-beta.2"), "NOTICE must acknowledge the current public release");
+assert.ok(notice.includes("v0.2.0-beta.2"), "NOTICE must acknowledge the local release candidate");
+assert.ok(notice.includes("has not been published"), "NOTICE must state that beta.2 is unpublished");
 assert.ok(notice.includes("separate explicit owner authorization"), "NOTICE must require authorization for each future release");
-assert.ok(!notice.includes("GitHub Release publication is not authorized"), "NOTICE must not retain the obsolete release statement");
+
+for (const [name, content, statement] of [
+    ["README.md", chineseReadme, "只处于本地发布候选阶段，尚未创建 GitHub Release"],
+    ["README.en.md", englishReadme, "is only a local release candidate and has no GitHub Release"],
+    ["docs/user/INSTALL.md", installGuide, "只处于本地发布候选阶段，尚未创建 GitHub Release"],
+]) {
+    assert.ok(content.includes(statement), `${name} must state the beta.2 publication boundary`);
+}
 
 console.log("PASS public documentation contract");

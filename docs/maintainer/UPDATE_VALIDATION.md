@@ -7,7 +7,7 @@
 ## 兼容基线与证据边界
 
 - 构建和 CI 基线：HDT `1.53.5.7354` x64、.NET Framework 4.7.2 目标框架。
-- 已完成实机验收：Windows 11 24H2 x64 + HDT `1.53.5`。
+- `0.2.0-beta.2` 本地候选尚未完成 Windows 11 24H2 x64 + HDT `1.53.5` 最终实机 smoke；自动化验证不能替代该验收。
 - 目标兼容环境：Windows 10 22H2 x64；在完成专用 VM smoke test 前，不得对外表述为“已完成 Win10 实机验证”。
 - GitHub Actions 的 `windows-2022` runner 只证明 Windows Server 构建与自动化测试通过，不能替代 Win10 或 Win11 最终用户环境。
 
