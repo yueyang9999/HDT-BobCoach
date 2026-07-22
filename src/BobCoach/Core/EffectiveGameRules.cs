@@ -54,7 +54,8 @@ namespace BobCoach.Engine
             bool carryTimewarpMarksToGreater,
             IList<string> sourceIds,
             IList<string> conflicts,
-            ActiveTrinketContext activeTrinkets = null)
+            ActiveTrinketContext activeTrinkets = null,
+            int upgradeCostDelta = 0)
         {
             MinionPurchaseCostOverride = minionPurchaseCostOverride;
             FirstMinionPurchaseCost = firstMinionPurchaseCost;
@@ -93,6 +94,7 @@ namespace BobCoach.Engine
             _sourceIds = new ReadOnlyCollection<string>(new List<string>(sourceIds ?? new string[0]));
             _conflicts = new ReadOnlyCollection<string>(new List<string>(conflicts ?? new string[0]));
             ActiveTrinkets = activeTrinkets ?? ActiveTrinketContext.Empty;
+            UpgradeCostDelta = upgradeCostDelta;
         }
 
         public int? MinionPurchaseCostOverride { get; private set; }
@@ -133,6 +135,7 @@ namespace BobCoach.Engine
         public IList<string> SourceIds { get { return _sourceIds; } }
         public IList<string> Conflicts { get { return _conflicts; } }
         public ActiveTrinketContext ActiveTrinkets { get; private set; }
+        public int UpgradeCostDelta { get; private set; }
         public static EffectiveGameRules Default { get { return DefaultRules; } }
 
         internal EffectiveGameRules WithActiveTrinkets(ActiveTrinketContext context)
@@ -147,7 +150,8 @@ namespace BobCoach.Engine
                 TimewarpOfferRules, TimewarpPoolMergeRules, UnscheduledRandomTimewarpVisitCount,
                 LesserTimewarpEnabled, TimewarpMarkDelta, SharedTimewarpMarkBudget,
                 CarryTimewarpMarksToGreater, SourceIds, Conflicts,
-                context ?? ActiveTrinketContext.Empty);
+                context ?? ActiveTrinketContext.Empty,
+                context != null ? context.UpgradeCostDelta : 0);
         }
     }
 }

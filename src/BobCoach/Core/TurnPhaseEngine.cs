@@ -52,7 +52,7 @@ namespace BobCoach.Engine
                 result.Phase = GamePhase.Late;
 
             // 紧迫度计算
-            result.LevelUrgency = ComputeLevelUrgency(turn, tier, gold, health);
+            result.LevelUrgency = ComputeLevelUrgency(state);
             result.BuildUrgency = ComputeBuildUrgency(boardSize, tier, turn, health);
             result.SurvivalUrgency = ComputeSurvivalUrgency(health, state.MaxHealth);
 
@@ -66,8 +66,12 @@ namespace BobCoach.Engine
             return result;
         }
 
-        private float ComputeLevelUrgency(int turn, int tier, int gold, int health)
+        private float ComputeLevelUrgency(GameState state)
         {
+            int turn = state.Turn;
+            int tier = state.TavernTier;
+            int gold = state.Gold;
+            int health = state.Health;
             if (tier >= 6) return 0f;
 
             float urgency = 0.5f;
@@ -76,8 +80,9 @@ namespace BobCoach.Engine
             // 中期：升本节奏
             if (turn >= 5 && turn <= 8 && tier <= 4) urgency += 0.15f;
             // 金币充裕
-            int upCost = ActionEnumerator.GetUpgradeCost(tier, turn);
-            if (gold >= upCost + 3) urgency += 0.1f;
+            EffectiveGameRules rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            int? upCost = GameRuleEvaluator.GetUpgradeCost(state, rules);
+            if (upCost.HasValue && gold >= upCost.Value + 3) urgency += 0.1f;
             // 低血量降低升本冲动
             if (health < 15) urgency -= 0.2f;
             if (health < 10) urgency -= 0.3f;
