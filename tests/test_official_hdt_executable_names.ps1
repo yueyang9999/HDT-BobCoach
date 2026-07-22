@@ -80,25 +80,17 @@ try {
                 $node.Name -eq "Get-Sha256"
         }, $true))
         Assert-Equal 1 $shaFunctions.Count "installer Get-Sha256 function count"
-        $allHashCalls = @($installerAst.FindAll({
-            param($node)
-            $node -is [Management.Automation.Language.CommandAst] -and
-                $node.GetCommandName() -eq "Get-FileHash"
-        }, $true))
-        $helperHashCalls = @($shaFunctions[0].Body.FindAll({
-            param($node)
-            $node -is [Management.Automation.Language.CommandAst] -and
-                $node.GetCommandName() -eq "Get-FileHash"
-        }, $true))
-        Assert-Equal 1 $allHashCalls.Count "installer direct Get-FileHash count"
-        Assert-Equal 1 $helperHashCalls.Count "Get-Sha256 Get-FileHash count"
         $shaText = $shaFunctions[0].Extent.Text
-        Assert-True ($shaText -match '\$previousWhatIf\s*=\s*\$WhatIfPreference') `
-            "Get-Sha256 saves WhatIfPreference"
-        Assert-True ($shaText -match '\$WhatIfPreference\s*=\s*\$false') `
-            "Get-Sha256 clears WhatIfPreference"
-        Assert-True ($shaText -match 'finally[\s\S]*\$WhatIfPreference\s*=\s*\$previousWhatIf') `
-            "Get-Sha256 restores WhatIfPreference in finally"
+        Assert-True ($shaText -match '\[IO\.File\]::OpenRead\(\$Path\)') `
+            "Get-Sha256 opens a regular file stream"
+        Assert-True ($shaText -match '\[Security\.Cryptography\.SHA256\]::Create\(\)') `
+            "Get-Sha256 creates a SHA256 implementation"
+        Assert-True ($shaText -match '\.ComputeHash\(\$stream\)') `
+            "Get-Sha256 hashes the file stream"
+        Assert-True ($shaText -match 'finally[\s\S]*\$sha256\.Dispose\(\)') `
+            "Get-Sha256 disposes SHA256 in finally"
+        Assert-True ($shaText -match 'finally[\s\S]*\$stream\.Dispose\(\)') `
+            "Get-Sha256 disposes the file stream in finally"
 
         $whatIfResult = Invoke-TestPowerShell $whatIfPackage.Installer @(
             "-PluginDirectory", $whatIfPlugins, "-WhatIf", "-Confirm:`$false"
@@ -343,7 +335,7 @@ try {
         Assert-True ($runningUninstall.ExitCode -ne 0) "running official HDT blocks uninstall"
         Assert-True (Test-Path -LiteralPath (Join-Path $runningPlugins "BobCoach.dll") -PathType Leaf) "running official HDT uninstall writes nothing"
     } finally {
-        if (!$runningProcess.HasExited) { Stop-Process -Id $runningProcess.Id -Force }
+        Stop-TestHdtProcess $runningProcess
     }
 
     Write-Host "PASS installer WhatIf, readonly lifecycle, failure recovery, AppData path, and process contracts"

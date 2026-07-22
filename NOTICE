@@ -32,7 +32,7 @@ Runtime relationships
   prompts. Its
   equipped-trinket effects are original Bob Coach logic driven by HDT match
   state and versioned local CardId rules, without Firestone statistics. The
-  `hdt-1.53.5-hearthdb-2026-07-22` ruleset covers eight exact CardIds audited
+  `hdt-1.53.5-hearthdb-2026-07-22-r2` ruleset covers 15 exact CardIds audited
   against a maintainer-provided HearthDb snapshot; that snapshot is not copied
   into the repository or release package, and tests use synthetic state only.
 - HearthstoneJSON/hsdata and Gamerhub data remain subject to their own rights

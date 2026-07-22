@@ -82,7 +82,7 @@ try {
         Assert-True ($runningResult.ExitCode -ne 0) "running HDT blocks uninstall"
         Assert-True (Test-Path -LiteralPath $runningDll) "running HDT retains DLL"
     } finally {
-        if (!$runningProcess.HasExited) { Stop-Process -Id $runningProcess.Id -Force }
+        Stop-TestHdtProcess $runningProcess
     }
 
     $outsideData = Join-Path $testRoot "OutsideData"

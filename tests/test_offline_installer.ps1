@@ -22,8 +22,16 @@ try {
     $package = New-TestOfflinePackage -Root $testRoot -Name "FreshPackage"
     $plugins = New-TestHdtPluginDirectory "Fresh"
 
-    $whatIf = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $plugins, "-WhatIf", "-Confirm:`$false")
-    Assert-Equal 0 $whatIf.ExitCode "WhatIf exit"
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $whatIfOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $package.Installer `
+            -PluginDirectory $plugins -WhatIf 2>&1
+        $whatIfExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    Assert-Equal 0 $whatIfExitCode "WhatIf -File exit; output=$(@($whatIfOutput) -join ' | ')"
     Assert-False (Test-Path -LiteralPath $plugins) "WhatIf creates no plugin directory"
 
     $fresh = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $plugins, "-Confirm:`$false")
@@ -150,7 +158,7 @@ try {
             $env:APPDATA = $previousAppData
         }
     } finally {
-        if (!$runningProcess.HasExited) { Stop-Process -Id $runningProcess.Id -Force }
+        Stop-TestHdtProcess $runningProcess
     }
 
     Write-Host "PASS offline installer install, integrity, upgrade, rollback, and HDT process contracts"

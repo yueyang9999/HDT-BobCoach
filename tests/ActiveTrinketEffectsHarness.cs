@@ -15,6 +15,13 @@ internal static class ActiveTrinketEffectsHarness
     private const string StegodonPortraitId = "BG35_MagicItem_702";
     private const string TinyfinOnesieId = "BG30_MagicItem_441";
     private const string DramalocStickerId = "BG35_MagicItem_754";
+    private const string EternalPortraitId = "BG30_MagicItem_301";
+    private const string RivendarePortraitId = "BG30_MagicItem_310";
+    private const string HolyMalletId = "BG30_MagicItem_902";
+    private const string TrainingCertificateId = "BG30_MagicItem_962";
+    private const string ValorousMedallionId = "BG30_MagicItem_970";
+    private const string GreaterValorousMedallionId = "BG30_MagicItem_970t";
+    private const string BalefulIncenseId = "BG32_MagicItem_360";
 
     private static int Main()
     {
@@ -22,7 +29,7 @@ internal static class ActiveTrinketEffectsHarness
 
         if (!string.Equals(
             TrinketEffectRegistry.RuleSetVersion,
-            "hdt-1.53.5-hearthdb-2026-07-22",
+            "hdt-1.53.5-hearthdb-2026-07-22-r2",
             StringComparison.Ordinal))
             return Fail("equipped-trinket rules must expose their audited local ruleset version");
         if (TestExactResolutionAndDiagnostics(registry) != 0) return 1;
@@ -33,6 +40,7 @@ internal static class ActiveTrinketEffectsHarness
         if (TestSynergyScoring(registry) != 0) return 1;
         if (TestCombatEffectsAndContextIsolation(registry) != 0) return 1;
         if (TestExpandedStartOfCombatEffects(registry) != 0) return 1;
+        if (TestPhase2StartOfCombatEffects(registry) != 0) return 1;
         if (TestCombatSimulatorContextWiring(registry) != 0) return 1;
         if (TestRebornUsesOwnerSummonEffects(registry) != 0) return 1;
         if (TestCombatSimulatorStartOfCombatOrdering(registry) != 0) return 1;
@@ -75,20 +83,41 @@ internal static class ActiveTrinketEffectsHarness
         ActiveTrinketContext context = registry.Resolve(new[]
         {
             DesignerEyepatchId,
+            CowrieNecklaceId,
+            IronforgeAnvilId,
+            SlammaStickerId,
             EmeraldDreamcatcherId,
             StegodonPortraitId,
             TinyfinOnesieId,
             DramalocStickerId,
+            EternalPortraitId,
+            RivendarePortraitId,
+            HolyMalletId,
+            TrainingCertificateId,
+            ValorousMedallionId,
+            GreaterValorousMedallionId,
+            BalefulIncenseId,
+            EternalPortraitId,
             DesignerEyepatchId.ToLowerInvariant(),
             "UNKNOWN_ACTIVE_TRINKET",
         });
 
-        if (context.ResolvedCardIds.Count != 5
+        if (context.ResolvedCardIds.Count != 15
             || context.ResolvedCardIds[0] != DesignerEyepatchId
+            || !context.ResolvedCardIds.Contains(CowrieNecklaceId)
+            || !context.ResolvedCardIds.Contains(IronforgeAnvilId)
+            || !context.ResolvedCardIds.Contains(SlammaStickerId)
             || !context.ResolvedCardIds.Contains(EmeraldDreamcatcherId)
             || !context.ResolvedCardIds.Contains(StegodonPortraitId)
             || !context.ResolvedCardIds.Contains(TinyfinOnesieId)
             || !context.ResolvedCardIds.Contains(DramalocStickerId)
+            || !context.ResolvedCardIds.Contains(EternalPortraitId)
+            || !context.ResolvedCardIds.Contains(RivendarePortraitId)
+            || !context.ResolvedCardIds.Contains(HolyMalletId)
+            || !context.ResolvedCardIds.Contains(TrainingCertificateId)
+            || !context.ResolvedCardIds.Contains(ValorousMedallionId)
+            || !context.ResolvedCardIds.Contains(GreaterValorousMedallionId)
+            || !context.ResolvedCardIds.Contains(BalefulIncenseId)
             || context.UnknownCardIds.Count != 2
             || !context.UnknownCardIds.Contains(DesignerEyepatchId.ToLowerInvariant())
             || !context.UnknownCardIds.Contains("UNKNOWN_ACTIVE_TRINKET"))
@@ -221,6 +250,86 @@ internal static class ActiveTrinketEffectsHarness
         if (dramalocBoard[0].Attack != 9 || dramalocBoard[1].Attack != 4
             || dramalocBoard[2].Attack != 12)
             return Fail("Dramaloc must add the owner's highest hand Attack only to Murlocs");
+
+        return 0;
+    }
+
+    private static int TestPhase2StartOfCombatEffects(TrinketEffectRegistry registry)
+    {
+        var portraitBoard = new List<CombatUnit>
+        {
+            Unit("BG25_008", 5, 7, "Undead"),
+            Unit("BG25_008_G", 10, 14, "Undead"),
+            Unit("TEST_ETERNAL_LOOKALIKE", 5, 7, "Undead"),
+            Unit("BG25_354", 6, 4, "Undead"),
+            Unit("BG25_354_G", 12, 8, "Undead"),
+        };
+        portraitBoard[3].MaxHealth = 10;
+        portraitBoard[4].MaxHealth = 16;
+        registry.Resolve(new[] { EternalPortraitId, RivendarePortraitId })
+            .ApplyStartOfCombat(portraitBoard);
+        if (!portraitBoard[0].Taunt || !portraitBoard[0].Reborn
+            || !portraitBoard[1].Taunt || !portraitBoard[1].Reborn
+            || portraitBoard[2].Taunt || portraitBoard[2].Reborn
+            || portraitBoard[3].Health != 8 || portraitBoard[3].MaxHealth != 20
+            || portraitBoard[4].Health != 16 || portraitBoard[4].MaxHealth != 32)
+            return Fail("portraits must target only exact normal and golden Eternal Knight or Titus CardIds");
+
+        var edgeBoard = new List<CombatUnit>
+        {
+            Unit("EDGE_LEFT", 4, 4, "Undead"),
+            Unit("EDGE_MIDDLE", 5, 5, "Pirate"),
+            Unit("EDGE_RIGHT", 6, 6, "Undead"),
+        };
+        registry.Resolve(new[] { HolyMalletId, BalefulIncenseId })
+            .ApplyStartOfCombat(edgeBoard);
+        if (!edgeBoard[0].DivineShield || edgeBoard[1].DivineShield
+            || !edgeBoard[2].DivineShield || !edgeBoard[0].Reborn
+            || edgeBoard[1].Reborn || !edgeBoard[2].Reborn)
+            return Fail("edge rules must affect only the owner's left-most and right-most valid targets");
+
+        var singleBoard = new List<CombatUnit> { Unit("SINGLE_UNDEAD", 3, 5, "Undead") };
+        registry.Resolve(new[] { HolyMalletId, BalefulIncenseId })
+            .ApplyStartOfCombat(singleBoard);
+        if (!singleBoard[0].DivineShield || !singleBoard[0].Reborn
+            || singleBoard[0].Attack != 3 || singleBoard[0].Health != 5)
+            return Fail("edge rules must handle a single valid target exactly once");
+
+        var trainingBoard = new List<CombatUnit>
+        {
+            Unit("TRAINING_FIRST_TIE", 2, 3, "Beast"),
+            Unit("TRAINING_SECOND_TIE", 2, 4, "Pirate"),
+            Unit("TRAINING_THIRD_TIE", 2, 5, "Dragon"),
+            Unit("TRAINING_HIGH", 8, 8, "Mech"),
+        };
+        registry.Resolve(new[] { TrainingCertificateId })
+            .ApplyStartOfCombat(trainingBoard);
+        if (trainingBoard[0].Attack != 4 || trainingBoard[0].Health != 6
+            || trainingBoard[0].MaxHealth != 6
+            || trainingBoard[1].Attack != 4 || trainingBoard[1].Health != 8
+            || trainingBoard[1].MaxHealth != 8
+            || trainingBoard[2].Attack != 2 || trainingBoard[2].Health != 5
+            || trainingBoard[3].Attack != 8 || trainingBoard[3].Health != 8)
+            return Fail("Training Certificate must stably double exactly the first two lowest-Attack units");
+
+        var medallionBoard = new List<CombatUnit>
+        {
+            Unit("MEDALLION_OWNER", 1, 2, "Beast"),
+            Unit("MEDALLION_OWNER_2", 3, 4, "Pirate"),
+        };
+        var opponentBoard = new List<CombatUnit>
+        {
+            Unit("MEDALLION_OPPONENT", 7, 9, "Undead"),
+        };
+        registry.Resolve(new[] { ValorousMedallionId, GreaterValorousMedallionId })
+            .ApplyStartOfCombat(medallionBoard);
+        if (medallionBoard[0].Attack != 9 || medallionBoard[0].Health != 10
+            || medallionBoard[0].MaxHealth != 10
+            || medallionBoard[1].Attack != 11 || medallionBoard[1].Health != 12
+            || medallionBoard[1].MaxHealth != 12
+            || opponentBoard[0].Attack != 7 || opponentBoard[0].Health != 9
+            || opponentBoard[0].MaxHealth != 9)
+            return Fail("medallions must stack on their owner only and keep current and maximum Health aligned");
 
         return 0;
     }
