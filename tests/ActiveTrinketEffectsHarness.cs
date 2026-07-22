@@ -24,6 +24,7 @@ internal static class ActiveTrinketEffectsHarness
     private const string GreaterValorousMedallionId = "BG30_MagicItem_970t";
     private const string BalefulIncenseId = "BG32_MagicItem_360";
     private const string BartendOTronOilcanId = "BG30_MagicItem_705";
+    private const string KarazhanChessSetId = "BG30_MagicItem_972";
 
     private static int Main()
     {
@@ -31,9 +32,10 @@ internal static class ActiveTrinketEffectsHarness
 
         if (!string.Equals(
             TrinketEffectRegistry.RuleSetVersion,
-            "hdt-1.53.5-hearthdb-2026-07-22-r3",
+            "hdt-1.53.5-hearthdb-2026-07-22-r4",
             StringComparison.Ordinal))
             return Fail("equipped-trinket rules must expose their audited local ruleset version");
+        if (TestKarazhanChessSetSummonSemantics(registry) != 0) return 1;
         if (TestExactResolutionAndDiagnostics(registry) != 0) return 1;
         if (TestExactStatSpellClassification() != 0) return 1;
         if (TestUnknownDiagnosticDeduplication() != 0) return 1;
@@ -103,12 +105,13 @@ internal static class ActiveTrinketEffectsHarness
             GreaterValorousMedallionId,
             BalefulIncenseId,
             BartendOTronOilcanId,
+            KarazhanChessSetId,
             EternalPortraitId,
             DesignerEyepatchId.ToLowerInvariant(),
             "UNKNOWN_ACTIVE_TRINKET",
         });
 
-        if (context.ResolvedCardIds.Count != 16
+        if (context.ResolvedCardIds.Count != 17
             || context.ResolvedCardIds[0] != DesignerEyepatchId
             || !context.ResolvedCardIds.Contains(CowrieNecklaceId)
             || !context.ResolvedCardIds.Contains(IronforgeAnvilId)
@@ -125,12 +128,109 @@ internal static class ActiveTrinketEffectsHarness
             || !context.ResolvedCardIds.Contains(GreaterValorousMedallionId)
             || !context.ResolvedCardIds.Contains(BalefulIncenseId)
             || !context.ResolvedCardIds.Contains(BartendOTronOilcanId)
+            || !context.ResolvedCardIds.Contains(KarazhanChessSetId)
             || context.UnknownCardIds.Count != 2
             || !context.UnknownCardIds.Contains(DesignerEyepatchId.ToLowerInvariant())
             || !context.UnknownCardIds.Contains("UNKNOWN_ACTIVE_TRINKET"))
             return Fail("known effects must resolve by exact CardId and unknown IDs must be diagnostics only");
 
         return 0;
+    }
+
+    private static int TestKarazhanChessSetSummonSemantics(TrinketEffectRegistry registry)
+    {
+        var chessSet = registry.Resolve(new[] { KarazhanChessSetId, SlammaStickerId });
+        if (!chessSet.ResolvedCardIds.Contains(KarazhanChessSetId)
+            || chessSet.UnknownCardIds.Count != 0)
+            return Fail("Karazhan Chess Set must resolve only from its exact audited CardId");
+
+        var left = Unit("TEST_KARAZHAN_LEFT", 3, 4, "Beast");
+        left.Position = 0;
+        left.BaseAttack = 3;
+        left.BaseHealth = 4;
+        left.DivineShield = true;
+        left.Reborn = true;
+        left.Taunt = true;
+        left.HasStartOfCombat = true;
+        left.HasDeathrattle = true;
+        left.DeathrattleCount = 1;
+        left.Mechanics.Add("TEST_MECHANIC");
+        left.Extra["source"] = "original";
+        var right = Unit("TEST_KARAZHAN_RIGHT", 9, 9, "Pirate");
+        right.Position = 1;
+        var attacker = new List<CombatUnit> { left, right };
+        var defenderLeft = Unit("TEST_KARAZHAN_DEFENDER", 7, 7, "Beast");
+        var defender = new List<CombatUnit> { defenderLeft };
+        var context = new CombatContext(attacker, defender, new Random(1),
+            attackerTrinkets: chessSet,
+            defenderTrinkets: registry.Resolve(new string[0]));
+
+        CombatEffects.Register(left.CardId, new CardHandlers
+        {
+            StartOfCombat = (ctx, own, enemy) =>
+            {
+                left.Attack += 2;
+                left.Health += 1;
+                left.MaxHealth += 1;
+            }
+        });
+        InvokeStartOfCombat(attacker, defender, context);
+
+        if (attacker.Count != 3 || context.AllUnits.Count != 4
+            || !ReferenceEquals(attacker[0], left)
+            || !ReferenceEquals(attacker[2], right)
+            || ReferenceEquals(attacker[1], left))
+            return Fail("Karazhan Chess Set must summon one copy beside the current left-most owner minion");
+
+        CombatUnit copy = attacker[1];
+        if (left.Attack != 5 || left.Health != 5 || left.MaxHealth != 5
+            || copy.CardId != left.CardId || copy.Attack != 10
+            || copy.Health != 5 || copy.MaxHealth != 5
+            || !copy.DivineShield || !copy.Reborn || !copy.Taunt
+            || copy.DeathrattleCount != 1 || copy.Position != 1
+            || right.Position != 2
+            || defender.Count != 1 || !ReferenceEquals(defender[0], defenderLeft))
+            return Fail("Karazhan must copy post-minion-effect state for its owner and apply Slamma exactly once");
+
+        if (ReferenceEquals(copy.MinionTypes, left.MinionTypes)
+            || ReferenceEquals(copy.Mechanics, left.Mechanics)
+            || ReferenceEquals(copy.Extra, left.Extra)
+            || copy.StartOfCombatTriggered || copy.DeathrattleTriggered
+            || copy.AvengeTriggered || copy.RebornUsed || copy.KilledBy != null)
+            return Fail("Karazhan copies must have independent collections and fresh runtime trigger state");
+
+        copy.MinionTypes.Add("Pirate");
+        copy.Mechanics.Add("COPY_ONLY");
+        copy.Extra["copy"] = true;
+        if (left.MinionTypes.Contains("Pirate") || left.Mechanics.Contains("COPY_ONLY")
+            || left.Extra.ContainsKey("copy"))
+            return Fail("Karazhan copy mutations must not leak back to the source minion");
+
+        var fullBoard = new List<CombatUnit>();
+        for (int i = 0; i < 7; i++)
+            fullBoard.Add(Unit("TEST_KARAZHAN_FULL_" + i, 1, 1, "Beast"));
+        var fullEnemy = new List<CombatUnit> { Unit("TEST_KARAZHAN_FULL_ENEMY", 1, 1, "Pirate") };
+        var fullContext = new CombatContext(fullBoard, fullEnemy, new Random(1),
+            attackerTrinkets: registry.Resolve(new[] { KarazhanChessSetId }));
+        InvokeStartOfCombat(fullBoard, fullEnemy, fullContext);
+        if (fullBoard.Count != 7 || fullContext.AllUnits.Count != 8
+            || fullContext.LastSummoned != null)
+            return Fail("Karazhan Chess Set must fail closed when the owner's board is full");
+
+        var wrongCase = registry.Resolve(new[] { KarazhanChessSetId.ToLowerInvariant() });
+        if (wrongCase.ResolvedCardIds.Count != 0 || wrongCase.UnknownCardIds.Count != 1)
+            return Fail("Karazhan Chess Set matching must remain exact and case-sensitive");
+
+        return 0;
+    }
+
+    private static void InvokeStartOfCombat(
+        List<CombatUnit> attacker, List<CombatUnit> defender, CombatContext context)
+    {
+        var method = typeof(CombatSimulator).GetMethod("PhaseStartOfCombat",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        if (method == null) throw new InvalidOperationException("PhaseStartOfCombat not found");
+        method.Invoke(new CombatSimulator(), new object[] { attacker, defender, context });
     }
 
     private static int TestOilcanUpgradeRules(TrinketEffectRegistry registry)

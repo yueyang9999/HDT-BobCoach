@@ -603,8 +603,8 @@ namespace BobCoach.Engine
 
             // Phase 1e: 饰品战斗效果
             // Equipped trinkets resolve after hero, board, and hand start-of-combat effects.
-            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits, ctx.AttackerHand);
-            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits, ctx.DefenderHand);
+            ctx.AttackerTrinkets.ApplyStartOfCombat(atkUnits, ctx.AttackerHand, ctx);
+            ctx.DefenderTrinkets.ApplyStartOfCombat(defUnits, ctx.DefenderHand, ctx);
 
             if (ctx.AttackerTrinketHandlers != null)
             {

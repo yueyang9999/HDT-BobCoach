@@ -32,9 +32,10 @@ Runtime relationships
   prompts. Its
   equipped-trinket effects are original Bob Coach logic driven by HDT match
   state and versioned local CardId rules, without Firestone statistics. The
-  `hdt-1.53.5-hearthdb-2026-07-22-r3` ruleset covers 16 exact CardIds audited
+  `hdt-1.53.5-hearthdb-2026-07-22-r4` ruleset covers 17 exact CardIds audited
   against a maintainer-provided HearthDb snapshot; this includes the local
-  `BG30_MagicItem_705` Oilcan upgrade-cost rule. The snapshot is not copied
+  `BG30_MagicItem_705` Oilcan upgrade-cost rule and the controlled summon rule
+  for `BG30_MagicItem_972` Karazhan Chess Set. The snapshot is not copied
   into the repository or release package, and tests use synthetic state only.
 - HearthstoneJSON/hsdata and Gamerhub data remain subject to their own rights
   and terms. The production plugin currently does not drive an external

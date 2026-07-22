@@ -39,11 +39,11 @@ GameState.ActiveTrinkets (exact CardId list)
 
 `GameStateExtractor` 从 HDT 状态取得 `GameState.ActiveTrinkets`（精确 `CardId` 列表），注册表只按精确、版本化的本地 `CardId` 规则解析。硬规则必须在行动枚举和资源计算前进入 `EffectiveGameRules`；协同修正进入特征与行动评分；战斗开始和召唤类效果进入双方隔离的战斗上下文。未知 ID 只记录限频诊断并保守忽略未知效果，不得用名称或模糊文本猜测合法性、费用或评分。
 
-当前 `hdt-1.53.5-hearthdb-2026-07-22-r3` 规则集覆盖 16 个精确 ID（`BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`、`BG30_MagicItem_301`、`BG30_MagicItem_310`、`BG30_MagicItem_902`、`BG30_MagicItem_962`、`BG30_MagicItem_970`、`BG30_MagicItem_970t`、`BG32_MagicItem_360`、`BG30_MagicItem_705`），依据 HDT 1.53.5 / HearthDb build 245258 维护者快照审计。第三方或本地化名称不参与规则解析。`BG30_MagicItem_705` 将升本费用减少 3，并在 fallback 路径将费用下限钳制为 0，实时 HDT 费用不重复折扣。`ApplyStartOfCombat(ownerBoard, ownerHand)` 使用修改前快照或稳定战场顺序确定目标，并由 `CombatSimulator` 分别传入攻击方和防守方自己的战团与手牌，禁止跨方读取或应用效果。
+当前 `hdt-1.53.5-hearthdb-2026-07-22-r4` 规则集覆盖 17 个精确 ID（`BG30_MagicItem_439`、`BG35_MagicItem_921`、`BG30_MagicItem_403`、`BG30_MagicItem_540`、`BG30_MagicItem_542`、`BG35_MagicItem_702`、`BG30_MagicItem_441`、`BG35_MagicItem_754`、`BG30_MagicItem_301`、`BG30_MagicItem_310`、`BG30_MagicItem_902`、`BG30_MagicItem_962`、`BG30_MagicItem_970`、`BG30_MagicItem_970t`、`BG32_MagicItem_360`、`BG30_MagicItem_705`、`BG30_MagicItem_972`），依据 HDT 1.53.5 / HearthDb build 245258 维护者快照审计。第三方或本地化名称不参与规则解析。`BG30_MagicItem_705` 将升本费用减少 3，并在 fallback 路径将费用下限钳制为 0，实时 HDT 费用不重复折扣。`ApplyStartOfCombat(ownerBoard, ownerHand, combatContext)` 使用修改前快照或稳定战场顺序确定目标，并由 `CombatSimulator` 分别传入攻击方和防守方自己的战团、手牌与同一受控战斗上下文，禁止跨方读取或应用效果。
 
 `PhaseStartOfCombat` 的顺序固定为：攻方优先英雄技能、守方优先英雄技能、攻方普通英雄技能、守方普通英雄技能、场上随从双方交替且各自从左到右、手牌效果双方交替、装备饰品、旧式饰品 handler。Reborn 不是原对象原地复活：死亡单位必须从战团移除后，以半血新状态按死亡前位置重新插入所属方；`AllUnits` 不重复登记，所属方 `ApplySummon` 恰好触发一次，且不得调用对手召唤效果。
 
-Karazhan Chess Set 暂不进入该规则集：复制随从必须经 `CombatContext.SpawnToken` 完成深复制、位置插入、`AllUnits` 登记和所属方召唤效果联动，不能仅向战团列表追加浅复制。后续应先为饰品开战效果提供受控战斗上下文接口，再补充满场、复制隔离和 Slamma 联动测试。
+Karazhan Chess Set (`BG30_MagicItem_972`) 在随从与手牌开战效果完成后的饰品阶段，复制所属方当前最左随从。复制体通过 `CombatContext.SpawnToken` 插入源随从右侧，遵守 7 格上限，登记到 `AllUnits`，只触发所属方召唤效果；可变集合独立复制，运行时触发状态重置。行为测试覆盖双方隔离、满场拒绝、位置重排、非递归复制和 Slamma 恰好一次联动。
 
 这条已装备效果链不依赖 Firestone 统计、报价推荐结果或历史缓存，测试只使用合成状态和固定 ID。`TrinketStatsVerifier` 另行保留来源无关的纯校验边界；`TrinketStatsFetcher` 只保留 HearthstoneJSON 的受限通用能力，但生产插件当前没有外部饰品统计运行路径。未来适配器必须重新设计并单独审批。详见根目录的 `PRIVACY.md` 与 `DATA_SOURCES.md`。
 

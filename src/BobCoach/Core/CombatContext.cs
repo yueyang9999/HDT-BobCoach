@@ -198,7 +198,8 @@ namespace BobCoach.Engine
                 AttackerTrinkets.ApplySummon(token);
             else if (ReferenceEquals(side, DefenderSide))
                 DefenderTrinkets.ApplySummon(token);
-            token.Position = insertPos;
+            for (int i = 0; i < side.Count; i++)
+                side[i].Position = i;
             AllUnits.Add(token);
             LastSummoned = token;
             return token;

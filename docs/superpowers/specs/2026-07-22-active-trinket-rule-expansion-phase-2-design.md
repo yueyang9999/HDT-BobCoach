@@ -32,10 +32,10 @@
 
 ## 暂缓范围
 
-`BG30_MagicItem_972` Karazhan Chess Set 暂缓。它需要通过 `CombatContext.SpawnToken` 完成深复制、战团插入、`AllUnits` 登记和所属方召唤效果联动；当前 `ApplyStartOfCombat(ownerBoard, ownerHand)` 没有战斗上下文。单独改造该接口并补齐召唤生命周期测试后再纳入，不能只向列表追加浅复制。
+> 历史状态说明：本段记录的是当时的暂缓决策，已由 `hdt-1.53.5-hearthdb-2026-07-22-r4` 实现取代。当前实现通过 `CombatContext.SpawnToken` 完成独立集合复制、战团插入、`AllUnits` 登记和所属方召唤效果联动，并已覆盖满场、双方隔离、非递归和 Slamma 联动测试。
 
 不实现随机、发现、生成、依赖跨回合历史或可能已由 HDT 实体属性体现的常驻光环。测试只使用合成战团和固定 ID，不读取 Firestone 数据、历史缓存或用户数据。
 
 ## 版本与文档
 
-本轮规则集版本为 `hdt-1.53.5-hearthdb-2026-07-22-r2`。README、数据来源、隐私、NOTICE、架构和依赖文档统一记录 15 个精确 ID 的本地覆盖以及来源无关边界。
+本设计阶段交付的规则集版本为 `hdt-1.53.5-hearthdb-2026-07-22-r2`，当时覆盖 15 个精确 ID。该历史版本已由上文注明的 `hdt-1.53.5-hearthdb-2026-07-22-r4` 取代；现行 README、数据来源、隐私、NOTICE、架构和依赖文档统一记录 17 个精确 ID 的本地覆盖以及来源无关边界。

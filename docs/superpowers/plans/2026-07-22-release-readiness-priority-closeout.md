@@ -1,0 +1,72 @@
+# Release Readiness Priority Closeout Implementation Plan
+
+> **Execution requirement:** Execute this plan directly after writing it. Follow test-driven development and verification-before-completion. Do not push, change repository settings or CI, create a tag/PR/Release, or publish beta.2 without fresh explicit authorization.
+
+**Goal:** Close every locally actionable beta.2 release-readiness gap in priority order, while keeping Windows 11 24H2 and Windows 10 22H2 HDT smoke tests as explicit external release gates until matching environments are available.
+
+**Architecture:** Preserve the offline, exact-CardId trinket boundary and fail-closed behavior. Add a trinket rule only when the pinned HDT 1.53.5 HearthDb fact is unambiguous and the existing deterministic model can express the full relevant effect. Keep combat event semantics and start-of-combat ordering covered by focused behavioral tests. Treat public GitHub state and local release-candidate identity as separate evidence sets.
+
+**Tech stack:** C# 7-compatible HDT plugin code, PowerShell Roslyn harnesses, Node.js repository tests, Git/GitHub CLI read-only audits, existing Release build and packaging scripts.
+
+## Execution status (2026-07-22)
+
+- Task 1: Locally actionable checks complete. The host is build 26200 and no usable Hyper-V, VirtualBox, VMware, or QEMU guest was found. Windows 11 24H2 smoke remains a release gate; Windows 10 22H2 smoke remains required before first claiming Windows 10 support. GitHub API reports the repository as public, with `main` as the default branch and the latest `main` CI successful. Fresh credential-free checks reached the public repository directly: HTTPS returned 200 and `git ls-remote` returned the exact `main` HEAD. The repository's configured `origin` path still references an unavailable local proxy; validation and any authorized push must use a per-command proxy override without changing system or repository configuration.
+- Task 2: Complete. Added exact rule `BG30_MagicItem_972` (Karazhan Chess Set), advanced the ruleset to `hdt-1.53.5-hearthdb-2026-07-22-r4`, and expanded exact rules from 16 to 17. Focused behavior tests cover case sensitivity, board cap, placement, ownership isolation, non-recursion, deep-copy isolation, and single Slamma application.
+- Task 3: Reproduced as an existing `CS0649` warning in the test-side semantic model. It does not indicate a missing production identity assignment. No warning suppression or behavior-free production change was added; the warning remains a non-blocking maintenance item.
+- Task 4: Complete for authoritative source documents and this handover pass. Source version remains `0.2.0-beta.2`; public Release remains `v0.2.0-beta.1`; beta.2 remains a local, unpublished candidate.
+- Task 5: Complete for local verification. `npm test`, focused trinket behavior tests, Release x64/net472 build, repository validation, package/endpoint/sensitive-data/path/replay/large-file/`.github` audits, and `git diff --check` passed. The current DLL is 656896 bytes with SHA-256 `A92E5A56D3BAE43541FDAAE54954C014FB9D7B03B276D59113A978136652197C`. The final locally audited 11-entry ZIP is `E:\HDT-BobCoach-release-candidate\2026-07-22-priority-closeout-r5\package\BobCoach-0.2.0-beta.2-win-x64.zip`, 281740 bytes with SHA-256 `29B7CF7FBDCBBA11EADE3F2FC67FBCD4B6CDEDC8D3CC39B54ADA1D679B374328`; its external `.sha256` record matches. The earlier `r4` ZIP was generated before the final `DATA_SOURCES.md` correction and is superseded.
+- Task 6: In progress. Final diff review corrected one stale historical-design status sentence, and fresh local validation is complete. The user has explicitly authorized the scoped commit and fast-forward push to `main`; commit, remote-drift check, integration, push, and post-push verification remain. No beta.2 upload, tag, PR, GitHub Release, visibility change, or CI/CD change is authorized.
+
+**Global constraints:**
+
+- Do not restore Firestone/Zero to Heroes requests, caches, dedicated parsing, or automatic retries.
+- Do not inspect historical user caches and do not use `-RemoveUserData`.
+- Do not change `.env`, secrets, tokens, CI/CD, branch protection, Dependabot, or repository visibility in this implementation pass.
+- Do not delete files or history, rebase, force-push, create a PR/tag/Release, upload beta.2, or publish externally.
+- Preserve all unrelated worktree changes and use `apply_patch` for manual edits.
+
+## Task 1: Record environment gates and current public state
+
+**Modify:** this plan and the project handover document after verification.
+
+- Confirm whether an already configured Windows 11 24H2 or Windows 10 22H2 test environment exists without installing software, enabling Windows features, or downloading an ISO.
+- Read-only verify repository visibility, anonymous accessibility, default branch, latest main CI, public Releases, open PRs, security features, and branch/ruleset state.
+- Record matching-environment smoke tests as unresolved release gates when no environment exists; do not substitute the Windows 11 25H2 host.
+
+## Task 2: Re-audit `BG30_MagicItem_972` before expanding the registry
+
+**Modify if supported:** `tests/ActiveTrinketEffectsHarness.cs`, relevant trinket-rule source files, and authoritative documentation.
+
+- Obtain the exact card fact from the pinned HDT/HearthDb baseline or a traceable upstream source and compare it with the existing deterministic model.
+- If the effect is fully expressible, add a failing exact-ID, case-sensitive behavioral test first; capture RED, implement the smallest rule, then require GREEN.
+- If the effect depends on unsupported timing, targeting, choice, or state, keep it fail-closed and document the precise reason. Never infer behavior from translated display text alone.
+- Keep the rule-set version unchanged unless the registry actually expands.
+
+## Task 3: Remove the remaining `CS0649` warning without weakening identity checks
+
+**Modify if reproduced:** `tests/CardSemanticSourceBehavior.cs`, `src/BobCoach/Core/CardSemanticFactSource.cs`, and/or the concrete HearthDb source.
+
+- Reproduce the warning in a fresh focused or Release build and identify the compilation unit that leaves `CardSemanticFact.CardId` uninitialized.
+- Add or strengthen a behavioral test proving exact identity propagation and mismatch rejection before implementation.
+- Use explicit construction/initialization only when it improves the real contract; do not suppress the warning or add a compiler bypass.
+- Re-run focused tests and the Release build and require zero new warnings.
+
+## Task 4: Reconcile current documentation and handover evidence
+
+**Modify as needed:** `README.md`, `README.en.md`, `DATA_SOURCES.md`, `PRIVACY.md`, `NOTICE`, `docs/README.md`, `docs/maintainer/ARCHITECTURE.md`, `docs/maintainer/DEPENDENCIES.md`, `docs/maintainer/BUILD.md`, `docs/maintainer/UPDATE_VALIDATION.md`, `docs/maintainer/RELEASE.md`, and the handover document.
+
+- Ensure source version `0.2.0-beta.2`, local candidate status, public `v0.2.0-beta.1`, exact ruleset/count, offline data boundaries, and GitHub-data disclaimers agree.
+- Make historical design records clearly non-authoritative where old acceptance language can be mistaken for current release evidence; retain history rather than deleting it.
+- Update the handover to current HEAD/main CI and the newest validation/package evidence.
+
+## Task 5: Run fresh release verification and package audit
+
+- Run focused semantic and active-trinket behavior tests, `npm test`, Release x64/net472 build, `tools/build/validate_repository.ps1`, and `git diff --check`.
+- Run package allowlist, endpoint/production-call-graph, sensitive-information, personal-path, replay-data, large-file, and `.github` diff audits.
+- Build a new beta.2 local candidate ZIP outside the repository, verify its contents, and record size and SHA-256. Do not upload it.
+- Re-check public GitHub state and anonymous accessibility after local verification.
+
+## Task 6: Review and stop at authorization boundaries
+
+- Inspect final status and diff and report locally completed items, unresolved environment gates, GitHub governance risks, and exact validation evidence.
+- Do not commit or push in this pass without fresh authorization. Updating local `main`, changing GitHub rules/security settings, CI/Dependabot changes, or publishing beta.2 each require explicit authorization at the point of action.

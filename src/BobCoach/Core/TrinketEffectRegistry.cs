@@ -6,7 +6,7 @@ namespace BobCoach.Engine
     /// <summary>Versioned registry of deterministic local equipped-trinket rules.</summary>
     public sealed class TrinketEffectRegistry
     {
-        public const string RuleSetVersion = "hdt-1.53.5-hearthdb-2026-07-22-r3";
+        public const string RuleSetVersion = "hdt-1.53.5-hearthdb-2026-07-22-r4";
         public const string DesignerEyepatchCardId = "BG30_MagicItem_439";
         public const string CowrieNecklaceCardId = "BG35_MagicItem_921";
         public const string IronforgeAnvilCardId = "BG30_MagicItem_403";
@@ -23,6 +23,7 @@ namespace BobCoach.Engine
         public const string GreaterValorousMedallionCardId = "BG30_MagicItem_970t";
         public const string BalefulIncenseCardId = "BG32_MagicItem_360";
         public const string BartendOTronOilcanCardId = "BG30_MagicItem_705";
+        public const string KarazhanChessSetCardId = "BG30_MagicItem_972";
 
         // Audited against the HDT 1.53.5 HearthDb snapshot. Cowrie's hard cost rule
         // must fail closed: localized text is never used to infer resource changes.
@@ -54,6 +55,7 @@ namespace BobCoach.Engine
             bool dreamcatcher = false, stegodon = false, tinyfin = false, dramaloc = false;
             bool eternal = false, rivendare = false, mallet = false, training = false;
             bool valorous = false, greaterValorous = false, incense = false, oilcan = false;
+            bool karazhanChessSet = false;
 
             foreach (string cardId in activeCardIds)
             {
@@ -76,6 +78,7 @@ namespace BobCoach.Engine
                     case GreaterValorousMedallionCardId: greaterValorous = true; resolved.Add(cardId); break;
                     case BalefulIncenseCardId: incense = true; resolved.Add(cardId); break;
                     case BartendOTronOilcanCardId: oilcan = true; resolved.Add(cardId); break;
+                    case KarazhanChessSetCardId: karazhanChessSet = true; resolved.Add(cardId); break;
                     default: unknown.Add(cardId); break;
                 }
             }
@@ -84,7 +87,7 @@ namespace BobCoach.Engine
             return new ActiveTrinketContext(
                 resolved, unknown, eyepatch, cowrie, anvil, slamma,
                 dreamcatcher, stegodon, tinyfin, dramaloc, eternal, rivendare,
-                mallet, training, valorous, greaterValorous, incense, oilcan);
+                mallet, training, valorous, greaterValorous, incense, oilcan, karazhanChessSet);
         }
     }
 

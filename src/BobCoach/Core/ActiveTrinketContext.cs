@@ -9,7 +9,8 @@ namespace BobCoach.Engine
     {
         internal static readonly ActiveTrinketContext Empty = new ActiveTrinketContext(
             new List<string>(), new List<string>(), false, false, false, false,
-            false, false, false, false, false, false, false, false, false, false, false, false);
+            false, false, false, false, false, false, false, false, false, false, false, false,
+            false);
 
         private readonly bool _designerEyepatch;
         private readonly bool _cowrieNecklace;
@@ -27,6 +28,7 @@ namespace BobCoach.Engine
         private readonly bool _greaterValorousMedallion;
         private readonly bool _balefulIncense;
         private readonly bool _bartendOTronOilcan;
+        private readonly bool _karazhanChessSet;
 
         internal ActiveTrinketContext(
             IList<string> resolvedCardIds,
@@ -46,7 +48,8 @@ namespace BobCoach.Engine
             bool valorousMedallion,
             bool greaterValorousMedallion,
             bool balefulIncense,
-            bool bartendOTronOilcan)
+            bool bartendOTronOilcan,
+            bool karazhanChessSet)
         {
             ResolvedCardIds = new ReadOnlyCollection<string>(
                 new List<string>(resolvedCardIds ?? new List<string>()));
@@ -68,6 +71,7 @@ namespace BobCoach.Engine
             _greaterValorousMedallion = greaterValorousMedallion;
             _balefulIncense = balefulIncense;
             _bartendOTronOilcan = bartendOTronOilcan;
+            _karazhanChessSet = karazhanChessSet;
         }
 
         public ReadOnlyCollection<string> ResolvedCardIds { get; private set; }
@@ -123,7 +127,8 @@ namespace BobCoach.Engine
         }
 
         public void ApplyStartOfCombat(
-            IList<CombatUnit> ownerBoard, IList<MinionData> ownerHand = null)
+            IList<CombatUnit> ownerBoard, IList<MinionData> ownerHand = null,
+            CombatContext combatContext = null)
         {
             if (ownerBoard == null) return;
 
@@ -269,6 +274,44 @@ namespace BobCoach.Engine
                 if (rightUndead != null && !ReferenceEquals(leftUndead, rightUndead))
                     rightUndead.Reborn = true;
             }
+
+            if (_karazhanChessSet && combatContext != null)
+            {
+                CombatUnit source = FirstUnit(ownerBoard);
+                List<CombatUnit> side = ownerBoard as List<CombatUnit>;
+                if (source != null && side != null
+                    && (ReferenceEquals(side, combatContext.AttackerSide)
+                        || ReferenceEquals(side, combatContext.DefenderSide)))
+                {
+                    int windfuryAttacksLeft = source.WindfuryAttacksLeft;
+                    CombatUnit copy = CopyForSummon(source);
+                    CombatUnit summoned = combatContext.SpawnToken(
+                        side, copy, side.IndexOf(source));
+                    if (summoned != null)
+                        summoned.WindfuryAttacksLeft = windfuryAttacksLeft;
+                }
+            }
+        }
+
+        private static CombatUnit CopyForSummon(CombatUnit source)
+        {
+            CombatUnit copy = source.ShallowCopy();
+            copy.MinionTypes = source.MinionTypes == null
+                ? new List<string>() : new List<string>(source.MinionTypes);
+            copy.Mechanics = source.Mechanics == null
+                ? new List<string>() : new List<string>(source.Mechanics);
+            copy.Extra = source.Extra == null
+                ? new Dictionary<string, object>()
+                : new Dictionary<string, object>(source.Extra);
+            copy.Position = 999;
+            copy.Alive = true;
+            copy.RebornUsed = false;
+            copy.DeathrattleTriggered = false;
+            copy.AvengeTriggered = false;
+            copy.StartOfCombatTriggered = false;
+            copy.DeathCountWitnessed = 0;
+            copy.KilledBy = null;
+            return copy;
         }
 
         private static bool HasExactCardId(CombatUnit unit, string normalCardId, string goldenCardId)
