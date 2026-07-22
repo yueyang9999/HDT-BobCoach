@@ -1,10 +1,10 @@
 # Bob教练 HDT 插件 0.2.0-beta.2 本地发布候选
 
-{{PREVIEW_NOTICE}}
+{{LOCAL_CANDIDATE_NOTICE}}
 > `LOCAL RELEASE CANDIDATE / NOT A PUBLIC GITHUB RELEASE`
 >
 > 本段仅适用于 `0.2.0-beta.2` 本地发布候选；该包不是 GitHub 公开 Release，不是最终 Beta，不可冒充正式版。它只供受控的本地安装和当前赛季真实对局验证，不代表完整 P0 发布矩阵或 Windows 11 24H2 最终实机 smoke 已经通过，也不得未经单独授权上传或公开发布。
-{{/PREVIEW_NOTICE}}
+{{/LOCAL_CANDIDATE_NOTICE}}
 
 Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.53.5 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
 

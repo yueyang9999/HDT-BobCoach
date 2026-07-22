@@ -15,6 +15,7 @@ const privacy = read("PRIVACY.md");
 const notice = read("NOTICE");
 const architecture = read("docs/maintainer/ARCHITECTURE.md");
 const dependencies = read("docs/maintainer/DEPENDENCIES.md");
+const bilingualDisclosureDesign = read("docs/design/双语自述与第三方声明设计_2026-07-21.md");
 const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
 const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
 const unpublishedPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/";
@@ -103,6 +104,7 @@ for (const [name, content, statement] of [
     ["NOTICE", notice, "historical evaluation context"],
     ["docs/maintainer/ARCHITECTURE.md", architecture, "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计"],
     ["docs/maintainer/DEPENDENCIES.md", dependencies, "不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计"],
+    ["docs/design/双语自述与第三方声明设计_2026-07-21.md", bilingualDisclosureDesign, "不请求、不缓存、不使用 Firestone/Zero to Heroes 饰品统计"],
 ]) {
     assert.ok(content.includes(statement), `${name} must document the retired Firestone runtime boundary`);
 }

@@ -131,6 +131,9 @@ try {
     $extractedPackageRoot = Join-Path $extractRoot $packageName
     Assert-ExtractedPackage $extractedPackageRoot
     $releaseReadme = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $extractedPackageRoot "README_OFFLINE.md")
+    Assert-True ($releaseReadme.Contains(
+        "LOCAL RELEASE CANDIDATE / NOT A PUBLIC GITHUB RELEASE"
+    )) "release README identifies the local non-public candidate"
     foreach ($previewOnlyText in @(
         "CURRENT SEASON PREVIEW",
         "NOT FINAL BETA",
