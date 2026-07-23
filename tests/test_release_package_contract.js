@@ -100,6 +100,7 @@ for (const [token, label] of [
   ['CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts', 'builder retired preview gate'],
   ['docs\\user\\INSTALL.html', 'builder local HTML guide source'],
   ['docs\\user\\images\\install', 'builder local guide image source'],
+  ['Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Force -Name', 'builder relative package enumeration'],
 ]) requireText(builder, token, label);
 
 forbid(installer, /Invoke-WebRequest|Start-BitsTransfer|WebClient|HttpClient/i, 'installer network access');
@@ -108,6 +109,7 @@ forbid(installer, /Remove-Item[^\r\n]+Plugins[^\r\n]+-Recurse/i, 'installer recu
 forbid(uninstaller, /Remove-Item[^\r\n]+Plugins[^\r\n]+-Recurse/i, 'uninstaller recursive Plugins deletion');
 forbid(builder, /Copy-Item[^\r\n]*\*[^\r\n]*-Recurse/i, 'builder recursive wildcard copy');
 forbid(builder, /HearthstoneDeckTracker\\Plugins|AppData\\Roaming/i, 'builder deployment path');
+forbid(builder, /\.FullName\.Substring\(/i, 'builder absolute-path substring enumeration');
 
 for (const phase of ['Install', 'Upgrade', 'Rollback', 'Uninstall', 'Reinstall']) {
   if (!new RegExp(`Invoke-LifecycleStep[^\\r\\n]+\\"${phase}\\"`).test(lifecycle)) {

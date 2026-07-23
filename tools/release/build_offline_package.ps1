@@ -304,10 +304,9 @@ try {
     }
     Write-Utf8NoBom (Join-Path $packageDirectory "SHA256SUMS.txt") (($hashLines -join "`n") + "`n")
 
-    $packagePrefixLength = $packageDirectory.TrimEnd('\').Length + 1
     $actualPackageFiles = @(
-        Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Force |
-            ForEach-Object { $_.FullName.Substring($packagePrefixLength).Replace('\', '/') }
+        Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Force -Name |
+            ForEach-Object { $_.Replace('\', '/') }
     )
     Assert-ExactSet $PackageFiles $actualPackageFiles "Package files"
     foreach ($scriptName in @("INSTALL.ps1", "UNINSTALL.ps1")) {
