@@ -195,8 +195,8 @@ function warn(name, msg) {
     const calibSrc = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
 
     test("[LayoutResolution] LayoutConfig records calibration canvas size", () => {
-        if (!configSrc.includes("Version { get; set; } = 9"))
-            return "LayoutConfig version must bump to v9 (面板字段) so stale raw-pixel calibration is not reused";
+        if (!configSrc.includes("Version { get; set; } = 10"))
+            return "LayoutConfig version must bump to v10 so the legacy default shop offset can be migrated";
         if (!configSrc.includes("CalibrationWidth") || !configSrc.includes("CalibrationHeight"))
             return "missing CalibrationWidth/CalibrationHeight";
         if (!configSrc.includes("ScaleX(") || !configSrc.includes("ScaleY("))
@@ -220,6 +220,26 @@ function warn(name, msg) {
             return "GameLayoutCalculator still applies persisted pixel offsets without resolution scaling";
     });
 
+    test("[ShopLayout][0723] 2048宽5卡默认购买标签与卡牌中轴重合", () => {
+        const defaultOffsetMatch = configSrc.match(/public\s+const\s+double\s+DefaultShopOffsetX\s*=\s*(-?\d+(?:\.\d+)?)/);
+        if (!defaultOffsetMatch) return "无法读取 DefaultShopOffsetX";
+
+        const canvasWidth = 2048;
+        const defaultOffsetAtCanvasWidth = Number(defaultOffsetMatch[1])
+            * canvasWidth / 1920;
+        const shopGroupCenter = canvasWidth / 2 + defaultOffsetAtCanvasWidth;
+        if (Math.abs(shopGroupCenter - canvasWidth / 2) > 0.01)
+            return `默认商店中轴偏移 ${defaultOffsetAtCanvasWidth.toFixed(1)}px`;
+
+        const ratingIdx = overlaySrc.indexOf("public void ShowShopCardRating");
+        const nextMethodIdx = overlaySrc.indexOf("internal void ShowTimewarpPurchaseRating", ratingIdx);
+        const ratingBlock = overlaySrc.slice(ratingIdx, nextMethodIdx);
+        if (!ratingBlock.includes("left + (cw - barW) / 2 + labelOffX"))
+            return "购买标签条没有按卡牌矩形居中";
+        if (!ratingBlock.includes("cx - arrowW / 2"))
+            return "购买箭头没有按卡牌中心定位";
+    });
+
     test("[LayoutResolution] status strip position is resolution-scaled", () => {
         const idx = calcSrc.indexOf("public LayoutPoint GetStatusStripPosition");
         const block = calcSrc.slice(idx, idx + 260);
@@ -227,6 +247,17 @@ function warn(name, msg) {
             return "status strip still uses raw 1080p coordinates";
         if (!block.includes("ScaleX(8)") || !block.includes("ScaleY(105)"))
             return "status strip position should use ScaleX/ScaleY";
+    });
+
+    test("[LayoutResolution] top-right suggestion badge stays inside the canvas", () => {
+        const idx = overlaySrc.indexOf("public void ShowSuggestionBadge");
+        const block = overlaySrc.slice(idx, idx + 1100);
+        if (!block.includes("tb.Measure("))
+            return "suggestion badge must measure its rendered text width before positioning";
+        if (!block.includes("tb.DesiredSize.Width"))
+            return "suggestion badge right anchor does not use measured text width";
+        if (!/Math\.Max\(0,\s*w\s*-\s*tb\.DesiredSize\.Width\s*-/.test(block))
+            return "suggestion badge must clamp its left edge while preserving a right margin";
     });
 
     test("[LayoutResolution] trinket/discover panels do not use raw 1080p coordinates", () => {
@@ -897,9 +928,9 @@ function warn(name, msg) {
             return "resolved local spell facts must not be written to diagnostic logs";
     });
 
-    test("[07072158][#1] 商店按实际卡数居中(确认B:买卡向心靠拢); 基准偏移由ShopOffsetX校准", () => {
+    test("[07072158][#1] 商店按实际卡数居中(确认B:买卡向心靠拢); 设备差异可由ShopOffsetX校准", () => {
         const p = readFile("src/BobCoach/BobCoachPlugin.cs");
-        // 用户确认B: 游戏买卡后向中心轴靠拢=始终按实际卡数居中。偏差来自居中基准(招募区中轴≠屏幕正中), 由全局ShopOffsetX校准, 非居中逻辑。
+        // 用户确认B: 游戏买卡后向中心轴靠拢=始终按实际卡数居中。默认基准是客户区中轴, 设备差异才由ShopOffsetX校准。
         if (!/slotCountForLayout = Math\.Max\(1, Math\.Min\(7, state\.ShopMinions\.Count\)\)/.test(p))
             return "商店须按实际在场卡数居中(实测B: 买卡后向心靠拢)";
         const o = readFile("src/BobCoach/OverlayRenderer.cs");
@@ -1501,9 +1532,9 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
     const pluginSrcDense = readFile("src/BobCoach/BobCoachPlugin.cs");
     const overlaySrcDense = readFile("src/BobCoach/OverlayRenderer.cs");
 
-    test("[ShopTag][07072158] 商店标签按实际在场卡数居中(确认B); 基准由ShopOffsetX校准", () => {
+    test("[ShopTag][07072158] 商店标签按实际在场卡数居中(确认B); 设备差异由ShopOffsetX校准", () => {
         // 反复历程(以实测为准): 07072052全dense→截图疑似右偏 → 07072158回退raw → 用户确认B(买卡向心靠拢=居中)→恢复dense。
-        // 结论: 居中逻辑(实际卡数)正确; 偏差是居中【基准】(游戏招募区中轴偏左约一卡, ≠屏幕正中), 由全局ShopOffsetX校准一次, 非布局逻辑。
+        // 结论: 居中逻辑使用实际卡数; 默认基准为客户区中轴, ShopOffsetX仅保留给设备差异校准。
         const renderIdx = pluginSrcDense.indexOf("int slotCountForLayout");
         const renderBlock = pluginSrcDense.slice(Math.max(0, renderIdx - 600), renderIdx + 900);
         if (!renderBlock.includes("Math.Max(1, Math.Min(7, state.ShopMinions.Count))"))

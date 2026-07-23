@@ -12,17 +12,18 @@ namespace BobCoach.Engine
     {
         public const double DefaultCalibrationWidth = 1920.0;
         public const double DefaultCalibrationHeight = 1080.0;
+        private const int LegacyShopOffsetVersion = 9;
+        private const double LegacyDefaultShopOffsetX = -64.5;
 
-        // 招募区中轴实测偏左约3.36%宽(半卡): 用户在2559下校准得 -86px(0708实测对齐)。
-        // 存成1920基准默认值, 渲染时按 当前宽/1920 缩放 → 任意16:9分辨率同一分数, 新用户开箱大致对齐。
-        // 用户自己的校准值(ui_config.json)会覆盖本默认; 非16:9宽高比可能需重校准。
-        public const double DefaultShopOffsetX = -64.5;   // -0.0336 × 1920
+        // 默认以游戏客户区中轴为商店牌组中轴。F10 校准只保存用户设备上的实际差异，
+        // 不把单台设备的负向校准固化为所有用户的默认值。
+        public const double DefaultShopOffsetX = 0;
 
-        public int Version { get; set; } = 9;             // v9: 选择面板(饰品/发现)位置+缩放可校准(PanelOffsetX/Y/Scale)
+        public int Version { get; set; } = 10;            // v10: migrate the former default half-card shop offset
         public double CalibrationWidth { get; set; } = DefaultCalibrationWidth;
         public double CalibrationHeight { get; set; } = DefaultCalibrationHeight;
         public bool BoardLeftToRight { get; set; } = true; // false=索引0在最右(默认)
-        public double ShopOffsetX { get; set; } = DefaultShopOffsetX;   // 默认招募区中轴偏移(半卡), 用户校准覆盖
+        public double ShopOffsetX { get; set; } = DefaultShopOffsetX;   // 招募区中轴微调, 用户校准覆盖
         public double ShopOffsetY { get; set; } = 0;
         public double BoardOffsetX { get; set; } = 0;
         public double BoardOffsetY { get; set; } = 0;
@@ -170,14 +171,34 @@ namespace BobCoach.Engine
                 {
                     var json = File.ReadAllText(ConfigPath);
                     var loaded = new JavaScriptSerializer().Deserialize<LayoutConfig>(json);
-                    if (loaded != null && loaded.Version == new LayoutConfig().Version)
-                        return loaded;
-                    // 版本不匹配: 旧偏移值在新基准下会错位, 静默重置
-                    return new LayoutConfig();
+                    return NormalizeLoadedConfig(loaded);
                 }
             }
             catch { }
             return new LayoutConfig();
+        }
+
+        internal static LayoutConfig NormalizeLoadedConfig(LayoutConfig loaded)
+        {
+            var current = new LayoutConfig();
+            if (loaded == null) return current;
+            if (loaded.Version == current.Version) return loaded;
+
+            if (loaded.Version == LegacyShopOffsetVersion)
+            {
+                double calibrationWidth = loaded.CalibrationWidth > 100
+                    ? loaded.CalibrationWidth
+                    : DefaultCalibrationWidth;
+                double legacyDefault = LegacyDefaultShopOffsetX
+                    * calibrationWidth / DefaultCalibrationWidth;
+                if (Math.Abs(loaded.ShopOffsetX - legacyDefault) <= 0.5)
+                    loaded.ShopOffsetX = DefaultShopOffsetX;
+                loaded.Version = current.Version;
+                return loaded;
+            }
+
+            // Unknown older schemas may contain incompatible raw-pixel offsets.
+            return current;
         }
     }
 }

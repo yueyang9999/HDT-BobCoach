@@ -395,7 +395,7 @@ namespace BobCoach
                 .Where(m => m != null && m.EntityId > 0 && m.Position >= 0)
                 .GroupBy(m => m.EntityId)
                 .ToDictionary(g => g.Key, g => g.First().Position);
-            // 07072158(确认B): 始终按实际在场卡数居中(与ShopRender一致); 居中基准偏移由全局 ShopOffsetX 校准
+            // 07072158(确认B): 始终按实际在场卡数居中(与ShopRender一致); 设备差异由用户 ShopOffsetX 校准
             int layoutCount = Math.Max(1, Math.Min(7, liveShopMinions.Count));
             var denseSlots = liveShopMinions
                 .OrderBy(m => m.Position)
@@ -1177,13 +1177,20 @@ namespace BobCoach
             var canvas = Core.OverlayCanvas;
             if (canvas == null) return;
             double w = canvas.ActualWidth > 0 ? canvas.ActualWidth : 1920;
+            double rightMargin = _calc.ScaleX(16);
+            double availableWidth = Math.Max(0, w - rightMargin * 2);
             var tb = new TextBlock
             {
                 Text = text, FontSize = 14, FontWeight = FontWeights.Bold,
                 Foreground = ParseBrush(colorHex) ?? Brushes.LimeGreen, IsHitTestVisible = false,
+                MaxWidth = availableWidth,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
             };
             if (!string.IsNullOrEmpty(tooltip)) tb.ToolTip = new ToolTip { Content = tooltip };
-            Canvas.SetLeft(tb, w * 0.95); Canvas.SetTop(tb, _calc.ScaleY(50));
+            tb.Measure(new Size(availableWidth, double.PositiveInfinity));
+            Canvas.SetLeft(tb, Math.Max(0, w - tb.DesiredSize.Width - rightMargin));
+            Canvas.SetTop(tb, _calc.ScaleY(50));
             Panel.SetZIndex(tb, 996);
             canvas.Children.Add(tb); _activeElements.Add(tb);
             AnimateFadeOut(tb, 8.0);

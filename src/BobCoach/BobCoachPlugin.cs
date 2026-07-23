@@ -2281,7 +2281,7 @@ namespace BobCoach
                     int maxRawShopSlot = state.ShopMinions.Count > 0 ? state.ShopMinions.Max(m => m.Position) : -1;
                     bool denseReplenishingShop = state.ReplenishingShopActive && state.ShopMinions.Count > 0;
                     // 07072158(用户确认B: 买卡后向中心轴靠拢=始终按实际在场卡数居中)。所有商店按实际卡数居中。
-                    // ⚠偏差根因是居中【基准】而非居中逻辑: 游戏招募区中轴≠屏幕正中(偏左约一卡), 由全局 ShopOffsetX 校准一次对齐(F10 Shop 方向键←)。
+                    // 默认以游戏客户区中轴为基准；设备差异仅由用户的 ShopOffsetX 校准覆盖。
                     bool denseVisibleShop = true;
                     int slotCountForLayout = Math.Max(1, Math.Min(7, state.ShopMinions.Count));
                     var denseShopSlots = state.ShopMinions
