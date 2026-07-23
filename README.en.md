@@ -23,7 +23,7 @@ Windows 10 and Windows 11 use the same 64-bit installer package:
 
 **Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
 
-First-time users should follow the [Chinese installation guide](docs/user/INSTALL.md). The package can be extracted normally, but installation is not complete until `INSTALL.ps1` has been run as described in the guide.
+First-time users should follow the illustrated [Chinese installation guide](docs/user/INSTALL.md), or open the downloadable [HTML guide](docs/user/INSTALL.html). The default installation does not require a terminal.
 
 ## System Requirements
 
@@ -37,15 +37,12 @@ After installation, the plugin does not require Node.js, administrator privilege
 
 ## Installation Summary
 
-1. Close HDT.
-2. Verify the ZIP's SHA-256 and extract all files to a normal local directory.
-3. Run the following command from the extracted directory:
+1. Fully exit HDT and extract the complete ZIP.
+2. Press `Win + R` and open `%AppData%\HearthstoneDeckTracker\Plugins`.
+3. Then copy `BobCoach.dll` into the root of that directory.
+4. Start HDT, then enable BobCoach under `Options > Tracker > Plugins`.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
-```
-
-The installer verifies package hashes, the DLL version, and the x64 architecture. It writes only to `%APPDATA%\HearthstoneDeckTracker\Plugins`. The `Plugins` directory under the HDT program directory is not the user plugin location and is rejected by the installer. Installation is complete only after `PASS installed` or `PASS upgraded` appears. See [UPGRADE](docs/user/UPGRADE.md), [ROLLBACK](docs/user/ROLLBACK.md), and [UNINSTALL](docs/user/UNINSTALL.md) for the corresponding procedures.
+`INSTALL.ps1` remains an optional advanced installation method for package verification, automatic backup, and rollback. See [UPGRADE](docs/user/UPGRADE.md), [ROLLBACK](docs/user/ROLLBACK.md), and [UNINSTALL](docs/user/UNINSTALL.md) for the corresponding procedures.
 
 ## Privacy and Network Access
 

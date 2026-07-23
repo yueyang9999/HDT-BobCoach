@@ -1,7 +1,12 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $script:OfflinePackageFiles = @(
     "BobCoach.dll",
+    "安装教程.html",
+    "images/install/install-01-exit-hdt.png",
+    "images/install/install-02-open-plugins-folder.png",
+    "images/install/install-03-copy-bobcoach-dll.png",
+    "images/install/install-04-enable-bobcoach.png",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -16,6 +21,10 @@ $script:OfflinePackageFiles = @(
 
 function Write-Utf8NoBom([string]$Path, [string]$Content) {
     [IO.File]::WriteAllText($Path, $Content, (New-Object Text.UTF8Encoding($false)))
+}
+
+function Write-Utf8Bom([string]$Path, [string]$Content) {
+    [IO.File]::WriteAllText($Path, $Content, (New-Object Text.UTF8Encoding($true)))
 }
 
 function Assert-True([bool]$Condition, [string]$Label) {
@@ -134,6 +143,18 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
     Copy-Item -LiteralPath $pluginSource -Destination (Join-Path $packageRoot "BobCoach.dll")
     Copy-Item -LiteralPath $installerSource -Destination (Join-Path $packageRoot "INSTALL.ps1")
+
+    foreach ($relativePath in @(
+        "安装教程.html",
+        "images/install/install-01-exit-hdt.png",
+        "images/install/install-02-open-plugins-folder.png",
+        "images/install/install-03-copy-bobcoach-dll.png",
+        "images/install/install-04-enable-bobcoach.png"
+    )) {
+        $destination = Join-Path $packageRoot $relativePath
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+        Write-Utf8NoBom $destination ("offline test fixture: {0}`n" -f $relativePath)
+    }
 
     foreach ($nameToWrite in @(
         "README_OFFLINE.md",

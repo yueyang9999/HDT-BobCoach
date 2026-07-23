@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$ZipPath,
@@ -21,6 +21,11 @@ param(
 $ErrorActionPreference = "Stop"
 $script:PackageFiles = @(
     "BobCoach.dll",
+    "安装教程.html",
+    "images/install/install-01-exit-hdt.png",
+    "images/install/install-02-open-plugins-folder.png",
+    "images/install/install-03-copy-bobcoach-dll.png",
+    "images/install/install-04-enable-bobcoach.png",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -179,7 +184,7 @@ function Read-StrictInternalSums([string]$Content) {
     }
     $result = @{}
     foreach ($line in $lines) {
-        if ($line -notmatch '\A([A-Fa-f0-9]{64})  ([^/\\\r\n]+)\z') {
+        if ($line -notmatch '\A([A-Fa-f0-9]{64})  ([^\\:*?"<>|\r\n]+)\z') {
             throw "Invalid SHA256SUMS.txt record: $line"
         }
         $name = $Matches[2]
@@ -235,26 +240,32 @@ function Read-ZipContract([string]$Path) {
             }
             if (!$seen.Add($name)) { throw "Duplicate ZIP entry: $name" }
             $parts = @($name.Split('/'))
-            if ($parts.Count -ne 2 -or [string]::IsNullOrWhiteSpace($parts[0]) -or [string]::IsNullOrWhiteSpace($parts[1])) {
+            if ($parts.Count -lt 2 -or @($parts | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -ne 0) {
                 throw "Unsafe ZIP entry layout: $name"
             }
-            $safeEntries += [pscustomobject]@{ Entry = $entry; Root = $parts[0]; Leaf = $parts[1]; FullName = $name }
+            $relativePath = ($parts[1..($parts.Count - 1)] -join '/')
+            $safeEntries += [pscustomobject]@{
+                Entry = $entry
+                Root = $parts[0]
+                RelativePath = $relativePath
+                FullName = $name
+            }
         }
         if ($safeEntries.Count -ne $script:PackageFiles.Count) {
             throw "ZIP file count mismatch expected=$($script:PackageFiles.Count) actual=$($safeEntries.Count)"
         }
         $roots = @($safeEntries | Select-Object -ExpandProperty Root -Unique)
         if ($roots.Count -ne 1) { throw "ZIP must contain one common package directory" }
-        Assert-ExactSet $script:PackageFiles @($safeEntries | Select-Object -ExpandProperty Leaf) "ZIP files"
+        Assert-ExactSet $script:PackageFiles @($safeEntries | Select-Object -ExpandProperty RelativePath) "ZIP files"
 
         $hashes = @{}
         $lengths = @{}
         foreach ($item in $safeEntries) {
-            $hashes[$item.Leaf] = Get-EntrySha256 $item.Entry
-            $lengths[$item.Leaf] = [long]$item.Entry.Length
+            $hashes[$item.RelativePath] = Get-EntrySha256 $item.Entry
+            $lengths[$item.RelativePath] = [long]$item.Entry.Length
         }
-        $sumEntry = ($safeEntries | Where-Object { $_.Leaf -eq "SHA256SUMS.txt" }).Entry
-        $manifestEntry = ($safeEntries | Where-Object { $_.Leaf -eq "manifest.json" }).Entry
+        $sumEntry = ($safeEntries | Where-Object { $_.RelativePath -eq "SHA256SUMS.txt" }).Entry
+        $manifestEntry = ($safeEntries | Where-Object { $_.RelativePath -eq "manifest.json" }).Entry
         $internalSums = Read-StrictInternalSums (Read-EntryText $sumEntry)
         foreach ($fileName in $internalSums.Keys) {
             if ($internalSums[$fileName] -ne $hashes[$fileName]) {
@@ -529,16 +540,23 @@ function Expand-ValidatedPackage($Preflight) {
     $packageRoot = Join-Path $extractRoot $Preflight.Zip.PackageDirectory
     if (!(Test-Path -LiteralPath $packageRoot -PathType Container)) { throw "Extracted package directory missing" }
     Assert-NoReparseInExistingChain $packageRoot "ExtractedPackage"
-    $files = @(Get-ChildItem -LiteralPath $packageRoot -File -Force | Select-Object -ExpandProperty Name)
+    $files = @(
+        Get-ChildItem -LiteralPath $packageRoot -File -Force -Recurse | ForEach-Object {
+            $_.FullName.Substring($packageRoot.Length).TrimStart('\').Replace('\', '/')
+        }
+    )
     Assert-ExactSet $script:PackageFiles $files "Extracted package files"
-    if (@(Get-ChildItem -LiteralPath $packageRoot -Directory -Force).Count -ne 0) {
-        throw "Extracted package contains unexpected directories"
-    }
+    $directories = @(
+        Get-ChildItem -LiteralPath $packageRoot -Directory -Force -Recurse | ForEach-Object {
+            $_.FullName.Substring($packageRoot.Length).TrimStart('\').Replace('\', '/')
+        }
+    )
+    Assert-ExactSet @("images", "images/install") $directories "Extracted package directories"
     foreach ($fileName in $script:PackageFiles) {
         $filePath = Join-Path $packageRoot $fileName
         Assert-NoReparseInExistingChain $filePath "ExtractedFile"
         $actualHash = Get-Sha256 $filePath
-        $expectedHash = [string]$Preflight.Zip.EntryHashes.$fileName
+        $expectedHash = [string]$Preflight.Zip.EntryHashes[$fileName]
         if ($actualHash -ne $expectedHash) { throw "Extracted file SHA-256 mismatch: $fileName" }
     }
     $facts = Get-CandidateFacts (Join-Path $packageRoot "BobCoach.dll")

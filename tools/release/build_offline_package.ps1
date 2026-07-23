@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
@@ -33,6 +33,11 @@ $stagingRoot = Join-Path $tempRoot "staging"
 $archiveRoot = Join-Path $tempRoot "archive"
 $PackageFiles = @(
     "BobCoach.dll",
+    "安装教程.html",
+    "images/install/install-01-exit-hdt.png",
+    "images/install/install-02-open-plugins-folder.png",
+    "images/install/install-03-copy-bobcoach-dll.png",
+    "images/install/install-04-enable-bobcoach.png",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -217,6 +222,7 @@ try {
     if (!(Test-Path -LiteralPath $readmeTemplatePath -PathType Leaf)) { throw "Package source missing: $readmeTemplatePath" }
     $copyMap = @(
         [pscustomobject]@{ Source = $candidateDll; Name = "BobCoach.dll" },
+        [pscustomobject]@{ Source = (Join-Path $repoRoot "docs\user\INSTALL.html"); Name = "安装教程.html" },
         [pscustomobject]@{ Source = (Join-Path $releaseDirectory "INSTALL.ps1"); Name = "INSTALL.ps1" },
         [pscustomobject]@{ Source = (Join-Path $releaseDirectory "UNINSTALL.ps1"); Name = "UNINSTALL.ps1" },
         [pscustomobject]@{ Source = (Join-Path $repoRoot "LICENSE"); Name = "LICENSE" },
@@ -225,9 +231,26 @@ try {
         [pscustomobject]@{ Source = (Join-Path $repoRoot "PRIVACY.md"); Name = "PRIVACY.md" },
         [pscustomobject]@{ Source = (Join-Path $repoRoot "SUPPORT.md"); Name = "SUPPORT.md" }
     )
+    $guideImageDirectory = Join-Path $repoRoot "docs\user\images\install"
+    foreach ($imageName in @(
+        "install-01-exit-hdt.png",
+        "install-02-open-plugins-folder.png",
+        "install-03-copy-bobcoach-dll.png",
+        "install-04-enable-bobcoach.png"
+    )) {
+        $copyMap += [pscustomobject]@{
+            Source = Join-Path $guideImageDirectory $imageName
+            Name = "images/install/$imageName"
+        }
+    }
     foreach ($entry in $copyMap) {
         if (!(Test-Path -LiteralPath $entry.Source -PathType Leaf)) { throw "Package source missing: $($entry.Source)" }
-        Copy-Item -LiteralPath $entry.Source -Destination (Join-Path $packageDirectory $entry.Name)
+        $destination = Join-Path $packageDirectory $entry.Name
+        $destinationParent = Split-Path -Parent $destination
+        if (!(Test-Path -LiteralPath $destinationParent -PathType Container)) {
+            New-Item -ItemType Directory -Path $destinationParent -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $entry.Source -Destination $destination
     }
 
     $readme = Get-Content -Raw -Encoding UTF8 -LiteralPath $readmeTemplatePath
@@ -281,7 +304,11 @@ try {
     }
     Write-Utf8NoBom (Join-Path $packageDirectory "SHA256SUMS.txt") (($hashLines -join "`n") + "`n")
 
-    $actualPackageFiles = @(Get-ChildItem -LiteralPath $packageDirectory -Force | Select-Object -ExpandProperty Name)
+    $packagePrefixLength = $packageDirectory.TrimEnd('\').Length + 1
+    $actualPackageFiles = @(
+        Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Force |
+            ForEach-Object { $_.FullName.Substring($packagePrefixLength).Replace('\', '/') }
+    )
     Assert-ExactSet $PackageFiles $actualPackageFiles "Package files"
     foreach ($scriptName in @("INSTALL.ps1", "UNINSTALL.ps1")) {
         $tokens = $null

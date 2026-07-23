@@ -1,4 +1,4 @@
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
+﻿[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
 param(
     [string]$PluginDirectory,
     [switch]$Rollback,
@@ -9,6 +9,11 @@ $ErrorActionPreference = "Stop"
 
 $PackageFiles = @(
     "BobCoach.dll",
+    "安装教程.html",
+    "images/install/install-01-exit-hdt.png",
+    "images/install/install-02-open-plugins-folder.png",
+    "images/install/install-03-copy-bobcoach-dll.png",
+    "images/install/install-04-enable-bobcoach.png",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -78,7 +83,7 @@ function Read-StrictSha256Sums([string]$Path) {
     $records = @{}
     $lines = @(Get-Content -LiteralPath $Path -Encoding UTF8)
     foreach ($line in $lines) {
-        if ($line -notmatch '^([A-F0-9]{64})  ([^\\/:*?"<>|]+)$') {
+        if ($line -notmatch '^([A-F0-9]{64})  ([^\\:*?"<>|\r\n]+)$') {
             throw "Invalid SHA256SUMS line: $line"
         }
         $hash = $Matches[1]
@@ -92,8 +97,33 @@ function Read-StrictSha256Sums([string]$Path) {
 }
 
 function Assert-PackageIntegrity {
-    $actualEntries = @(Get-ChildItem -LiteralPath $PSScriptRoot -Force | Select-Object -ExpandProperty Name)
-    Assert-ExactSet $PackageFiles $actualEntries "Package files"
+    $packageRoot = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
+    $prefixLength = $packageRoot.Length + 1
+    $expectedDirectorySet = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    foreach ($packageFile in $PackageFiles) {
+        $directory = [IO.Path]::GetDirectoryName($packageFile.Replace('/', '\'))
+        while (![string]::IsNullOrWhiteSpace($directory)) {
+            [void]$expectedDirectorySet.Add($directory.Replace('\', '/'))
+            $directory = [IO.Path]::GetDirectoryName($directory)
+        }
+    }
+    $expectedDirectories = @($expectedDirectorySet)
+    $actualEntries = @(Get-ChildItem -LiteralPath $PSScriptRoot -Recurse -Force)
+    foreach ($entry in $actualEntries) {
+        if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Package contains a reparse point: $($entry.FullName)"
+        }
+    }
+    $actualFiles = @(
+        $actualEntries | Where-Object { !$_.PSIsContainer } |
+            ForEach-Object { $_.FullName.Substring($prefixLength).Replace('\', '/') }
+    )
+    $actualDirectories = @(
+        $actualEntries | Where-Object { $_.PSIsContainer } |
+            ForEach-Object { $_.FullName.Substring($prefixLength).Replace('\', '/') }
+    )
+    Assert-ExactSet $PackageFiles $actualFiles "Package files"
+    Assert-ExactSet $expectedDirectories $actualDirectories "Package directories"
 
     $sumPath = Join-Path $PSScriptRoot "SHA256SUMS.txt"
     $records = Read-StrictSha256Sums $sumPath

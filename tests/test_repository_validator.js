@@ -58,6 +58,18 @@ function assertRejected(relativePath, category, content, tracked) {
     }
 }
 
+function assertAccepted(relativePath, content) {
+    const root = createRepository();
+    try {
+        writeFile(root, relativePath, content);
+        const result = runValidator(root);
+        assert.strictEqual(result.status, 0, `validator rejected ${relativePath}: ${result.stdout}\n${result.stderr}`);
+        assert.match(result.stdout, /PASS repository validation/i);
+    } finally {
+        removeRepository(root);
+    }
+}
+
 {
     const root = createRepository();
     try {
@@ -81,9 +93,15 @@ assertRejected("plugins/BobCoach.dll", "forbidden-binary-or-image", Buffer.from(
 assertRejected("plugins/HearthstoneDeckTracker.exe", "forbidden-binary-or-image", Buffer.from([0, 1, 2]), false);
 assertRejected("archives/release.zip", "forbidden-binary-or-image", Buffer.from([0, 1, 2]), false);
 assertRejected("evidence/screenshot.png", "forbidden-binary-or-image", Buffer.from([0x89, 0x50, 0x4e, 0x47]), false);
+assertRejected("docs/user/images/install/INSTALL-01-exit-hdt.png", "forbidden-binary-or-image", Buffer.from([0x89, 0x50, 0x4e, 0x47]), false);
+assertRejected("evidence/screenshot.jpg", "forbidden-binary-or-image", Buffer.from([0xff, 0xd8, 0xff]), false);
 assertRejected("vm/snapshot.vhd", "forbidden-directory", Buffer.from([0, 1, 2]), false);
 assertRejected("images/base.iso", "forbidden-binary-or-image", Buffer.from([0, 1, 2]), false);
 assertRejected("local-data/cache.txt", "forbidden-directory", "synthetic cache\n", false);
+assertAccepted("docs/user/images/install/install-01-exit-hdt.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+assertAccepted("docs/user/images/install/install-02-open-plugins-folder.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+assertAccepted("docs/user/images/install/install-03-copy-bobcoach-dll.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+assertAccepted("docs/user/images/install/install-04-enable-bobcoach.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 const utf16Token = Buffer.concat([
     Buffer.from([0xff, 0xfe]),
     Buffer.from(`credential=${token}\n`, "utf16le"),

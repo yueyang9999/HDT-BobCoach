@@ -8,6 +8,11 @@ const releaseRoot = path.join(root, 'tools', 'release');
 const errors = [];
 const expectedFiles = [
   'BobCoach.dll',
+  '安装教程.html',
+  'images/install/install-01-exit-hdt.png',
+  'images/install/install-02-open-plugins-folder.png',
+  'images/install/install-03-copy-bobcoach-dll.png',
+  'images/install/install-04-enable-bobcoach.png',
   'README_OFFLINE.md',
   'INSTALL.ps1',
   'UNINSTALL.ps1',
@@ -38,7 +43,7 @@ function forbid(source, pattern, label) {
 }
 
 function packageFiles(source, label) {
-  const match = source.match(/\$PackageFiles\s*=\s*@\(([\s\S]*?)\)\s*(?:\r?\n|$)/);
+  const match = source.match(/\$(?:script:)?PackageFiles\s*=\s*@\(([\s\S]*?)\)\s*(?:\r?\n|$)/);
   if (!match) {
     errors.push(`missing ${label} PackageFiles array`);
     return [];
@@ -53,7 +58,11 @@ const lifecycle = read('tools/release/verify_offline_package_lifecycle.ps1');
 const lifecycleConsumerTest = read('tests/test_offline_package_lifecycle_consumer.ps1');
 const readme = read('tools/release/README_OFFLINE.md');
 
-for (const [source, label] of [[installer, 'installer'], [builder, 'builder']]) {
+for (const [source, label] of [
+  [installer, 'installer'],
+  [builder, 'builder'],
+  [lifecycle, 'lifecycle verifier'],
+]) {
   if (JSON.stringify(packageFiles(source, label)) !== JSON.stringify(expectedFiles)) {
     errors.push(`${label} package whitelist mismatch`);
   }
@@ -89,6 +98,8 @@ for (const [token, label] of [
   ['$zipPath.sha256', 'builder external ZIP hash'],
   ['Get-PluginFacts $stagedPluginPath', 'builder staged DLL validation'],
   ['CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts', 'builder retired preview gate'],
+  ['docs\\user\\INSTALL.html', 'builder local HTML guide source'],
+  ['docs\\user\\images\\install', 'builder local guide image source'],
 ]) requireText(builder, token, label);
 
 forbid(installer, /Invoke-WebRequest|Start-BitsTransfer|WebClient|HttpClient/i, 'installer network access');

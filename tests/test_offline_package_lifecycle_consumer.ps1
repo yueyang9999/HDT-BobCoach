@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet("All", "Success", "Preflight", "DryRun", "ChildFailure", "CanonicalPath", "OutputFlood", "TerminalEvidenceFailure", "ResultPathTakeover", "EnvironmentIsolation", "NestedReparse", "FinalStateCaptureFailure", "StepEvidenceFailure", "DoubleFailure")]
     [string[]]$Scenario = @("All")
@@ -16,6 +16,11 @@ $candidatePath = if ([string]::IsNullOrWhiteSpace($env:BOBCOACH_TEST_DLL)) {
 }
 $script:PackageFiles = @(
     "BobCoach.dll",
+    "安装教程.html",
+    "images/install/install-01-exit-hdt.png",
+    "images/install/install-02-open-plugins-folder.png",
+    "images/install/install-03-copy-bobcoach-dll.png",
+    "images/install/install-04-enable-bobcoach.png",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -231,6 +236,17 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     Copy-Item -LiteralPath $candidatePath -Destination (Join-Path $packageRoot "BobCoach.dll")
     Copy-Item -LiteralPath (Join-Path $repoRoot "tools\release\INSTALL.ps1") -Destination $packageRoot
     Copy-Item -LiteralPath (Join-Path $repoRoot "tools\release\UNINSTALL.ps1") -Destination $packageRoot
+    Copy-Item -LiteralPath (Join-Path $repoRoot "docs\user\INSTALL.html") -Destination (Join-Path $packageRoot "安装教程.html")
+    foreach ($imageName in @(
+        "install-01-exit-hdt.png",
+        "install-02-open-plugins-folder.png",
+        "install-03-copy-bobcoach-dll.png",
+        "install-04-enable-bobcoach.png"
+    )) {
+        $destination = Join-Path $packageRoot "images\install\$imageName"
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repoRoot "docs\user\images\install\$imageName") -Destination $destination
+    }
     foreach ($fileName in @("README_OFFLINE.md", "LICENSE", "NOTICE", "DATA_SOURCES.md", "PRIVACY.md", "SUPPORT.md")) {
         $source = if ($fileName -eq "README_OFFLINE.md") {
             Join-Path $repoRoot "tools\release\README_OFFLINE.md"
@@ -545,7 +561,7 @@ function Test-LifecycleSuccess {
 
     $sumPath = Join-Path $fixture.EvidenceDirectory "EVIDENCE_SHA256SUMS.txt"
     Assert-True (Test-Path -LiteralPath $sumPath -PathType Leaf) "evidence checksum exists"
-    $sumLines = @(Get-Content -LiteralPath $sumPath | Where-Object { $_ -ne "" })
+    $sumLines = @(Get-Content -LiteralPath $sumPath -Encoding UTF8 | Where-Object { $_ -ne "" })
     Assert-True ($sumLines.Count -gt 10) "evidence checksum coverage"
     $sumPaths = @()
     foreach ($line in $sumLines) {
@@ -585,7 +601,7 @@ function Test-OutputFlood {
     $flood = "[Console]::Out.Write(('O' * 262144)); [Console]::Error.Write(('E' * 262144))`r`n"
     $marker = '$ErrorActionPreference = "Stop"'
     Assert-True ($installerBody.Contains($marker)) "output flood injection marker"
-    Write-Utf8NoBom $installerPath ($installerBody.Replace($marker, ($flood + $marker)))
+    Write-Utf8Bom $installerPath ($installerBody.Replace($marker, ($flood + $marker)))
     Write-TestManifestAndSums $fixture.PackageRoot
     Publish-TestZip $fixture.PackageRoot $fixture.ZipPath
     Write-ExternalHash $fixture.ZipPath $fixture.Sha256Path
@@ -644,7 +660,7 @@ if ($unexpectedSuccess.Count -ne 0) {
     (New-Object Text.UTF8Encoding($false))
 )
 '@
-    Write-Utf8NoBom $installerPath ($installerBody + "`r`n" + $injection)
+    Write-Utf8Bom $installerPath ($installerBody + "`r`n" + $injection)
     Write-TestManifestAndSums $fixture.PackageRoot
     Publish-TestZip $fixture.PackageRoot $fixture.ZipPath
     Write-ExternalHash $fixture.ZipPath $fixture.Sha256Path
@@ -678,7 +694,7 @@ foreach ($name in @("LOCALAPPDATA", "USERPROFILE", "TEMP", "TMP")) {
     }
 }
 '@
-    Write-Utf8NoBom $installerPath ($installerBody + "`r`n" + $injection)
+    Write-Utf8Bom $installerPath ($installerBody + "`r`n" + $injection)
     Write-TestManifestAndSums $fixture.PackageRoot
     Publish-TestZip $fixture.PackageRoot $fixture.ZipPath
     Write-ExternalHash $fixture.ZipPath $fixture.Sha256Path
@@ -707,7 +723,7 @@ if (!(Test-Path -LiteralPath $link)) {
     New-Item -ItemType Junction -Path $link -Target $target | Out-Null
 }
 '@
-    Write-Utf8NoBom $installerPath ($installerBody + "`r`n" + $injection)
+    Write-Utf8Bom $installerPath ($installerBody + "`r`n" + $injection)
     Write-TestManifestAndSums $fixture.PackageRoot
     Publish-TestZip $fixture.PackageRoot $fixture.ZipPath
     Write-ExternalHash $fixture.ZipPath $fixture.Sha256Path
@@ -761,7 +777,7 @@ function Test-StepEvidenceFailureAttribution {
 $evidenceRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 New-Item -ItemType Directory -Path (Join-Path $evidenceRoot "states\01-fresh-install.json") | Out-Null
 '@
-    Write-Utf8NoBom $installerPath ($installerBody + "`r`n" + $injection)
+    Write-Utf8Bom $installerPath ($installerBody + "`r`n" + $injection)
     Write-TestManifestAndSums $fixture.PackageRoot
     Publish-TestZip $fixture.PackageRoot $fixture.ZipPath
     Write-ExternalHash $fixture.ZipPath $fixture.Sha256Path

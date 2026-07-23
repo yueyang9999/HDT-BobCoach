@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Bob Coach 中文图文安装教程</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #20242a; background: #f4f6f8; font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif; line-height: 1.7; }
+    main { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 56px; }
+    h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: 0; }
+    h2 { margin: 34px 0 10px; font-size: 24px; letter-spacing: 0; }
+    p { margin: 8px 0 14px; }
+    .lead { color: #596270; font-size: 17px; }
+    .notice { margin: 22px 0; padding: 14px 18px; border-left: 4px solid #c62828; background: #fff; }
+    .step { margin: 24px 0 34px; padding-bottom: 30px; border-bottom: 1px solid #d5dae0; }
+    .step:last-of-type { border-bottom: 0; }
+    .step h2 { display: flex; align-items: center; gap: 12px; }
+    .number { flex: 0 0 38px; width: 38px; height: 38px; display: inline-grid; place-items: center; border-radius: 50%; color: #fff; background: #c62828; font-size: 20px; }
+    img { display: block; width: 100%; height: auto; margin: 16px 0 8px; border: 1px solid #cbd1d8; }
+    .caption { color: #657080; font-size: 14px; }
+    code { padding: 2px 5px; border-radius: 3px; background: #e9edf2; font-family: Consolas, monospace; }
+    p code, li code { overflow-wrap: anywhere; word-break: break-word; }
+    pre { overflow-x: auto; padding: 14px 16px; border: 1px solid #ccd2d9; background: #fff; }
+    pre code { padding: 0; background: transparent; }
+    ul { padding-left: 22px; }
+    @media (max-width: 560px) { main { width: min(100% - 20px, 920px); padding-top: 20px; } h1 { font-size: 26px; } h2 { font-size: 20px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Bob Coach 中文图文安装教程</h1>
+  <p class="lead">不用终端，四步完成。请先完整解压官方安装 ZIP，并确认能看到 <code>BobCoach.dll</code>。</p>
+  <div class="notice"><strong>下载：</strong>当前公开安装包是 <a href="https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip">BobCoach-0.2.0-beta.1-win-x64.zip</a>，适用于 Windows 11 24H2 x64 和 Windows 10 22H2 x64。已经在安装包内打开本教程时，无需再次下载。不要下载 <code>Source code (zip)</code> 或 <code>Source code (tar.gz)</code>，它们是源码快照。</div>
+
+  <section class="step">
+    <h2><span class="number">1</span>完全退出 HDT</h2>
+    <p>在 Windows 右下角通知区域找到 HDT 图标，右键后选择“退出”。不要只关闭主窗口；HDT 可能仍在后台运行。</p>
+    <img src="images/install/install-01-exit-hdt.png" alt="完全退出 Hearthstone Deck Tracker，右键通知区域图标并选择退出">
+    <p class="caption">图示：右键 HDT 通知区域图标，选择“退出”。</p>
+  </section>
+
+  <section class="step">
+    <h2><span class="number">2</span>打开插件目录</h2>
+    <p>按 <code>Win + R</code>，粘贴 <code>%AppData%\HearthstoneDeckTracker\Plugins</code>，然后点“确定”。目录不存在时，先正常启动并退出一次 HDT。</p>
+    <img src="images/install/install-02-open-plugins-folder.png" alt="在 Windows 运行窗口输入 HDT 插件目录路径">
+    <p class="caption">图示：在“运行”窗口粘贴插件目录路径并点“确定”。</p>
+  </section>
+
+  <section class="step">
+    <h2><span class="number">3</span>复制 BobCoach.dll</h2>
+    <p>将解压目录中的 <code>BobCoach.dll</code> 复制到刚打开的 <code>Plugins</code> 根目录。升级时选择替换已有文件，不要再创建 BobCoach 子文件夹。</p>
+    <img src="images/install/install-03-copy-bobcoach-dll.png" alt="将 BobCoach.dll 复制到 Plugins 根目录">
+    <p class="caption">图示：<code>BobCoach.dll</code> 应直接位于 <code>Plugins</code> 根目录。</p>
+  </section>
+
+  <section class="step">
+    <h2><span class="number">4</span>启动并启用 BobCoach</h2>
+    <p>重新启动 HDT，打开 <code>Options &gt; Tracker &gt; Plugins</code>，找到 BobCoach 并勾选启用。重启一次 HDT，再确认它仍为启用状态。</p>
+    <img src="images/install/install-04-enable-bobcoach.png" alt="在 HDT 的 Plugins 页面勾选启用 BobCoach">
+    <p class="caption">图示：在 HDT 插件页面启用 BobCoach；实际布局可能随 HDT 版本略有变化。</p>
+  </section>
+
+  <h2>没有看到 BobCoach</h2>
+  <ul>
+    <li>确认文件位于 <code>%AppData%\HearthstoneDeckTracker\Plugins\BobCoach.dll</code>。</li>
+    <li>右键 DLL 打开“属性”；如果有“解除锁定”，勾选后确定。</li>
+    <li>完全退出并重启 HDT，再检查插件页面。</li>
+  </ul>
+
+  <h2>可选高级安装</h2>
+  <p>普通玩家不需要使用终端。需要完整性校验、自动备份或回退时，可在解压目录运行：</p>
+  <pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1</code></pre>
+  <p>看到 <code>PASS installed</code> 或 <code>PASS upgraded</code> 表示脚本安装完成。</p>
+</main>
+</body>
+</html>

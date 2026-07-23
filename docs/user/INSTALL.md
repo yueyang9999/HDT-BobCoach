@@ -1,56 +1,83 @@
 # Bob Coach 中文安装教程
 
-## 当前状态
+不熟悉终端也能完成。先下载官方安装包 [BobCoach-0.2.0-beta.1-win-x64.zip](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip)，完整解压后确认目录中能看到 `BobCoach.dll`。
 
-当前最新公开版本为 `0.2.0-beta.1`。仓库当前源码版本为 `0.2.0-beta.2`，只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。不要把仓库源码、CI 产物、本地候选包或第三方转发文件当作已公开的官方安装包。
+[下载或离线打开 HTML 图文教程](INSTALL.html)
 
-Windows 10 和 Windows 11 使用同一个 64 位安装包：
+## 四步安装
 
-| 你的系统 | 下载 | 验证状态 |
-| --- | --- | --- |
-| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | beta.1 公开资产可用；beta.2 尚未完成最终实机 smoke |
-| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+### 第 1 步：完全退出 HDT
 
-[下载 beta.1 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+在 Windows 右下角通知区域找到 HDT 图标，右键后选择“退出”。不要只关闭 HDT 主窗口；它可能仍在后台运行。
 
-**不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
+![完全退出 Hearthstone Deck Tracker，右键通知区域图标并选择退出](images/install/install-01-exit-hdt.png)
 
-安装包可以直接解压，但解压不等于安装完成。必须继续运行 `INSTALL.ps1`，并看到 `PASS installed` 或 `PASS upgraded`。
+图示：右键 HDT 通知区域图标，选择“退出”。HDT 界面可能随版本略有变化。
 
-## 要求
+### 第 2 步：打开插件目录
 
-- beta.2 最终实机 smoke 尚未完成的 Windows 11 24H2 x64，或尚未完成专用实机验证的目标兼容环境 Windows 10 22H2 x64；
-- Hearthstone Deck Tracker (HDT) `1.53.5` x64；
-- 系统提供的 .NET Framework 4.8 或 4.8.1 运行时；
-- 标准用户权限。
+按 `Win + R`，粘贴下面这条路径，然后点“确定”：
 
-安装不需要 Node.js、Visual Studio、管理员权限或 Bob Coach 自有在线服务。HDT 和 Hearthstone 由用户自行合法安装。
-
-## 安装完整包
-
-1. 完全退出 HDT，确认任务管理器没有 `HearthstoneDeckTracker` 或 `Hearthstone Deck Tracker` 进程。
-2. 从本仓库 [Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 取得完整 ZIP，并保留 ZIP 内所有文件；不要单独复制 DLL、使用 CI 产物或混用不同版本的文件。
-3. 同一 Release 会提供 `BobCoach-<version>-win-x64.zip.sha256`。核对哈希后再解压：
-
-```powershell
-Get-FileHash .\BobCoach-<version>-win-x64.zip -Algorithm SHA256
+```text
+%AppData%\HearthstoneDeckTracker\Plugins
 ```
 
-4. 进入解压后的内层目录，运行：
+如果系统提示目录不存在，请先正常启动并退出一次 HDT，然后重试。
+
+![在 Windows 运行窗口输入 HDT 插件目录路径](images/install/install-02-open-plugins-folder.png)
+
+图示：在“运行”窗口粘贴插件目录路径并点“确定”。
+
+### 第 3 步：复制 BobCoach.dll
+
+回到解压后的安装包，将 `BobCoach.dll` 复制到刚打开的 `Plugins` 根目录。升级时选择替换已有文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
+
+![将 BobCoach.dll 复制到 Plugins 根目录](images/install/install-03-copy-bobcoach-dll.png)
+
+图示：`BobCoach.dll` 应直接位于 `Plugins` 根目录。
+
+### 第 4 步：启动并启用 BobCoach
+
+重新启动 HDT，打开 `Options > Tracker > Plugins`，找到 BobCoach 并勾选启用。关闭并重启一次 HDT，再确认 BobCoach 仍为启用状态。
+
+![在 HDT 的 Plugins 页面勾选启用 BobCoach](images/install/install-04-enable-bobcoach.png)
+
+图示：在 HDT 插件页面启用 BobCoach；实际布局可能随 HDT 版本略有变化。
+
+## 下载时注意
+
+当前最新公开版本为 `0.2.0-beta.1`，官方文件名是 `BobCoach-0.2.0-beta.1-win-x64.zip`。仓库源码版本为 `0.2.0-beta.2`，只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。
+
+- `Windows 11 24H2 x64` 与 `Windows 10 22H2 x64` 使用同一个 64 位安装包。
+- 不要下载 Release 页面底部的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是安装包。
+- 不要混用不同版本的 DLL、manifest 或校验文件。
+- 安装不需要 Node.js、Visual Studio或管理员权限。
+
+## 常见问题
+
+### 插件列表没有 BobCoach
+
+1. 确认 HDT 已完全退出后再复制 DLL。
+2. 确认文件路径正好是 `%AppData%\HearthstoneDeckTracker\Plugins\BobCoach.dll`。
+3. 右键 `BobCoach.dll`，打开“属性”；如果底部有“解除锁定”，勾选后确定。
+4. 重新启动 HDT，再到 `Options > Tracker > Plugins` 检查。
+
+### 覆盖后仍显示旧版本
+
+确认只在上述 AppData 插件目录保留当前 `BobCoach.dll`，不要同时向 HDT 程序目录复制。完全退出 HDT，重新覆盖 DLL 后再启动。
+
+### 插件能加载但对局提示不完整
+
+部分功能需要 Hearthstone 的 `Power.log`。Bob Coach 不会静默修改 `log.config`；请在 HDT 的“Bob 教练”入口查看拟议变更并自行确认。拒绝修改不会阻止插件加载，但相关对局功能会失败关闭。
+
+## 可选高级安装
+
+普通玩家不需要使用终端。需要包完整性校验、自动备份、升级或回退时，可在解压目录运行随包提供的 `INSTALL.ps1`：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
 ```
 
-5. 输入 `Y` 确认写入。看到 `PASS installed` 或 `PASS upgraded` 才表示完成。
-6. 启动 HDT，在 `Options > Tracker > Plugins` 中确认 `BobCoach` 已启用；重启一次 HDT 后再次确认。
-
-默认目标是 `%APPDATA%\HearthstoneDeckTracker\Plugins`。如果该目录不存在，先正常启动并退出一次 HDT。
-
-HDT 的用户插件目录不随程序安装位置变化；便携版或自定义程序目录也使用上述 AppData 路径。不要把 DLL 安装到 HDT 程序目录下的 `Plugins`。`-PluginDirectory` 只接受当前 `%APPDATA%` 对应的同一目录，通常应省略。安装器会验证包完整性、清单、DLL 身份、x64 架构和目标路径，验证失败时不会写入插件目录。
-
-## Power.log
-
-部分功能需要 Hearthstone 的 `Power.log`。安装器不会修改 `log.config`。当插件提示配置不完整时，只能在 HDT 内通过“Bob 教练”按钮查看目标路径、完整变更和用途后，再明确确认写入。拒绝或写入失败不会阻止插件加载，但相关功能会失败关闭。
+脚本会校验 `SHA256SUMS.txt`、manifest、DLL 版本与 x64 架构，并只写入同一个 AppData 插件目录。看到 `PASS installed` 或 `PASS upgraded` 表示完成。
 
 详见 [升级](UPGRADE.md)、[回退](ROLLBACK.md)、[卸载](UNINSTALL.md) 和 [故障排查](TROUBLESHOOTING.md)。

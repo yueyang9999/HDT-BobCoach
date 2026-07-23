@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "offline_package_test_helpers.ps1")
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -27,6 +27,11 @@ $packageName = "BobCoach-0.2.0-beta.2-win-x64"
 $zipName = "$packageName.zip"
 $expectedFiles = @(
     "BobCoach.dll",
+    "安装教程.html",
+    "images/install/install-01-exit-hdt.png",
+    "images/install/install-02-open-plugins-folder.png",
+    "images/install/install-03-copy-bobcoach-dll.png",
+    "images/install/install-04-enable-bobcoach.png",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -48,7 +53,11 @@ function Assert-ExactStrings([string[]]$Expected, [string[]]$Actual, [string]$La
 }
 
 function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLoad) {
-    $actualFiles = @(Get-ChildItem -LiteralPath $PackageRoot -Force | Select-Object -ExpandProperty Name)
+    $prefixLength = $PackageRoot.TrimEnd('\').Length + 1
+    $actualFiles = @(
+        Get-ChildItem -LiteralPath $PackageRoot -Recurse -File -Force |
+            ForEach-Object { $_.FullName.Substring($prefixLength).Replace('\', '/') }
+    )
     Assert-ExactStrings $expectedFiles $actualFiles "extracted file set"
 
     $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PackageRoot "manifest.json") | ConvertFrom-Json
@@ -80,10 +89,10 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
     }
 
     $sumLines = @(Get-Content -LiteralPath (Join-Path $PackageRoot "SHA256SUMS.txt") -Encoding UTF8)
-    Assert-Equal 10 $sumLines.Count "SHA256SUMS line count"
+    Assert-Equal 15 $sumLines.Count "SHA256SUMS line count"
     $seen = @{}
     foreach ($line in $sumLines) {
-        if ($line -notmatch '^([A-F0-9]{64})  ([^\\/:*?"<>|]+)$') { throw "Invalid SHA256SUMS line: $line" }
+        if ($line -notmatch '^([A-F0-9]{64})  ([^\\:*?"<>|\r\n]+)$') { throw "Invalid SHA256SUMS line: $line" }
         $hash = $Matches[1]
         $fileName = $Matches[2]
         Assert-False $seen.ContainsKey($fileName) "duplicate SHA256SUMS file"

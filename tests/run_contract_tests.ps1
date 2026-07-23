@@ -20,7 +20,8 @@ foreach ($file in @(
     "test_repository_validator.js",
     "test_release_build_contract.js",
     "test_release_identity.js",
-    "test_release_package_contract.js"
+    "test_release_package_contract.js",
+    "test_install_guide_contract.js"
 )) {
     Invoke-Checked $file "node"
 }
