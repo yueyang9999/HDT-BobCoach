@@ -53,10 +53,9 @@ function Assert-ExactStrings([string[]]$Expected, [string[]]$Actual, [string]$La
 }
 
 function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLoad) {
-    $prefixLength = $PackageRoot.TrimEnd('\').Length + 1
     $actualFiles = @(
-        Get-ChildItem -LiteralPath $PackageRoot -Recurse -File -Force |
-            ForEach-Object { $_.FullName.Substring($prefixLength).Replace('\', '/') }
+        Get-ChildItem -LiteralPath $PackageRoot -Recurse -File -Force -Name |
+            ForEach-Object { $_.Replace('\', '/') }
     )
     Assert-ExactStrings $expectedFiles $actualFiles "extracted file set"
 
