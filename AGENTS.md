@@ -33,7 +33,7 @@ Only commit files required to build, test, package, document, or maintain the HD
 Do not commit:
 
 - replay XML, raw logs, recordings, crash dumps, user profiles, credentials, or personal paths;
-- screenshots, except for cropped and privacy-cleaned final installation-guide images under `docs/user/images/install/`; raw screenshots, validation screenshots, user-data screenshots, and screenshots outside that exact directory remain prohibited;
+- screenshots, except for cropped and privacy-cleaned final installation-guide images under `docs/user/images/install/` and cropped, privacy-cleaned, compressed final feature-showcase images under `docs/user/images/features/`; raw screenshots, validation screenshots, user-data screenshots, and screenshots outside those exact directories remain prohibited;
 - `.env` files, secrets, tokens, passwords, signing material, or private endpoints;
 - `.debate`, `.mcp`, `sessions`, `local-data`, VM images, ISO files, validation evidence, caches, or generated packages;
 - the historical Python analysis pipeline, Electron overlay, `BobObserver`, or unrelated experiments;

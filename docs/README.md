@@ -9,6 +9,8 @@
 - [中文项目说明与下载入口](../README.md)
 - [English README](../README.en.md)
 - [中文安装教程](user/INSTALL.md)
+- [功能展示](user/FEATURES.md)：查看购买、升本、技能、饰品和发现提示的实战画面
+- [功能展示离线 HTML](user/FEATURES.html)
 - [升级教程](user/UPGRADE.md)
 - [回退教程](user/ROLLBACK.md)
 - [卸载教程](user/UNINSTALL.md)

@@ -8,7 +8,7 @@
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; color: #20242a; background: #f4f6f8; font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif; line-height: 1.7; }
-    main { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 56px; }
+    main { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 56px; }
     h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: 0; }
     h2 { margin: 34px 0 10px; font-size: 24px; letter-spacing: 0; }
     p { margin: 8px 0 14px; }
@@ -25,7 +25,7 @@
     pre { overflow-x: auto; padding: 14px 16px; border: 1px solid #ccd2d9; background: #fff; }
     pre code { padding: 0; background: transparent; }
     ul { padding-left: 22px; }
-    @media (max-width: 560px) { main { width: min(100% - 20px, 920px); padding-top: 20px; } h1 { font-size: 26px; } h2 { font-size: 20px; } }
+    @media (max-width: 560px) { main { width: min(100% - 20px, 960px); padding-top: 20px; } h1 { font-size: 26px; } h2 { font-size: 20px; } }
   </style>
 </head>
 <body>
@@ -42,10 +42,10 @@
   </section>
 
   <section class="step">
-    <h2><span class="number">2</span>打开插件目录</h2>
-    <p>按 <code>Win + R</code>，粘贴 <code>%AppData%\HearthstoneDeckTracker\Plugins</code>，然后点“确定”。目录不存在时，先正常启动并退出一次 HDT。</p>
-    <img src="images/install/install-02-open-plugins-folder.png" alt="在 Windows 运行窗口输入 HDT 插件目录路径">
-    <p class="caption">图示：在“运行”窗口粘贴插件目录路径并点“确定”。</p>
+    <h2><span class="number">2</span>在 HDT 中打开插件文件夹</h2>
+    <p>重新打开 HDT，进入“选项 &gt; 插件”，点击页面底部的“打开插件文件夹”。HDT 会直接打开正确的 <code>Plugins</code> 目录，不需要手动输入路径。</p>
+    <img src="images/install/install-02-open-plugins-folder.png" alt="在 HDT 的选项和插件页面点击打开插件文件夹">
+    <p class="caption">图示：左侧选择“插件”，再点击底部的“打开插件文件夹”。如果按钮不可用，可手动打开 <code>%AppData%\HearthstoneDeckTracker\Plugins</code>。</p>
   </section>
 
   <section class="step">
@@ -56,10 +56,10 @@
   </section>
 
   <section class="step">
-    <h2><span class="number">4</span>启动并启用 BobCoach</h2>
-    <p>重新启动 HDT，打开 <code>Options &gt; Tracker &gt; Plugins</code>，找到 BobCoach 并勾选启用。重启一次 HDT，再确认它仍为启用状态。</p>
+    <h2><span class="number">4</span>开启 BobCoach</h2>
+    <p>回到 HDT 的插件页面，打开 BobCoach 右侧的开关。关闭并重启一次 HDT，再确认 BobCoach 仍为开启状态。</p>
     <img src="images/install/install-04-enable-bobcoach.png" alt="在 HDT 的 Plugins 页面勾选启用 BobCoach">
-    <p class="caption">图示：在 HDT 插件页面启用 BobCoach；实际布局可能随 HDT 版本略有变化。</p>
+    <p class="caption">图示：BobCoach 开关位于插件名称右侧；蓝色表示已经开启。实际布局可能随 HDT 版本略有变化。</p>
   </section>
 
   <h2>没有看到 BobCoach</h2>

@@ -11,6 +11,12 @@ project material for which contributors have the right to grant that license.
 It does not relicense third-party software, game data, card names or text,
 trademarks, images, aggregate statistics, or user gameplay records.
 
+Documentation screenshots may show Hearthstone, Hearthstone Battlegrounds,
+Hearthstone Deck Tracker, and other third-party user interfaces or assets only
+to explain compatibility and plugin behavior. Those interfaces, images, marks,
+and game assets remain the property of their respective rights holders and are
+not relicensed by this repository.
+
 Runtime relationships
 ---------------------
 

@@ -47,8 +47,8 @@ for (const imagePath of expectedGuideImages) {
 }
 
 for (const [source, label, tokens] of [
-  [markdown, 'Markdown guide', ['完全退出 HDT', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'BobCoach.dll', 'BobCoach.dll.sha256', '根目录', '启用 BobCoach', '可选高级安装']],
-  [html, 'HTML guide', ['完全退出 HDT', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'BobCoach.dll', 'BobCoach.dll.sha256', '根目录', '启用 BobCoach', '可选高级安装']],
+  [markdown, 'Markdown guide', ['完全退出 HDT', '打开插件文件夹', 'BobCoach.dll', 'BobCoach.dll.sha256', 'Plugins', '开启 BobCoach', '可选高级安装']],
+  [html, 'HTML guide', ['完全退出 HDT', '打开插件文件夹', 'BobCoach.dll', 'BobCoach.dll.sha256', 'Plugins', '开启 BobCoach', '可选高级安装']],
   [chineseReadme, 'Chinese README', ['把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制', '%AppData%\\HearthstoneDeckTracker\\Plugins', '启用 BobCoach', 'docs/user/INSTALL.html']],
   [englishReadme, 'English README', ['Copy both `BobCoach.dll` and `BobCoach.dll.sha256`', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'enable BobCoach', 'optional advanced']],
   [offlineReadme, 'offline README', ['安装教程.html', '手动复制 `BobCoach.dll` 和相邻的 `BobCoach.dll.sha256`', '%APPDATA%\\HearthstoneDeckTracker\\Plugins', '可选高级安装']],

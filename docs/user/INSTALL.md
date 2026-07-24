@@ -14,19 +14,13 @@
 
 图示：右键 HDT 通知区域图标，选择“退出”。HDT 界面可能随版本略有变化。
 
-### 第 2 步：打开插件目录
+### 第 2 步：在 HDT 中打开插件文件夹
 
-按 `Win + R`，粘贴下面这条路径，然后点“确定”：
+重新打开 HDT，进入“选项 > 插件”，点击页面底部的“打开插件文件夹”。HDT 会直接打开正确的 `Plugins` 目录，不需要手动输入路径。
 
-```text
-%AppData%\HearthstoneDeckTracker\Plugins
-```
+![在 HDT 的选项和插件页面点击打开插件文件夹](images/install/install-02-open-plugins-folder.png)
 
-如果系统提示目录不存在，请先正常启动并退出一次 HDT，然后重试。
-
-![在 Windows 运行窗口输入 HDT 插件目录路径](images/install/install-02-open-plugins-folder.png)
-
-图示：在“运行”窗口粘贴插件目录路径并点“确定”。
+图示：左侧选择“插件”，再点击底部的“打开插件文件夹”。如果按钮不可用，可手动打开 `%AppData%\HearthstoneDeckTracker\Plugins`。
 
 ### 第 3 步：复制 DLL 和校验文件
 
@@ -36,13 +30,13 @@
 
 图示：`BobCoach.dll` 应直接位于 `Plugins` 根目录；`1.0.0` 还必须在同目录放置 `BobCoach.dll.sha256`。
 
-### 第 4 步：启动并启用 BobCoach
+### 第 4 步：开启 BobCoach
 
-重新启动 HDT，打开 `Options > Tracker > Plugins`，找到 BobCoach 并勾选启用。关闭并重启一次 HDT，再确认 BobCoach 仍为启用状态。
+回到 HDT 的插件页面，打开 BobCoach 右侧的开关。关闭并重启一次 HDT，再确认 BobCoach 仍为开启状态。
 
 ![在 HDT 的 Plugins 页面勾选启用 BobCoach](images/install/install-04-enable-bobcoach.png)
 
-图示：在 HDT 插件页面启用 BobCoach；实际布局可能随 HDT 版本略有变化。
+图示：BobCoach 开关位于插件名称右侧；蓝色表示已经开启。实际布局可能随 HDT 版本略有变化。
 
 ## 下载时注意
 

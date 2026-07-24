@@ -23,7 +23,7 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 **不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
 
-第一次安装请打开 [中文安装教程（新手从这里开始）](docs/user/INSTALL.md)，也可直接查看或下载 [HTML 图文教程](docs/user/INSTALL.html)。普通玩家不需要打开终端。
+第一次安装请打开 [中文安装教程（新手从这里开始）](docs/user/INSTALL.md)，也可直接查看或下载 [HTML 图文教程](docs/user/INSTALL.html)。想先看看插件在对局中会提示什么，可以打开 [功能展示](docs/user/FEATURES.md) 或 [离线 HTML 展示页](docs/user/FEATURES.html)。普通玩家不需要打开终端。
 
 ## 系统要求
 
@@ -39,8 +39,8 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 1. 完全退出 HDT。
 2. 完整解压安装 ZIP。
-3. 按 `Win + R`，打开 `%AppData%\HearthstoneDeckTracker\Plugins`。
-4. 当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`。`1.0.0` 发布后，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到该目录根部；1.0.0 缺少校验文件或两者不匹配时会拒绝启动。随后启动 HDT，并在 `Options > Tracker > Plugins` 中启用 BobCoach。
+3. 打开 HDT，进入“选项 > 插件”，点击“打开插件文件夹”。如果按钮不可用，可手动打开 `%AppData%\HearthstoneDeckTracker\Plugins`。
+4. 当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`。`1.0.0` 发布后，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到该目录根部；1.0.0 缺少校验文件或两者不匹配时会拒绝启动。随后回到插件页面启用 BobCoach。
 
 `INSTALL.ps1` 是可选高级安装方式，用于完整性校验、自动备份和回退；普通安装不要求使用 PowerShell。升级、回滚和卸载分别见 [升级教程](docs/user/UPGRADE.md)、[回退教程](docs/user/ROLLBACK.md) 和 [卸载教程](docs/user/UNINSTALL.md)。
 

@@ -19,6 +19,13 @@ $allowedInstallationImagePaths = @(
     "docs/user/images/install/install-03-copy-bobcoach-dll.png",
     "docs/user/images/install/install-04-enable-bobcoach.png"
 )
+$allowedFeatureImagePaths = @(
+    "docs/user/images/features/feature-01-buy.jpg",
+    "docs/user/images/features/feature-02-upgrade.jpg",
+    "docs/user/images/features/feature-03-hero-power.jpg",
+    "docs/user/images/features/feature-04-trinket.jpg",
+    "docs/user/images/features/feature-05-discover.jpg"
+)
 $binaryExtensions = $forbiddenBinaryExtensions + @(
     ".7z", ".rar", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".pdf", ".mp3", ".mp4", ".wav", ".woff", ".woff2", ".ttf", ".pdb"
 )
@@ -115,7 +122,8 @@ foreach ($gitPath in $paths) {
 
     $extension = [IO.Path]::GetExtension($relativePath).ToLowerInvariant()
     $isAllowedInstallationImage = $extension -eq ".png" -and $allowedInstallationImagePaths -ccontains $relativePath
-    if (($forbiddenBinaryExtensions -contains $extension) -and !$isAllowedInstallationImage) {
+    $isAllowedFeatureImage = $extension -eq ".jpg" -and $allowedFeatureImagePaths -ccontains $relativePath
+    if (($forbiddenBinaryExtensions -contains $extension) -and !$isAllowedInstallationImage -and !$isAllowedFeatureImage) {
         Add-Failure $failures "forbidden-binary-or-image" $relativePath "extension $extension is not allowed"
         continue
     }

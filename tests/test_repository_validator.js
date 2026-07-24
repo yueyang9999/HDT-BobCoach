@@ -95,6 +95,8 @@ assertRejected("archives/release.zip", "forbidden-binary-or-image", Buffer.from(
 assertRejected("evidence/screenshot.png", "forbidden-binary-or-image", Buffer.from([0x89, 0x50, 0x4e, 0x47]), false);
 assertRejected("docs/user/images/install/INSTALL-01-exit-hdt.png", "forbidden-binary-or-image", Buffer.from([0x89, 0x50, 0x4e, 0x47]), false);
 assertRejected("evidence/screenshot.jpg", "forbidden-binary-or-image", Buffer.from([0xff, 0xd8, 0xff]), false);
+assertRejected("docs/user/images/features/feature-06-other.jpg", "forbidden-binary-or-image", Buffer.from([0xff, 0xd8, 0xff]), false);
+assertRejected("docs/user/images/features/feature-01-buy.png", "forbidden-binary-or-image", Buffer.from([0x89, 0x50, 0x4e, 0x47]), false);
 assertRejected("vm/snapshot.vhd", "forbidden-directory", Buffer.from([0, 1, 2]), false);
 assertRejected("images/base.iso", "forbidden-binary-or-image", Buffer.from([0, 1, 2]), false);
 assertRejected("local-data/cache.txt", "forbidden-directory", "synthetic cache\n", false);
@@ -102,6 +104,11 @@ assertAccepted("docs/user/images/install/install-01-exit-hdt.png", Buffer.from([
 assertAccepted("docs/user/images/install/install-02-open-plugins-folder.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 assertAccepted("docs/user/images/install/install-03-copy-bobcoach-dll.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 assertAccepted("docs/user/images/install/install-04-enable-bobcoach.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+assertAccepted("docs/user/images/features/feature-01-buy.jpg", Buffer.from([0xff, 0xd8, 0xff]));
+assertAccepted("docs/user/images/features/feature-02-upgrade.jpg", Buffer.from([0xff, 0xd8, 0xff]));
+assertAccepted("docs/user/images/features/feature-03-hero-power.jpg", Buffer.from([0xff, 0xd8, 0xff]));
+assertAccepted("docs/user/images/features/feature-04-trinket.jpg", Buffer.from([0xff, 0xd8, 0xff]));
+assertAccepted("docs/user/images/features/feature-05-discover.jpg", Buffer.from([0xff, 0xd8, 0xff]));
 const utf16Token = Buffer.concat([
     Buffer.from([0xff, 0xfe]),
     Buffer.from(`credential=${token}\n`, "utf16le"),
