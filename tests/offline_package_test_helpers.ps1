@@ -2,6 +2,7 @@
 
 $script:OfflinePackageFiles = @(
     "BobCoach.dll",
+    "BobCoach.dll.sha256",
     "安装教程.html",
     "images/install/install-01-exit-hdt.png",
     "images/install/install-02-open-plugins-folder.png",
@@ -45,6 +46,29 @@ function Assert-FileHashEqual([string]$ExpectedPath, [string]$ActualPath, [strin
     $expected = (Get-FileHash -LiteralPath $ExpectedPath -Algorithm SHA256).Hash
     $actual = (Get-FileHash -LiteralPath $ActualPath -Algorithm SHA256).Hash
     Assert-Equal $expected $actual $Label
+}
+
+function Write-PluginChecksumFile([string]$DllPath, [string]$ChecksumPath) {
+    $hash = (Get-FileHash -LiteralPath $DllPath -Algorithm SHA256).Hash
+    Write-Utf8NoBom $ChecksumPath ("{0}  BobCoach.dll`n" -f $hash)
+}
+
+function Assert-PluginChecksum([string]$DllPath, [string]$ChecksumPath, [string]$Label) {
+    Assert-True (Test-Path -LiteralPath $ChecksumPath -PathType Leaf) "$Label sidecar exists"
+    $line = (Get-Content -Raw -Encoding UTF8 -LiteralPath $ChecksumPath).Trim()
+    if ($line -notmatch '^([A-F0-9]{64})  BobCoach\.dll$') {
+        throw "Assertion failed: $Label invalid sidecar content=$line"
+    }
+    $actualHash = (Get-FileHash -LiteralPath $DllPath -Algorithm SHA256).Hash
+    Assert-Equal $actualHash $Matches[1] "$Label sidecar hash"
+}
+
+function Write-TestOfflinePackageSums([string]$PackageRoot) {
+    $hashLines = foreach ($fileName in ($script:OfflinePackageFiles | Where-Object { $_ -ne "SHA256SUMS.txt" } | Sort-Object)) {
+        $hash = (Get-FileHash -LiteralPath (Join-Path $PackageRoot $fileName) -Algorithm SHA256).Hash
+        "{0}  {1}" -f $hash, $fileName
+    }
+    Write-Utf8NoBom (Join-Path $PackageRoot "SHA256SUMS.txt") (($hashLines -join "`n") + "`n")
 }
 
 function Assert-SafeTestRoot([string]$Path) {
@@ -142,6 +166,7 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
     $packageRoot = Join-Path $Root $Name
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
     Copy-Item -LiteralPath $pluginSource -Destination (Join-Path $packageRoot "BobCoach.dll")
+    Write-PluginChecksumFile (Join-Path $packageRoot "BobCoach.dll") (Join-Path $packageRoot "BobCoach.dll.sha256")
     Copy-Item -LiteralPath $installerSource -Destination (Join-Path $packageRoot "INSTALL.ps1")
 
     foreach ($relativePath in @(
@@ -171,31 +196,29 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
     $pluginHash = (Get-FileHash -LiteralPath (Join-Path $packageRoot "BobCoach.dll") -Algorithm SHA256).Hash
     $pluginSize = (Get-Item -LiteralPath (Join-Path $packageRoot "BobCoach.dll")).Length
     $manifest = [ordered]@{
-        schemaVersion = 1
-        packageVersion = "0.2.0-beta.2"
-        assemblyVersion = "0.2.0.0"
-        fileVersion = "0.2.0.0"
-        informationalVersion = "0.2.0-beta.2"
+        schemaVersion = 2
+        packageVersion = "1.0.0"
+        assemblyVersion = "1.0.0.0"
+        fileVersion = "1.0.0.0"
+        informationalVersion = "1.0.0"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
         hdtBaselineVersion = "1.53.5.7354"
         pluginFile = "BobCoach.dll"
+        pluginChecksumFile = "BobCoach.dll.sha256"
         pluginSize = $pluginSize
         pluginSha256 = $pluginHash
         files = $script:OfflinePackageFiles
     }
     Write-Utf8NoBom (Join-Path $packageRoot "manifest.json") (($manifest | ConvertTo-Json -Depth 4) + "`n")
 
-    $hashLines = foreach ($fileName in ($script:OfflinePackageFiles | Where-Object { $_ -ne "SHA256SUMS.txt" } | Sort-Object)) {
-        $hash = (Get-FileHash -LiteralPath (Join-Path $packageRoot $fileName) -Algorithm SHA256).Hash
-        "{0}  {1}" -f $hash, $fileName
-    }
-    Write-Utf8NoBom (Join-Path $packageRoot "SHA256SUMS.txt") (($hashLines -join "`n") + "`n")
+    Write-TestOfflinePackageSums $packageRoot
 
     return [pscustomobject]@{
         Root = $packageRoot
         Installer = Join-Path $packageRoot "INSTALL.ps1"
         Plugin = Join-Path $packageRoot "BobCoach.dll"
+        PluginChecksum = Join-Path $packageRoot "BobCoach.dll.sha256"
     }
 }
 

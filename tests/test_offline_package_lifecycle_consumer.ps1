@@ -16,6 +16,7 @@ $candidatePath = if ([string]::IsNullOrWhiteSpace($env:BOBCOACH_TEST_DLL)) {
 }
 $script:PackageFiles = @(
     "BobCoach.dll",
+    "BobCoach.dll.sha256",
     "安装教程.html",
     "images/install/install-01-exit-hdt.png",
     "images/install/install-02-open-plugins-folder.png",
@@ -130,15 +131,16 @@ function Write-TestManifestAndSums([string]$PackageRoot) {
     $pluginHash = Get-TestHash $pluginPath
     $pluginSize = (Get-Item -LiteralPath $pluginPath).Length
     $manifest = [ordered]@{
-        schemaVersion = 1
-        packageVersion = "0.2.0-beta.2"
-        assemblyVersion = "0.2.0.0"
-        fileVersion = "0.2.0.0"
-        informationalVersion = "0.2.0-beta.2"
+        schemaVersion = 2
+        packageVersion = "1.0.0"
+        assemblyVersion = "1.0.0.0"
+        fileVersion = "1.0.0.0"
+        informationalVersion = "1.0.0"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
         hdtBaselineVersion = "1.53.5.7354"
         pluginFile = "BobCoach.dll"
+        pluginChecksumFile = "BobCoach.dll.sha256"
         pluginSize = $pluginSize
         pluginSha256 = $pluginHash
         files = $script:PackageFiles
@@ -217,14 +219,14 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     }
 
     $fixtureRoot = Join-Path $Root $Name
-    $packageRoot = Join-Path $fixtureRoot "BobCoach-0.2.0-beta.2-win-x64"
+    $packageRoot = Join-Path $fixtureRoot "BobCoach-1.0.0-win-x64"
     $hdtDirectory = Join-Path $fixtureRoot "SyntheticHdt"
     $appDataRoot = Join-Path $fixtureRoot "IsolatedAppData"
     $pluginDirectory = Join-Path (Join-Path $appDataRoot "HearthstoneDeckTracker") "Plugins"
     $evidenceDirectory = Join-Path $fixtureRoot "Evidence"
     $logConfigPath = Join-Path $fixtureRoot "log.config"
     $previousPluginPath = Join-Path $fixtureRoot "previous\BobCoach.dll"
-    $zipPath = Join-Path $fixtureRoot "BobCoach-0.2.0-beta.2-win-x64.zip"
+    $zipPath = Join-Path $fixtureRoot "BobCoach-1.0.0-win-x64.zip"
     $sha256Path = "$zipPath.sha256"
 
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
@@ -234,6 +236,7 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     Write-Utf8NoBom $logConfigPath "isolated log.config sentinel`n"
     (Get-Item -LiteralPath $logConfigPath).IsReadOnly = $true
     Copy-Item -LiteralPath $candidatePath -Destination (Join-Path $packageRoot "BobCoach.dll")
+    Write-PluginChecksumFile (Join-Path $packageRoot "BobCoach.dll") (Join-Path $packageRoot "BobCoach.dll.sha256")
     Copy-Item -LiteralPath (Join-Path $repoRoot "tools\release\INSTALL.ps1") -Destination $packageRoot
     Copy-Item -LiteralPath (Join-Path $repoRoot "tools\release\UNINSTALL.ps1") -Destination $packageRoot
     Copy-Item -LiteralPath (Join-Path $repoRoot "docs\user\INSTALL.html") -Destination (Join-Path $packageRoot "安装教程.html")

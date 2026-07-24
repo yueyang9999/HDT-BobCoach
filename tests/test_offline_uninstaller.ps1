@@ -21,6 +21,8 @@ try {
     New-Item -ItemType Directory -Path $plugins -Force | Out-Null
     $targetDll = Join-Path $plugins "BobCoach.dll"
     New-TestManagedBobCoach -Path $targetDll | Out-Null
+    $targetChecksum = Join-Path $plugins "BobCoach.dll.sha256"
+    Write-PluginChecksumFile $targetDll $targetChecksum
     Write-Utf8NoBom (Join-Path $plugins "BobCoach.dll.backup-20260101T000000000Z-1111111111111111") "backup one"
     Write-Utf8NoBom (Join-Path $plugins "BobCoach.dll.backup-20260102T000000000Z-2222222222222222") "backup two"
 
@@ -34,6 +36,7 @@ try {
     $defaultResult = Invoke-TestPowerShell $uninstaller @("-Confirm:`$false")
     Assert-Equal 0 $defaultResult.ExitCode "default uninstall exit"
     Assert-False (Test-Path -LiteralPath $targetDll) "default removes DLL"
+    Assert-False (Test-Path -LiteralPath $targetChecksum) "default removes DLL checksum sidecar"
     Assert-Equal 2 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "default retains backups"
     Assert-True (Test-Path -LiteralPath $userDataFile) "default retains user data"
     Assert-True (Test-Path -LiteralPath $logConfig) "default retains log.config"
@@ -42,9 +45,11 @@ try {
     Assert-Equal 0 $idempotent.ExitCode "idempotent uninstall exit"
 
     New-TestManagedBobCoach -Path $targetDll | Out-Null
+    Write-PluginChecksumFile $targetDll $targetChecksum
     $whatIf = Invoke-TestPowerShell $uninstaller @("-PluginDirectory", $plugins, "-WhatIf", "-Confirm:`$false")
     Assert-Equal 0 $whatIf.ExitCode "uninstall WhatIf exit"
     Assert-True (Test-Path -LiteralPath $targetDll) "WhatIf retains DLL"
+    Assert-True (Test-Path -LiteralPath $targetChecksum) "WhatIf retains DLL checksum sidecar"
     Assert-True (Test-Path -LiteralPath $userDataFile) "WhatIf retains user data"
 
     $removeData = Invoke-TestPowerShell $uninstaller @(
@@ -52,6 +57,7 @@ try {
     )
     Assert-Equal 0 $removeData.ExitCode "explicit data uninstall exit"
     Assert-False (Test-Path -LiteralPath $targetDll) "explicit data uninstall removes DLL"
+    Assert-False (Test-Path -LiteralPath $targetChecksum) "explicit data uninstall removes DLL checksum sidecar"
     Assert-False (Test-Path -LiteralPath $userData) "explicit data uninstall removes exact user data"
     Assert-Equal 2 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "explicit data uninstall retains backups"
     Assert-True (Test-Path -LiteralPath $logConfig) "explicit data uninstall retains log.config"

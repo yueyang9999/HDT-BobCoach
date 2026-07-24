@@ -18,7 +18,7 @@ const dependencies = read("docs/maintainer/DEPENDENCIES.md");
 const bilingualDisclosureDesign = read("docs/design/双语自述与第三方声明设计_2026-07-21.md");
 const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
 const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
-const unpublishedPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.2/";
+const unpublishedPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/";
 
 for (const [name, content] of [
     ["README.md", chineseReadme],
@@ -38,11 +38,11 @@ assert.ok(
     chineseReadme.includes("[中文安装教程（新手从这里开始）](docs/user/INSTALL.md)"),
     "Chinese README must expose the beginner installation guide",
 );
-assert.ok(chineseReadme.includes("尚未完成最终实机 smoke"), "Chinese README must state that beta.2 final Win11 smoke is pending");
+assert.ok(chineseReadme.includes("尚未完成最终实机 smoke"), "Chinese README must state that 1.0.0 final Win11 smoke is pending");
 assert.ok(chineseReadme.includes("尚未完成专用实机验收"), "Chinese README must preserve Win10 limitation");
 assert.ok(
     englishReadme.includes("final physical smoke validation is still pending"),
-    "English README must state that beta.2 final Win11 smoke is pending",
+    "English README must state that 1.0.0 final Win11 smoke is pending",
 );
 assert.ok(
     englishReadme.includes("not completed dedicated physical validation"),
@@ -172,8 +172,8 @@ for (const [name, content, statements] of [
 }
 
 assert.ok(notice.includes("v0.2.0-beta.1"), "NOTICE must acknowledge the existing public release");
-assert.ok(notice.includes("v0.2.0-beta.2"), "NOTICE must acknowledge the local release candidate");
-assert.ok(notice.includes("has not been published"), "NOTICE must state that beta.2 is unpublished");
+assert.ok(notice.includes("v1.0.0"), "NOTICE must acknowledge the local release candidate");
+assert.ok(notice.includes("has not been published"), "NOTICE must state that 1.0.0 is unpublished");
 assert.ok(notice.includes("separate explicit owner authorization"), "NOTICE must require authorization for each future release");
 
 for (const [name, content, statement] of [
@@ -181,7 +181,7 @@ for (const [name, content, statement] of [
     ["README.en.md", englishReadme, "is only a local release candidate and has no GitHub Release"],
     ["docs/user/INSTALL.md", installGuide, "只处于本地发布候选阶段，尚未创建 GitHub Release"],
 ]) {
-    assert.ok(content.includes(statement), `${name} must state the beta.2 publication boundary`);
+    assert.ok(content.includes(statement), `${name} must state the 1.0.0 publication boundary`);
 }
 
 console.log("PASS public documentation contract");

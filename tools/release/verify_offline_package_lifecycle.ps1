@@ -21,6 +21,7 @@ param(
 $ErrorActionPreference = "Stop"
 $script:PackageFiles = @(
     "BobCoach.dll",
+    "BobCoach.dll.sha256",
     "安装教程.html",
     "images/install/install-01-exit-hdt.png",
     "images/install/install-02-open-plugins-folder.png",
@@ -196,16 +197,17 @@ function Read-StrictInternalSums([string]$Content) {
 }
 
 function Assert-ManifestContract($Manifest, [hashtable]$EntryHashes, [hashtable]$EntryLengths) {
-    if ([int]$Manifest.schemaVersion -ne 1) { throw "Manifest schema version mismatch" }
+    if ([int]$Manifest.schemaVersion -ne 2) { throw "Manifest schema version mismatch" }
     $expected = [ordered]@{
-        packageVersion = "0.2.0-beta.2"
-        assemblyVersion = "0.2.0.0"
-        fileVersion = "0.2.0.0"
-        informationalVersion = "0.2.0-beta.2"
+        packageVersion = "1.0.0"
+        assemblyVersion = "1.0.0.0"
+        fileVersion = "1.0.0.0"
+        informationalVersion = "1.0.0"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
         hdtBaselineVersion = "1.53.5.7354"
         pluginFile = "BobCoach.dll"
+        pluginChecksumFile = "BobCoach.dll.sha256"
     }
     foreach ($property in $expected.Keys) {
         if ([string]$Manifest.$property -ne $expected[$property]) { throw "Manifest $property mismatch" }
@@ -266,6 +268,7 @@ function Read-ZipContract([string]$Path) {
         }
         $sumEntry = ($safeEntries | Where-Object { $_.RelativePath -eq "SHA256SUMS.txt" }).Entry
         $manifestEntry = ($safeEntries | Where-Object { $_.RelativePath -eq "manifest.json" }).Entry
+        $pluginChecksumEntry = ($safeEntries | Where-Object { $_.RelativePath -eq "BobCoach.dll.sha256" }).Entry
         $internalSums = Read-StrictInternalSums (Read-EntryText $sumEntry)
         foreach ($fileName in $internalSums.Keys) {
             if ($internalSums[$fileName] -ne $hashes[$fileName]) {
@@ -274,6 +277,13 @@ function Read-ZipContract([string]$Path) {
         }
         try { $manifest = Read-EntryText $manifestEntry | ConvertFrom-Json } catch { throw "Manifest JSON is invalid" }
         Assert-ManifestContract $manifest $hashes $lengths
+        $pluginChecksumText = Read-EntryText $pluginChecksumEntry
+        if ($pluginChecksumText -notmatch '\A([A-F0-9]{64})  BobCoach\.dll(?:\r?\n)?\z') {
+            throw "Invalid BobCoach.dll.sha256 format"
+        }
+        if ($Matches[1] -ne $hashes["BobCoach.dll"]) {
+            throw "BobCoach.dll.sha256 does not match packaged DLL"
+        }
         return [pscustomobject]@{
             PackageDirectory = $roots[0]
             EntryNames = @($safeEntries | Select-Object -ExpandProperty FullName)
@@ -288,7 +298,7 @@ function Read-ZipContract([string]$Path) {
 function Assert-NoTargetArtifacts([string]$PluginDirectory) {
     if (!(Test-Path -LiteralPath $PluginDirectory -PathType Container)) { return }
     $artifacts = @()
-    foreach ($pattern in @("BobCoach.dll", "BobCoach.dll.backup-*", "BobCoach.dll.installing-*")) {
+    foreach ($pattern in @("BobCoach.dll", "BobCoach.dll.sha256", "BobCoach.dll.backup-*", "BobCoach.dll.installing-*", "BobCoach.dll.sha256.installing-*")) {
         $artifacts += @(Get-ChildItem -LiteralPath $PluginDirectory -Filter $pattern -Force -ErrorAction Stop)
     }
     if ($artifacts.Count -gt 0) { throw "Plugin target is not empty: $($artifacts[0].FullName)" }
@@ -475,11 +485,18 @@ function Get-LifecycleState([string]$PluginDirectory, [string]$AppDataRoot, [str
             Sort-Object Name |
             ForEach-Object { Get-FileState $_.FullName }
     )
+    $temporaryChecksums = @(
+        Get-ChildItem -LiteralPath $PluginDirectory -Filter "BobCoach.dll.sha256.installing-*" -File -Force -ErrorAction Stop |
+            Sort-Object Name |
+            ForEach-Object { Get-FileState $_.FullName }
+    )
     return [ordered]@{
         CapturedUtc = [DateTime]::UtcNow.ToString("o")
         Target = Get-FileState (Join-Path $PluginDirectory "BobCoach.dll")
+        TargetChecksum = Get-FileState (Join-Path $PluginDirectory "BobCoach.dll.sha256")
         Backups = $backups
         TemporaryDlls = $temporary
+        TemporaryChecksums = $temporaryChecksums
         UserData = Get-DirectoryState (Join-Path $AppDataRoot "bob-coach")
         LogConfig = if ([string]::IsNullOrWhiteSpace($LogConfigPath)) { $null } else { Get-FileState $LogConfigPath }
     }
@@ -561,6 +578,10 @@ function Expand-ValidatedPackage($Preflight) {
     }
     $facts = Get-CandidateFacts (Join-Path $packageRoot "BobCoach.dll")
     Assert-CandidateContract $facts $Preflight.Manifest
+    $checksumText = [IO.File]::ReadAllText((Join-Path $packageRoot "BobCoach.dll.sha256"))
+    if ($checksumText -notmatch '\A([A-F0-9]{64})  BobCoach\.dll(?:\r?\n)?\z' -or $Matches[1] -ne $facts.Sha256) {
+        throw "Extracted plugin checksum contract mismatch"
+    }
     return [pscustomobject]@{ Root = $packageRoot; CandidateFacts = $facts }
 }
 
@@ -647,20 +668,31 @@ function Invoke-IsolatedPowerShell(
 
 function Assert-TargetHash([string]$ExpectedHash, [string]$Label) {
     $target = Join-Path $preflight.Paths.PluginDirectory "BobCoach.dll"
+    $targetChecksum = Join-Path $preflight.Paths.PluginDirectory "BobCoach.dll.sha256"
     if (!(Test-Path -LiteralPath $target -PathType Leaf)) { throw "$Label target DLL missing" }
     $actual = Get-Sha256 $target
     if ($actual -ne $ExpectedHash) { throw "$Label target hash mismatch expected=$ExpectedHash actual=$actual" }
+    if (!(Test-Path -LiteralPath $targetChecksum -PathType Leaf)) { throw "$Label target checksum missing" }
+    $checksumText = [IO.File]::ReadAllText($targetChecksum)
+    if ($checksumText -notmatch '\A([A-F0-9]{64})  BobCoach\.dll(?:\r?\n)?\z' -or $Matches[1] -ne $actual) {
+        throw "$Label target checksum mismatch"
+    }
 }
 
 function Assert-TargetAbsent([string]$Label) {
     if (Test-Path -LiteralPath (Join-Path $preflight.Paths.PluginDirectory "BobCoach.dll")) {
         throw "$Label target DLL must be absent"
     }
+    if (Test-Path -LiteralPath (Join-Path $preflight.Paths.PluginDirectory "BobCoach.dll.sha256")) {
+        throw "$Label target checksum must be absent"
+    }
 }
 
 function Assert-NoTemporaryDll {
     $temporary = @(Get-ChildItem -LiteralPath $preflight.Paths.PluginDirectory -Filter "BobCoach.dll.installing-*" -File -Force)
     if ($temporary.Count -ne 0) { throw "Temporary plugin DLL remains: $($temporary[0].FullName)" }
+    $temporaryChecksums = @(Get-ChildItem -LiteralPath $preflight.Paths.PluginDirectory -Filter "BobCoach.dll.sha256.installing-*" -File -Force)
+    if ($temporaryChecksums.Count -ne 0) { throw "Temporary plugin checksum remains: $($temporaryChecksums[0].FullName)" }
 }
 
 function Assert-FileStateEqual($Expected, $Actual, [string]$Label) {
@@ -886,7 +918,9 @@ function Invoke-LifecycleExecution($Preflight) {
                 Assert-NoTemporaryDll
             }
             Invoke-LifecycleStep 3 "seed-previous" "Setup" {
-                Copy-Item -LiteralPath $Preflight.Paths.PreviousPlugin -Destination (Join-Path $Preflight.Paths.PluginDirectory "BobCoach.dll")
+                $seedDll = Join-Path $Preflight.Paths.PluginDirectory "BobCoach.dll"
+                Copy-Item -LiteralPath $Preflight.Paths.PreviousPlugin -Destination $seedDll
+                Write-Utf8NoBom (Join-Path $Preflight.Paths.PluginDirectory "BobCoach.dll.sha256") ("{0}  BobCoach.dll`n" -f $Preflight.PreviousPlugin.Sha256)
                 Assert-TargetHash $Preflight.PreviousPlugin.Sha256 "seed previous"
                 Assert-BackupState 0 0 0 "seed previous"
                 Assert-NoTemporaryDll

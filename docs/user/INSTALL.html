@@ -31,8 +31,8 @@
 <body>
 <main>
   <h1>Bob Coach 中文图文安装教程</h1>
-  <p class="lead">不用终端，四步完成。请先完整解压官方安装 ZIP，并确认能看到 <code>BobCoach.dll</code>。</p>
-  <div class="notice"><strong>下载：</strong>当前公开安装包是 <a href="https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip">BobCoach-0.2.0-beta.1-win-x64.zip</a>，适用于 Windows 11 24H2 x64 和 Windows 10 22H2 x64。已经在安装包内打开本教程时，无需再次下载。不要下载 <code>Source code (zip)</code> 或 <code>Source code (tar.gz)</code>，它们是源码快照。</div>
+  <p class="lead">不用终端，四步完成。请先完整解压官方安装 ZIP，并确认能看到 <code>BobCoach.dll</code>；后续 1.0.0 安装包还会包含 <code>BobCoach.dll.sha256</code>。</p>
+  <div class="notice"><strong>下载：</strong>当前公开安装包是 <a href="https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip">BobCoach-0.2.0-beta.1-win-x64.zip</a>，适用于 Windows 11 24H2 x64 和 Windows 10 22H2 x64。当前公开的 <code>0.2.0-beta.1</code> 只需复制 <code>BobCoach.dll</code>；1.0.0 发布后才需要同时复制 DLL 和 SHA 文件。已经在安装包内打开本教程时，无需再次下载。不要下载 <code>Source code (zip)</code> 或 <code>Source code (tar.gz)</code>，它们是源码快照。</div>
 
   <section class="step">
     <h2><span class="number">1</span>完全退出 HDT</h2>
@@ -49,10 +49,10 @@
   </section>
 
   <section class="step">
-    <h2><span class="number">3</span>复制 BobCoach.dll</h2>
-    <p>将解压目录中的 <code>BobCoach.dll</code> 复制到刚打开的 <code>Plugins</code> 根目录。升级时选择替换已有文件，不要再创建 BobCoach 子文件夹。</p>
+    <h2><span class="number">3</span>复制插件和校验文件</h2>
+    <p>当前公开的 beta.1 只复制 <code>BobCoach.dll</code>。1.0.0 发布后，将 <code>BobCoach.dll</code> 和 <code>BobCoach.dll.sha256</code> 一起复制到刚打开的 <code>Plugins</code> 根目录；两个文件必须来自同一个安装包并保持相邻。升级时选择替换对应文件，不要再创建 BobCoach 子文件夹。</p>
     <img src="images/install/install-03-copy-bobcoach-dll.png" alt="将 BobCoach.dll 复制到 Plugins 根目录">
-    <p class="caption">图示：<code>BobCoach.dll</code> 应直接位于 <code>Plugins</code> 根目录。</p>
+    <p class="caption">图示：插件 DLL 和它的 SHA 校验文件应直接位于 <code>Plugins</code> 根目录。</p>
   </section>
 
   <section class="step">
@@ -64,7 +64,8 @@
 
   <h2>没有看到 BobCoach</h2>
   <ul>
-    <li>确认文件位于 <code>%AppData%\HearthstoneDeckTracker\Plugins\BobCoach.dll</code>。</li>
+    <li>beta.1 确认 <code>BobCoach.dll</code> 位于 <code>%AppData%\HearthstoneDeckTracker\Plugins</code>；1.0.0 还要确认同目录存在 <code>BobCoach.dll.sha256</code>。</li>
+    <li>使用 1.0.0 时不要单独复制 DLL，也不要使用其他版本的 SHA 文件；插件会在启动时拒绝缺少校验或哈希不匹配的文件。</li>
     <li>右键 DLL 打开“属性”；如果有“解除锁定”，勾选后确定。</li>
     <li>完全退出并重启 HDT，再检查插件页面。</li>
   </ul>

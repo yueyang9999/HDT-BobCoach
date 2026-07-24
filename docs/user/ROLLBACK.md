@@ -15,4 +15,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -BackupPath "$env:APPDATA\HearthstoneDeckTracker\Plugins\BobCoach.dll.backup-..."
 ```
 
-回退也需要输入 `Y` 确认。当前 DLL 会先保留为一个新备份，既有备份不会被删除。成功后启动 HDT，确认插件启用且没有加载错误。
+回退也需要输入 `Y` 确认。当前 DLL 会先保留为一个新备份，既有备份不会被删除。安装器会为恢复后的 DLL 重新生成相邻的 `BobCoach.dll.sha256`，保证二者匹配。成功后启动 HDT，确认插件启用且没有加载错误。

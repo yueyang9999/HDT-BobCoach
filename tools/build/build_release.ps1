@@ -60,7 +60,7 @@ foreach ($field in $requiredIdentityFields) {
         throw "Missing release identity field: $field"
     }
 }
-if ([string]$identity.packageVersion -notmatch '^\d+\.\d+\.\d+-beta\.\d+$') {
+if ([string]$identity.packageVersion -notmatch '^\d+\.\d+\.\d+$') {
     throw "Invalid packageVersion: $($identity.packageVersion)"
 }
 if ([string]$identity.assemblyVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {

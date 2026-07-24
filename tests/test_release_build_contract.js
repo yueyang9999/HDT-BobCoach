@@ -42,9 +42,11 @@ const compileItems = [...project.matchAll(/<Compile Include="([^"]+)"/g)]
 const compileDigest = crypto.createHash("sha256")
     .update(`${compileItems.join("\n")}\n`, "utf8")
     .digest("hex");
-assert.strictEqual(compileItems.length, 171, "unexpected compile item count");
+assert.ok(compileItems.includes("Core\\PluginIntegrityVerifier.cs"),
+    "runtime integrity verifier must be compiled into BobCoach.dll");
+assert.strictEqual(compileItems.length, 172, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "7b728d39f8c72182a8179bbc6784276ea89f991cad98f648b05609784472d259",
+    "5bbd43035585cc59433123a2a488358ae7351e48f4ca5084874d51cb417697a3",
     "compile set changed");
 
 for (const token of [

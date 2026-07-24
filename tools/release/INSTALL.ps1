@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $PackageFiles = @(
     "BobCoach.dll",
+    "BobCoach.dll.sha256",
     "安装教程.html",
     "images/install/install-01-exit-hdt.png",
     "images/install/install-02-open-plugins-folder.png",
@@ -141,18 +142,19 @@ function Assert-PackageIntegrity {
     $expectedManifestFields = @(
         "schemaVersion", "packageVersion", "assemblyVersion", "fileVersion",
         "informationalVersion", "targetFramework", "runtimeIdentifier",
-        "hdtBaselineVersion", "pluginFile", "pluginSize", "pluginSha256", "files"
+        "hdtBaselineVersion", "pluginFile", "pluginChecksumFile", "pluginSize", "pluginSha256", "files"
     )
     Assert-ExactSet $expectedManifestFields @($manifest.PSObject.Properties.Name) "Manifest fields"
-    if ([int]$manifest.schemaVersion -ne 1) { throw "Unsupported manifest schemaVersion: $($manifest.schemaVersion)" }
-    if ([string]$manifest.packageVersion -ne "0.2.0-beta.2") { throw "Package version mismatch" }
-    if ([string]$manifest.assemblyVersion -ne "0.2.0.0") { throw "Assembly version contract mismatch" }
-    if ([string]$manifest.fileVersion -ne "0.2.0.0") { throw "File version contract mismatch" }
-    if ([string]$manifest.informationalVersion -ne "0.2.0-beta.2") { throw "Informational version contract mismatch" }
+    if ([int]$manifest.schemaVersion -ne 2) { throw "Unsupported manifest schemaVersion: $($manifest.schemaVersion)" }
+    if ([string]$manifest.packageVersion -ne "1.0.0") { throw "Package version mismatch" }
+    if ([string]$manifest.assemblyVersion -ne "1.0.0.0") { throw "Assembly version contract mismatch" }
+    if ([string]$manifest.fileVersion -ne "1.0.0.0") { throw "File version contract mismatch" }
+    if ([string]$manifest.informationalVersion -ne "1.0.0") { throw "Informational version contract mismatch" }
     if ([string]$manifest.targetFramework -ne ".NETFramework,Version=v4.7.2") { throw "Target framework contract mismatch" }
     if ([string]$manifest.runtimeIdentifier -ne "win-x64") { throw "Runtime identifier contract mismatch" }
     if ([string]$manifest.hdtBaselineVersion -ne "1.53.5.7354") { throw "HDT baseline contract mismatch" }
     if ([string]$manifest.pluginFile -ne "BobCoach.dll") { throw "Plugin file contract mismatch" }
+    if ([string]$manifest.pluginChecksumFile -ne "BobCoach.dll.sha256") { throw "Plugin checksum file contract mismatch" }
     if (@($manifest.files).Count -ne $PackageFiles.Count -or (@($manifest.files) -join "`n") -ne ($PackageFiles -join "`n")) {
         throw "Manifest file order mismatch"
     }
@@ -162,6 +164,13 @@ function Assert-PackageIntegrity {
     $pluginHash = Get-Sha256 $pluginPath
     if ([long]$manifest.pluginSize -ne $pluginItem.Length) { throw "Plugin size mismatch" }
     if ([string]$manifest.pluginSha256 -ne $pluginHash) { throw "Plugin hash mismatch" }
+
+    $pluginChecksumPath = Join-Path $PSScriptRoot "BobCoach.dll.sha256"
+    $pluginChecksumLines = @(Get-Content -LiteralPath $pluginChecksumPath -Encoding UTF8)
+    if ($pluginChecksumLines.Count -ne 1 -or $pluginChecksumLines[0] -notmatch '^([A-F0-9]{64})  BobCoach\.dll$') {
+        throw "Invalid BobCoach.dll.sha256 format"
+    }
+    if ($Matches[1] -ne $pluginHash) { throw "Plugin checksum sidecar mismatch" }
 
     $facts = Get-PluginAssemblyFacts $pluginPath
     if ($facts.Name -ne "BobCoach") { throw "Unexpected plugin assembly name: $($facts.Name)" }
@@ -177,6 +186,7 @@ function Assert-PackageIntegrity {
 
     return [pscustomobject]@{
         PluginPath = $pluginPath
+        PluginChecksumPath = $pluginChecksumPath
         PluginHash = $pluginHash
         PackageVersion = [string]$manifest.packageVersion
     }
@@ -239,6 +249,30 @@ function Clear-ReadOnlyAttribute([string]$Path) {
         ([int]$item.Attributes) -band (-bnot [int][IO.FileAttributes]::ReadOnly)
     )
     [IO.File]::SetAttributes($item.FullName, $updated)
+}
+
+function Write-PluginChecksum([string]$Path, [string]$Hash) {
+    [IO.File]::WriteAllText(
+        $Path,
+        ("{0}  BobCoach.dll`n" -f $Hash),
+        (New-Object Text.UTF8Encoding($false))
+    )
+}
+
+function Publish-PluginChecksum([string]$TemporaryChecksum, [string]$TargetChecksum) {
+    if (Test-Path -LiteralPath $TargetChecksum -PathType Leaf) {
+        Clear-ReadOnlyAttribute $TargetChecksum
+        $replacementBackup = "$TargetChecksum.replace-backup"
+        try {
+            [IO.File]::Replace($TemporaryChecksum, $TargetChecksum, $replacementBackup, $true)
+        } finally {
+            if (Test-Path -LiteralPath $replacementBackup -PathType Leaf) {
+                Remove-Item -LiteralPath $replacementBackup -Force
+            }
+        }
+    } else {
+        [IO.File]::Move($TemporaryChecksum, $TargetChecksum)
+    }
 }
 
 function Replace-BobCoachDll(
@@ -317,21 +351,49 @@ function Invoke-Rollback([string]$ResolvedPluginDirectory, [string]$RequestedBac
 
     $sourceHash = Get-Sha256 $sourceBackup
     $tempDll = Join-Path $ResolvedPluginDirectory ("BobCoach.dll.installing-" + [Guid]::NewGuid().ToString("N"))
+    $targetChecksum = Join-Path $ResolvedPluginDirectory "BobCoach.dll.sha256"
+    $tempChecksum = Join-Path $ResolvedPluginDirectory ("BobCoach.dll.sha256.installing-" + [Guid]::NewGuid().ToString("N"))
+    $currentBackup = $null
+    $dllPublished = $false
     try {
         Copy-Item -LiteralPath $sourceBackup -Destination $tempDll -ErrorAction Stop
         Clear-ReadOnlyAttribute $tempDll
         $tempHash = Get-Sha256 $tempDll
         if ($tempHash -ne $sourceHash) { throw "Temporary rollback hash mismatch" }
+        Write-PluginChecksum $tempChecksum $sourceHash
         if (Test-Path -LiteralPath $targetDll -PathType Leaf) {
             $currentBackup = New-BackupPath $targetDll
             Replace-BobCoachDll $tempDll $targetDll $currentBackup
         } else {
             [IO.File]::Move($tempDll, $targetDll)
         }
+        $dllPublished = $true
+        Publish-PluginChecksum $tempChecksum $targetChecksum
         Write-Host "PASS restored Bob Coach backup to $targetDll"
+    } catch {
+        $rollbackError = $_
+        if ($dllPublished) {
+            if (![string]::IsNullOrWhiteSpace($currentBackup) -and
+                (Test-Path -LiteralPath $currentBackup -PathType Leaf)) {
+                $failedCandidate = Join-Path $ResolvedPluginDirectory ("BobCoach.dll.failed-" + [Guid]::NewGuid().ToString("N"))
+                try {
+                    Replace-BobCoachDll $currentBackup $targetDll $failedCandidate
+                } finally {
+                    if (Test-Path -LiteralPath $failedCandidate -PathType Leaf) {
+                        Remove-Item -LiteralPath $failedCandidate -Force
+                    }
+                }
+            } elseif (Test-Path -LiteralPath $targetDll -PathType Leaf) {
+                Remove-Item -LiteralPath $targetDll -Force
+            }
+        }
+        throw $rollbackError
     } finally {
         if (Test-Path -LiteralPath $tempDll) {
             Remove-Item -LiteralPath $tempDll -Force
+        }
+        if (Test-Path -LiteralPath $tempChecksum) {
+            Remove-Item -LiteralPath $tempChecksum -Force
         }
     }
 }
@@ -351,6 +413,7 @@ $package = Assert-PackageIntegrity
 $resolvedPluginDirectory = Resolve-PluginDirectory $PluginDirectory
 Assert-HdtStopped $resolvedPluginDirectory
 $targetDll = Join-Path $resolvedPluginDirectory.Path "BobCoach.dll"
+$targetChecksum = Join-Path $resolvedPluginDirectory.Path "BobCoach.dll.sha256"
 
 if (!$PSCmdlet.ShouldProcess($targetDll, "Install Bob Coach $($package.PackageVersion)")) {
     return
@@ -361,21 +424,52 @@ if (!(Test-Path -LiteralPath $resolvedPluginDirectory.Path -PathType Container))
 }
 
 $tempDll = Join-Path $resolvedPluginDirectory.Path ("BobCoach.dll.installing-" + [Guid]::NewGuid().ToString("N"))
+$tempChecksum = Join-Path $resolvedPluginDirectory.Path ("BobCoach.dll.sha256.installing-" + [Guid]::NewGuid().ToString("N"))
+$backupPathForUpgrade = $null
+$dllPublished = $false
 try {
     Copy-Item -LiteralPath $package.PluginPath -Destination $tempDll -ErrorAction Stop
     Clear-ReadOnlyAttribute $tempDll
     $tempHash = Get-Sha256 $tempDll
     if ($tempHash -ne $package.PluginHash) { throw "Temporary plugin hash mismatch" }
+    Copy-Item -LiteralPath $package.PluginChecksumPath -Destination $tempChecksum -ErrorAction Stop
+    Clear-ReadOnlyAttribute $tempChecksum
     if (Test-Path -LiteralPath $targetDll -PathType Leaf) {
         $backupPathForUpgrade = New-BackupPath $targetDll
         Replace-BobCoachDll $tempDll $targetDll $backupPathForUpgrade
-        Write-Host "PASS upgraded Bob Coach $($package.PackageVersion) to $targetDll backup=$backupPathForUpgrade"
     } else {
         [IO.File]::Move($tempDll, $targetDll)
+    }
+    $dllPublished = $true
+    Publish-PluginChecksum $tempChecksum $targetChecksum
+    if (![string]::IsNullOrWhiteSpace($backupPathForUpgrade)) {
+        Write-Host "PASS upgraded Bob Coach $($package.PackageVersion) to $targetDll backup=$backupPathForUpgrade"
+    } else {
         Write-Host "PASS installed Bob Coach $($package.PackageVersion) to $targetDll"
     }
+} catch {
+    $installError = $_
+    if ($dllPublished) {
+        if (![string]::IsNullOrWhiteSpace($backupPathForUpgrade) -and
+            (Test-Path -LiteralPath $backupPathForUpgrade -PathType Leaf)) {
+            $failedCandidate = Join-Path $resolvedPluginDirectory.Path ("BobCoach.dll.failed-" + [Guid]::NewGuid().ToString("N"))
+            try {
+                Replace-BobCoachDll $backupPathForUpgrade $targetDll $failedCandidate
+            } finally {
+                if (Test-Path -LiteralPath $failedCandidate -PathType Leaf) {
+                    Remove-Item -LiteralPath $failedCandidate -Force
+                }
+            }
+        } elseif (Test-Path -LiteralPath $targetDll -PathType Leaf) {
+            Remove-Item -LiteralPath $targetDll -Force
+        }
+    }
+    throw $installError
 } finally {
     if (Test-Path -LiteralPath $tempDll) {
         Remove-Item -LiteralPath $tempDll -Force
+    }
+    if (Test-Path -LiteralPath $tempChecksum) {
+        Remove-Item -LiteralPath $tempChecksum -Force
     }
 }

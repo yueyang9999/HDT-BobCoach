@@ -33,6 +33,7 @@ $stagingRoot = Join-Path $tempRoot "staging"
 $archiveRoot = Join-Path $tempRoot "archive"
 $PackageFiles = @(
     "BobCoach.dll",
+    "BobCoach.dll.sha256",
     "安装教程.html",
     "images/install/install-01-exit-hdt.png",
     "images/install/install-02-open-plugins-folder.png",
@@ -180,7 +181,7 @@ if ($hasApprovedCandidate) {
 } elseif (!(Test-Path -LiteralPath $releaseBuilder -PathType Leaf)) {
     throw "Release builder missing: $releaseBuilder"
 }
-if ($identity.packageVersion -ne "0.2.0-beta.2" -or $identity.assemblyVersion -ne "0.2.0.0" -or
+if ($identity.packageVersion -ne "1.0.0" -or $identity.assemblyVersion -ne "1.0.0.0" -or
     $identity.targetFramework -ne "net472" -or $identity.runtimeIdentifier -ne "win-x64" -or
     $identity.hdtBaselineVersion -ne "1.53.5.7354") {
     throw "Unsupported release identity"
@@ -264,6 +265,7 @@ try {
     $stagedPluginPath = Join-Path $packageDirectory "BobCoach.dll"
     $pluginHash = (Get-FileHash -LiteralPath $stagedPluginPath -Algorithm SHA256).Hash
     $pluginSize = (Get-Item -LiteralPath $stagedPluginPath).Length
+    Write-Utf8NoBom (Join-Path $packageDirectory "BobCoach.dll.sha256") ("{0}  BobCoach.dll`n" -f $pluginHash)
     if ($hasApprovedCandidate -and
         ($pluginSize -ne $ApprovedCandidateSize -or $pluginHash -ne $ApprovedCandidateSha256)) {
         throw "Packaged approved candidate mismatch: bytes=$pluginSize sha256=$pluginHash"
@@ -281,7 +283,7 @@ try {
     }
 
     $manifest = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         packageVersion = [string]$identity.packageVersion
         assemblyVersion = [string]$identity.assemblyVersion
         fileVersion = [string]$identity.assemblyVersion
@@ -290,6 +292,7 @@ try {
         runtimeIdentifier = [string]$identity.runtimeIdentifier
         hdtBaselineVersion = [string]$identity.hdtBaselineVersion
         pluginFile = "BobCoach.dll"
+        pluginChecksumFile = "BobCoach.dll.sha256"
         pluginSize = $pluginSize
         pluginSha256 = $pluginHash
         files = $PackageFiles

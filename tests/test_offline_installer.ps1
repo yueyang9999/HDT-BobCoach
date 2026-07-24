@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param([switch]$FreshInstallOnly)
+param(
+    [switch]$FreshInstallOnly,
+    [switch]$ChecksumFailureOnly,
+    [switch]$RollbackChecksumFailureOnly
+)
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "offline_package_test_helpers.ps1")
@@ -16,11 +20,70 @@ function New-TestHdtPluginDirectory([string]$Name) {
     return Join-Path $hdtAppData "Plugins"
 }
 
+function Invoke-TestInstallerWithoutHostHdt(
+    [string]$Installer,
+    [string]$PluginDirectory,
+    [switch]$Rollback
+) {
+    $wrapper = Join-Path $testRoot "invoke-installer-without-host-hdt.ps1"
+    Write-Utf8NoBom $wrapper @'
+param([string]$Installer, [string]$PluginDirectory, [switch]$Rollback)
+$ErrorActionPreference = "Stop"
+function Get-Process {
+    param([string[]]$Name, [object]$ErrorAction)
+    return @()
+}
+if ($Rollback) {
+    & $Installer -PluginDirectory $PluginDirectory -Rollback -Confirm:$false
+} else {
+    & $Installer -PluginDirectory $PluginDirectory -Confirm:$false
+}
+'@
+    $arguments = @("-Installer", $Installer, "-PluginDirectory", $PluginDirectory)
+    if ($Rollback) { $arguments += "-Rollback" }
+    return Invoke-TestPowerShell $wrapper $arguments
+}
+
 try {
     New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 
     $package = New-TestOfflinePackage -Root $testRoot -Name "FreshPackage"
     $plugins = New-TestHdtPluginDirectory "Fresh"
+
+    if ($ChecksumFailureOnly) {
+        New-Item -ItemType Directory -Path $plugins -Force | Out-Null
+        $targetDll = Join-Path $plugins "BobCoach.dll"
+        New-TestManagedBobCoach -Path $targetDll -Version "0.1.0.0" | Out-Null
+        $legacyHash = (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash
+        New-Item -ItemType Directory -Path (Join-Path $plugins "BobCoach.dll.sha256") | Out-Null
+        $result = Invoke-TestInstallerWithoutHostHdt $package.Installer $plugins
+        Assert-True ($result.ExitCode -ne 0) "checksum publish failure exits nonzero"
+        Assert-Equal $legacyHash (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash "checksum publish failure preserves previous DLL"
+        Write-Host "PASS checksum publish failure preserves the installed DLL"
+        return
+    }
+
+    if ($RollbackChecksumFailureOnly) {
+        New-Item -ItemType Directory -Path $plugins -Force | Out-Null
+        $targetDll = Join-Path $plugins "BobCoach.dll"
+        New-TestManagedBobCoach -Path $targetDll -Version "1.0.0.0" | Out-Null
+        $currentHash = (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash
+        $rollbackDll = Join-Path $plugins "BobCoach.dll.backup-20260724T000000000Z-0000000000000000"
+        $rollbackSource = Join-Path $testRoot "rollback-source\BobCoach.dll"
+        New-Item -ItemType Directory -Path (Split-Path -Parent $rollbackSource) -Force | Out-Null
+        New-TestManagedBobCoach -Path $rollbackSource -Version "0.1.0.0" | Out-Null
+        Copy-Item -LiteralPath $rollbackSource -Destination $rollbackDll
+        New-Item -ItemType Directory -Path (Join-Path $plugins "BobCoach.dll.sha256") | Out-Null
+        $result = Invoke-TestInstallerWithoutHostHdt $package.Installer $plugins -Rollback
+        Assert-True ($result.ExitCode -ne 0) "rollback checksum publish failure exits nonzero"
+        $failureOutput = $result.Output -join "`n"
+        Assert-True ($failureOutput -match 'Cannot create a file when that file already exists') "rollback reaches checksum publish"
+        $rollbackBackups = @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File)
+        Assert-Equal 1 $rollbackBackups.Count "rollback compensation preserves original backup only"
+        Assert-Equal $currentHash (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash "rollback checksum publish failure preserves current DLL"
+        Write-Host "PASS rollback checksum publish failure preserves the installed DLL"
+        return
+    }
 
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
@@ -37,12 +100,29 @@ try {
     $fresh = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $plugins, "-Confirm:`$false")
     Assert-Equal 0 $fresh.ExitCode "fresh install exit"
     Assert-FileHashEqual $package.Plugin (Join-Path $plugins "BobCoach.dll") "fresh install DLL hash"
+    Assert-PluginChecksum (Join-Path $plugins "BobCoach.dll") (Join-Path $plugins "BobCoach.dll.sha256") "fresh install"
     Assert-Equal 0 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "fresh backup count"
 
     $defaultPlugins = New-TestHdtPluginDirectory "DefaultSuccess"
     $defaultFresh = Invoke-TestPowerShell $package.Installer @("-Confirm:`$false")
     Assert-Equal 0 $defaultFresh.ExitCode "default fresh install exit"
     Assert-FileHashEqual $package.Plugin (Join-Path $defaultPlugins "BobCoach.dll") "default fresh install DLL hash"
+    Assert-PluginChecksum (Join-Path $defaultPlugins "BobCoach.dll") (Join-Path $defaultPlugins "BobCoach.dll.sha256") "default fresh install"
+
+    $missingSidecar = New-TestOfflinePackage -Root $testRoot -Name "MissingSidecarPackage"
+    Remove-Item -LiteralPath $missingSidecar.PluginChecksum -Force
+    $missingSidecarPlugins = New-TestHdtPluginDirectory "MissingSidecar"
+    $missingSidecarResult = Invoke-TestPowerShell $missingSidecar.Installer @("-PluginDirectory", $missingSidecarPlugins, "-Confirm:`$false")
+    Assert-True ($missingSidecarResult.ExitCode -ne 0) "missing sidecar package fails"
+    Assert-False (Test-Path -LiteralPath $missingSidecarPlugins) "missing sidecar package writes nothing"
+
+    $mismatchedSidecar = New-TestOfflinePackage -Root $testRoot -Name "MismatchedSidecarPackage"
+    Write-Utf8NoBom $mismatchedSidecar.PluginChecksum (("0" * 64) + "  BobCoach.dll`n")
+    Write-TestOfflinePackageSums $mismatchedSidecar.Root
+    $mismatchedSidecarPlugins = New-TestHdtPluginDirectory "MismatchedSidecar"
+    $mismatchedSidecarResult = Invoke-TestPowerShell $mismatchedSidecar.Installer @("-PluginDirectory", $mismatchedSidecarPlugins, "-Confirm:`$false")
+    Assert-True ($mismatchedSidecarResult.ExitCode -ne 0) "mismatched sidecar package fails"
+    Assert-False (Test-Path -LiteralPath $mismatchedSidecarPlugins) "mismatched sidecar package writes nothing"
 
     $tampered = New-TestOfflinePackage -Root $testRoot -Name "TamperedPackage"
     Add-Content -LiteralPath (Join-Path $tampered.Root "README_OFFLINE.md") -Value "tampered"
@@ -78,24 +158,41 @@ try {
     }
 
     $upgradePlugins = New-TestHdtPluginDirectory "Upgrade"
+    $upgradeAppData = $env:APPDATA
     New-Item -ItemType Directory -Path $upgradePlugins -Force | Out-Null
     $targetDll = Join-Path $upgradePlugins "BobCoach.dll"
     New-TestManagedBobCoach -Path $targetDll -Version "0.1.0.0" | Out-Null
+    Write-PluginChecksumFile $targetDll (Join-Path $upgradePlugins "BobCoach.dll.sha256")
     $legacyHash = (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash
     $legacyBytes = [IO.File]::ReadAllBytes($targetDll)
 
     $upgrade = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $upgradePlugins, "-Confirm:`$false")
     Assert-Equal 0 $upgrade.ExitCode "upgrade exit"
     Assert-FileHashEqual $package.Plugin $targetDll "upgrade target hash"
+    Assert-PluginChecksum $targetDll (Join-Path $upgradePlugins "BobCoach.dll.sha256") "upgrade"
     $upgradeBackups = @(Get-ChildItem -LiteralPath $upgradePlugins -Filter "BobCoach.dll.backup-*" -File)
     Assert-Equal 1 $upgradeBackups.Count "upgrade backup count"
     $expectedBackupPattern = '^BobCoach\.dll\.backup-\d{8}T\d{9}Z-' + [regex]::Escape($legacyHash.Substring(0, 16)) + '$'
     Assert-True ($upgradeBackups[0].Name -match $expectedBackupPattern) "upgrade backup name"
     Assert-True ([Linq.Enumerable]::SequenceEqual([byte[]]$legacyBytes, [byte[]][IO.File]::ReadAllBytes($upgradeBackups[0].FullName))) "upgrade backup bytes"
 
+    $checksumFailurePlugins = New-TestHdtPluginDirectory "ChecksumPublishFailure"
+    New-Item -ItemType Directory -Path $checksumFailurePlugins -Force | Out-Null
+    $checksumFailureDll = Join-Path $checksumFailurePlugins "BobCoach.dll"
+    New-TestManagedBobCoach -Path $checksumFailureDll -Version "0.1.0.0" | Out-Null
+    $checksumFailureLegacyHash = (Get-FileHash -LiteralPath $checksumFailureDll -Algorithm SHA256).Hash
+    New-Item -ItemType Directory -Path (Join-Path $checksumFailurePlugins "BobCoach.dll.sha256") | Out-Null
+    $checksumFailureResult = Invoke-TestPowerShell $package.Installer @(
+        "-PluginDirectory", $checksumFailurePlugins, "-Confirm:`$false"
+    )
+    Assert-True ($checksumFailureResult.ExitCode -ne 0) "checksum publish failure exits nonzero"
+    Assert-Equal $checksumFailureLegacyHash (Get-FileHash -LiteralPath $checksumFailureDll -Algorithm SHA256).Hash "checksum publish failure preserves previous DLL"
+
+    $env:APPDATA = $upgradeAppData
     $rollback = Invoke-TestPowerShell $package.Installer @("-PluginDirectory", $upgradePlugins, "-Rollback", "-Confirm:`$false")
-    Assert-Equal 0 $rollback.ExitCode "latest rollback exit"
+    Assert-Equal 0 $rollback.ExitCode "latest rollback exit; output=$(@($rollback.Output) -join ' | ')"
     Assert-Equal $legacyHash (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash "latest rollback target hash"
+    Assert-PluginChecksum $targetDll (Join-Path $upgradePlugins "BobCoach.dll.sha256") "latest rollback"
     $afterRollbackBackups = @(Get-ChildItem -LiteralPath $upgradePlugins -Filter "BobCoach.dll.backup-*" -File)
     Assert-Equal 2 $afterRollbackBackups.Count "rollback preserves current version"
 
@@ -109,6 +206,7 @@ try {
     )
     Assert-Equal 0 $specifiedRollback.ExitCode "specified rollback exit"
     Assert-Equal $candidateHash (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash "specified rollback target hash"
+    Assert-PluginChecksum $targetDll (Join-Path $upgradePlugins "BobCoach.dll.sha256") "specified rollback"
 
     $targetBeforeFailure = (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash
     $corruptBackup = Join-Path $upgradePlugins "BobCoach.dll.backup-20990101T000000000Z-0000000000000000"

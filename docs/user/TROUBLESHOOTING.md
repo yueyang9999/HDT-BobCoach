@@ -22,7 +22,7 @@
 
 ## HDT 未显示 BobCoach
 
-确认安装器输出为 `PASS installed` 或 `PASS upgraded`，并确认 DLL 位于 `%APPDATA%\HearthstoneDeckTracker\Plugins`。完全重启 HDT 后，在 `Options > Tracker > Plugins` 中检查 BobCoach 是否启用。仍失败时，不要复制完整 `Power.log`；记录插件版本、Windows/HDT 版本、错误时间和最小已脱敏错误文本。
+确认安装器输出为 `PASS installed` 或 `PASS upgraded`，并确认 `BobCoach.dll` 与 `BobCoach.dll.sha256` 都位于 `%APPDATA%\HearthstoneDeckTracker\Plugins`。两者必须来自同一个安装包；缺少 SHA 文件、手工改名或哈希不匹配时，插件会拒绝启用。完全重启 HDT 后，在 `Options > Tracker > Plugins` 中检查 BobCoach 是否启用。仍失败时，不要复制完整 `Power.log`；记录插件版本、Windows/HDT 版本、错误时间和最小已脱敏错误文本。
 
 ## Power.log 相关提示不可用
 
@@ -30,4 +30,8 @@
 
 ## 升级后异常
 
-不要向 HDT 程序目录或多个副本手工覆盖 DLL。对 AppData 用户插件目录运行安装器，或按 [回退](ROLLBACK.md) 恢复备份。公开报告时仅提交最小复现和已脱敏内容，禁止上传完整日志、回放、账号信息、密钥或绝对个人路径。
+不要向 HDT 程序目录或多个副本手工覆盖 DLL，也不要单独替换 DLL 或 SHA 文件。对 AppData 用户插件目录运行安装器，或按 [回退](ROLLBACK.md) 恢复备份。公开报告时仅提交最小复现和已脱敏内容，禁止上传完整日志、回放、账号信息、密钥或绝对个人路径。
+
+## “时空扭曲”选牌时提示图标被遮挡
+
+“时空扭曲”使用炉石的特殊选牌画面，其渲染层可能盖住 HDT 常规覆盖层中的提示图标。这只影响提示图标的可见性，不影响 BobCoach 已完成的推荐计算，也不影响普通酒馆和饰品界面的提示位置。当前版本将其记录为已知限制；为避免破坏其他分辨率下已经验证的界面位置，不通过继续提高画布内层级或改动普通商店坐标规避。若后续处理，需要针对该画面单独验证独立顶层覆盖窗口。

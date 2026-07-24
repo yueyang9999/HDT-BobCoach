@@ -78,6 +78,7 @@ $resolvedPluginDirectory = Resolve-PluginDirectory $PluginDirectory
 Assert-HdtStopped $resolvedPluginDirectory
 $userDataPath = if ($RemoveUserData) { Resolve-UserDataPath } else { $null }
 $targetDll = Join-Path $resolvedPluginDirectory.Path "BobCoach.dll"
+$targetChecksum = Join-Path $resolvedPluginDirectory.Path "BobCoach.dll.sha256"
 
 if (Test-Path -LiteralPath $targetDll -PathType Leaf) {
     if ($PSCmdlet.ShouldProcess($targetDll, "Uninstall Bob Coach plugin DLL")) {
@@ -86,6 +87,15 @@ if (Test-Path -LiteralPath $targetDll -PathType Leaf) {
     }
 } else {
     Write-Host "PASS Bob Coach plugin DLL is already absent: $targetDll"
+}
+
+if (Test-Path -LiteralPath $targetChecksum -PathType Leaf) {
+    if ($PSCmdlet.ShouldProcess($targetChecksum, "Uninstall Bob Coach plugin checksum")) {
+        Remove-Item -LiteralPath $targetChecksum -Force
+        Write-Host "PASS removed Bob Coach plugin checksum: $targetChecksum"
+    }
+} else {
+    Write-Host "PASS Bob Coach plugin checksum is already absent: $targetChecksum"
 }
 
 if ($RemoveUserData) {

@@ -1,6 +1,6 @@
 {
   "name": "hdt-bobcoach",
-  "version": "0.2.0-beta.2",
+  "version": "1.0.0",
   "private": true,
   "description": "Offline-first BobCoach plugin for Hearthstone Deck Tracker",
   "license": "MIT",

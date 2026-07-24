@@ -35,7 +35,7 @@ namespace BobCoach.Engine
                 AllowAutoRedirect = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
             });
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("BobCoach/0.2 external-validation-readonly");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("BobCoach/1.0 external-validation-readonly");
         }
 
         public async Task<ExternalFetchResult> FetchAsync(

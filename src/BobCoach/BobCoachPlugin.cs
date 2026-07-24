@@ -158,7 +158,16 @@ namespace BobCoach
 
         public void OnLoad()
         {
-            Log("BobCoach v0.2.0 loading...");
+            var assembly = Assembly.GetExecutingAssembly();
+            Log(string.Format("BobCoach v{0} loading...", assembly.GetName().Version));
+
+            var integrity = Engine.PluginIntegrityVerifier.Verify(assembly.Location);
+            if (!integrity.IsValid)
+            {
+                Log("Plugin integrity check FAILED: " + integrity.Reason);
+                return;
+            }
+            Log("Plugin integrity check passed");
 
             if (!SecuritySelfCheck())
             {
@@ -644,7 +653,7 @@ namespace BobCoach
                 Log("Security check passed");
                 return true;
             }
-            catch (Exception ex) { Log("Security check error: " + ex); return true; }
+            catch (Exception ex) { Log("Security check error: " + ex); return false; }
         }
 
         // ── Game events ──

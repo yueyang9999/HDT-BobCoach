@@ -8,6 +8,7 @@ const releaseRoot = path.join(root, 'tools', 'release');
 const errors = [];
 const expectedFiles = [
   'BobCoach.dll',
+  'BobCoach.dll.sha256',
   '安装教程.html',
   'images/install/install-01-exit-hdt.png',
   'images/install/install-02-open-plugins-folder.png',
@@ -71,6 +72,8 @@ for (const [source, label] of [
 
 for (const [token, label] of [
   ['SHA256SUMS.txt', 'installer hash gate'],
+  ['BobCoach.dll.sha256', 'installer plugin checksum sidecar'],
+  ['pluginChecksumFile', 'installer manifest sidecar contract'],
   ['AssemblyFileVersionAttribute', 'installer file-version gate'],
   ['AssemblyInformationalVersionAttribute', 'installer informational-version gate'],
   ['PE32Plus', 'installer PE32Plus gate'],
@@ -95,6 +98,8 @@ for (const [token, label] of [
   ['CreateEntry', 'builder explicit ZIP entries'],
   ['LastWriteTime', 'builder fixed ZIP entry timestamps'],
   ['manifest.json', 'builder manifest'],
+  ['BobCoach.dll.sha256', 'builder plugin checksum sidecar'],
+  ['pluginChecksumFile', 'builder manifest sidecar contract'],
   ['SHA256SUMS.txt', 'builder package hashes'],
   ['$zipPath.sha256', 'builder external ZIP hash'],
   ['Get-PluginFacts $stagedPluginPath', 'builder staged DLL validation'],
@@ -132,7 +137,7 @@ forbid(
   /\.FullName\.Substring\(/i,
   'offline package builder test absolute-path substring enumeration',
 );
-for (const token of ['0.2.0-beta.2', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
+for (const token of ['1.0.0', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
 

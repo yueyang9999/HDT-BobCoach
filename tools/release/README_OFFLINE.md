@@ -1,19 +1,19 @@
-# Bob教练 HDT 插件 0.2.0-beta.2 本地发布候选
+# Bob教练 HDT 插件 1.0.0 本地发布候选
 
 {{LOCAL_CANDIDATE_NOTICE}}
 > `LOCAL RELEASE CANDIDATE / NOT A PUBLIC GITHUB RELEASE`
 >
-> 本段仅适用于 `0.2.0-beta.2` 本地发布候选；该包不是 GitHub 公开 Release，不是最终 Beta，不可冒充正式版。它只供受控的本地安装和当前赛季真实对局验证，不代表完整 P0 发布矩阵或 Windows 11 24H2 最终实机 smoke 已经通过，也不得未经单独授权上传或公开发布。
+> 本段仅适用于 `1.0.0` 本地发布候选；该包不是 GitHub 公开 Release，不可冒充已公开发布的正式包。它只供受控的本地安装和当前赛季真实对局验证，不代表完整 P0 发布矩阵或 Windows 11 24H2 最终实机 smoke 已经通过，也不得未经单独授权上传或公开发布。
 {{/LOCAL_CANDIDATE_NOTICE}}
 
 Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.53.5 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
 
-`0.2.0-beta.2` 本地候选尚未完成 Windows 11 24H2 x64 + HDT 1.53.5 最终实机 smoke。Windows 10 22H2 x64 是目标兼容环境，当前仅确认技术兼容，尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
+`1.0.0` 本地候选尚未完成 Windows 11 24H2 x64 + HDT 1.53.5 最终实机 smoke。Windows 10 22H2 x64 是目标兼容环境，当前仅确认技术兼容，尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
 
 ## 安装前
 
 1. 完全退出 Hearthstone Deck Tracker。任务管理器中不应再有 `Hearthstone Deck Tracker` 或 `HearthstoneDeckTracker` 进程。
-2. 完整解压 ZIP，保持包内 16 个文件完整，不要从不同版本的包混合文件。
+2. 完整解压 ZIP，保持包内 17 个文件完整，不要从不同版本的包混合文件。
 3. 双击解压目录根部的 `安装教程.html`。它可以离线打开，四个步骤都在文字后附有对应图片。
 {{ZIP_HASH_GUIDANCE}}
 4. 如果 ZIP 或 DLL 的“属性”窗口显示“此文件来自其他计算机，可能被阻止”，先对原始 ZIP 选择“解除锁定”，再重新解压。也可以在 ZIP 所在目录运行：
@@ -32,19 +32,19 @@ Get-FileHash .\BobCoach-0.2.0-beta.1-current-season-preview-20260719-win-x64.zip
 4. 如果 ZIP 或 DLL 的“属性”窗口显示“此文件来自其他计算机，可能被阻止”，先对原始 ZIP 选择“解除锁定”，再重新解压。也可以在 ZIP 所在目录运行：
 
 ```powershell
-Unblock-File -LiteralPath .\BobCoach-0.2.0-beta.2-win-x64.zip
+Unblock-File -LiteralPath .\BobCoach-1.0.0-win-x64.zip
 ```
 
 可在 PowerShell 中核对下载 ZIP 的 SHA-256：
 
 ```powershell
-Get-FileHash .\BobCoach-0.2.0-beta.2-win-x64.zip -Algorithm SHA256
+Get-FileHash .\BobCoach-1.0.0-win-x64.zip -Algorithm SHA256
 ```
 
 结果应与随 ZIP 提供的同名 `.zip.sha256` 文件一致。
 {{/RELEASE_ZIP_HASH_GUIDANCE}}
 
-普通玩家只需按 `安装教程.html` 手动复制 DLL，不需要使用终端。需要自动校验、备份或回退时，再使用后文的可选高级安装。
+普通玩家只需按 `安装教程.html` 手动复制 `BobCoach.dll` 和相邻的 `BobCoach.dll.sha256`，不需要使用终端。需要自动校验、备份或回退时，再使用后文的可选高级安装。
 
 ## 默认安装或升级
 
@@ -56,19 +56,19 @@ Get-FileHash .\BobCoach-0.2.0-beta.2-win-x64.zip -Algorithm SHA256
 
 按 `Win + R`，粘贴 `%APPDATA%\HearthstoneDeckTracker\Plugins`，然后点“确定”。如果目录不存在，先正常启动并退出一次 HDT，再重试。HDT 的用户插件目录不随程序安装位置变化；不要改用 HDT 程序安装目录下的 `Plugins`。
 
-### 第 3 步：复制 DLL
+### 第 3 步：复制 DLL 和校验文件
 
-回到完整解压后的安装包，复制 `BobCoach.dll` 到刚打开的 `Plugins` 根目录。正确路径是 `%APPDATA%\HearthstoneDeckTracker\Plugins\BobCoach.dll`。升级时选择替换已有文件。不要新建 `BobCoach` 子文件夹，也不要把教程、图片、脚本或其他说明文件复制进 HDT。
+回到完整解压后的安装包，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个文件必须来自同一个安装包并保持相邻；缺少校验文件或两者不匹配时，插件会拒绝启动。升级时同时替换两个文件。不要新建 `BobCoach` 子文件夹，也不要把教程、图片、脚本或其他说明文件复制进 HDT。
 
 ### 第 4 步：启动并启用 BobCoach
 
 重新启动 HDT，打开 `Options > Tracker > Plugins`，找到 BobCoach 并勾选启用。关闭并重启一次 HDT，再回到同一页面确认 BobCoach 仍为启用状态。HDT 主界面能看到 BobCoach 入口，且插件没有加载错误时，手动安装完成。
 
-如果插件列表没有 BobCoach，先确认 DLL 的完整路径和 HDT 是否已完全退出。右键 `BobCoach.dll` 打开“属性”；若底部有“解除锁定”，勾选后确定，再重启 HDT。仍无法加载时，只记录最小错误信息，不要上传完整私人对局日志。
+如果插件列表没有 BobCoach，先确认两个文件都位于插件目录根部且 HDT 已完全退出。右键原始 ZIP 打开“属性”；若底部有“解除锁定”，勾选后重新解压、复制，再重启 HDT。仍无法加载时，只记录最小错误信息，不要上传完整私人对局日志。
 
 ## 安装后确认
 
-插件页面应显示 `BobCoach 0.2.0.0`，开关为 `On`。Bob Coach 只从上述 AppData 插件目录加载 DLL；同一个版本不要复制到多个 HDT 目录。手动覆盖升级不会自动创建旧 DLL 备份，如需自动备份和回退，请使用后文的可选高级安装。
+插件页面应显示 `BobCoach 1.0.0.0`，开关为 `On`。Bob Coach 只从上述 AppData 插件目录加载 DLL；同一个版本不要复制到多个 HDT 目录。手动覆盖升级不会自动创建旧 DLL 备份，如需自动备份和回退，请使用后文的可选高级安装。
 
 ## 联网真实对局验证
 
@@ -81,7 +81,7 @@ Get-FileHash .\BobCoach-0.2.0-beta.2-win-x64.zip -Algorithm SHA256
 
 ## 可选高级安装
 
-普通玩家无需执行本节。需要校验包内 `SHA256SUMS.txt`、manifest、DLL 版本与 x64 架构，并在升级时自动保留旧 DLL 时，可在完整解压目录运行：
+普通玩家无需执行本节。需要校验包内 `SHA256SUMS.txt`、manifest、DLL 与 `BobCoach.dll.sha256` 的绑定、DLL 版本与 x64 架构，并在升级时自动保留旧 DLL 时，可在完整解压目录运行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
@@ -115,16 +115,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -Bac
 
 ### 安装失败或提示完整性校验失败
 
-- 确认 HDT 已完全退出，解压目录中正好有本说明列出的 16 个文件。
-- 不要单独替换 `BobCoach.dll`、`manifest.json` 或 `SHA256SUMS.txt`，也不要混用旧包文件。
+- 确认 HDT 已完全退出，解压目录中正好有本说明列出的 17 个文件。
+- 不要单独替换 `BobCoach.dll`、`BobCoach.dll.sha256`、`manifest.json` 或 `SHA256SUMS.txt`，也不要混用旧包文件。
 - 重新取得完整 ZIP，先解除 ZIP 的 Windows 锁定，再解压到一个新目录并重新运行安装命令。
 - 默认目录不存在时，先启动并退出一次 HDT；不要改用 HDT 程序目录下的 `Plugins`。
 - 不要通过改脚本、删哈希行或关闭 Windows 安全功能来绕过失败。
 
 ### HDT 中没有出现 BobCoach
 
-- 确认 `BobCoach.dll` 已直接复制到 AppData 插件目录根部，不在额外子文件夹中。
-- 确认 `BobCoach.dll` 实际位于 `%APPDATA%\HearthstoneDeckTracker\Plugins`，而不是 HDT 程序目录或另一个副本。
+- 确认 `BobCoach.dll` 与 `BobCoach.dll.sha256` 已一起复制到 AppData 插件目录根部，不在额外子文件夹中。
+- 确认两个文件实际位于 `%APPDATA%\HearthstoneDeckTracker\Plugins`，且来自同一个安装包，而不是 HDT 程序目录或另一个副本。
 - 打开 DLL 的“属性”检查是否有“解除锁定”；若有，退出 HDT，解除锁定后重新运行安装器。
 - 完全退出并重启 HDT，然后到 `Options > Tracker > Plugins` 再检查一次。
 - 仍未出现时，保留安装器完整错误文字和 HDT 日志中的 BobCoach 加载错误；不要上传完整私人对局日志。
@@ -143,7 +143,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -Rollback -Bac
 
 ## 卸载
 
-退出HDT后，默认只删除当前`BobCoach.dll`：
+退出HDT后，默认同时删除当前 `BobCoach.dll` 和 `BobCoach.dll.sha256`：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1

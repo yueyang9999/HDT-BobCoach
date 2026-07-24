@@ -1,11 +1,20 @@
 # Changelog
 
-All notable changes are recorded here. The project follows Semantic Versioning for package names while it is in beta.
+All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
 ## Unreleased
 
 - Established the clean public product repository, CI, community files, and maintainer documentation.
 - Added deterministic repository validation and an official HDT dependency pin for CI.
+
+## 1.0.0 local release candidate (unpublished) - 2026-07-24
+
+- Promoted the package and assembly identity to stable `1.0.0` / `1.0.0.0` naming.
+- Preserved the tested layout v10 overlay alignment fix, including zero default horizontal shop offset and migration of the former default.
+- Kept Firestone/Zero to Heroes out of the production runtime path; equipped-trinket decisions remain local and deterministic.
+- Added mandatory startup verification of the adjacent `BobCoach.dll.sha256` sidecar.
+- Updated install, upgrade, rollback, uninstall, packaging, and lifecycle verification so the DLL and checksum remain paired.
+- Documented the known limitation that Hearthstone's Timewarp choice screen can cover the hint icon; recommendation calculation remains unaffected.
 
 ## 0.2.0-beta.2 local release candidate (unpublished) - 2026-07-22
 

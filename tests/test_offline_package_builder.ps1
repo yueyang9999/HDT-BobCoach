@@ -23,10 +23,11 @@ if ([string]::IsNullOrWhiteSpace($hdtDirectory)) {
 $testRoot = Join-Path $env:TEMP ("bobcoach-offline-builder-test-" + [Guid]::NewGuid().ToString("N"))
 Assert-SafeTestRoot $testRoot
 
-$packageName = "BobCoach-0.2.0-beta.2-win-x64"
+$packageName = "BobCoach-1.0.0-win-x64"
 $zipName = "$packageName.zip"
 $expectedFiles = @(
     "BobCoach.dll",
+    "BobCoach.dll.sha256",
     "安装教程.html",
     "images/install/install-01-exit-hdt.png",
     "images/install/install-02-open-plugins-folder.png",
@@ -60,22 +61,24 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
     Assert-ExactStrings $expectedFiles $actualFiles "extracted file set"
 
     $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PackageRoot "manifest.json") | ConvertFrom-Json
-    Assert-Equal 1 ([int]$manifest.schemaVersion) "manifest schema"
-    Assert-Equal "0.2.0-beta.2" ([string]$manifest.packageVersion) "manifest package version"
-    Assert-Equal "0.2.0.0" ([string]$manifest.assemblyVersion) "manifest assembly version"
-    Assert-Equal "0.2.0.0" ([string]$manifest.fileVersion) "manifest file version"
-    Assert-Equal "0.2.0-beta.2" ([string]$manifest.informationalVersion) "manifest informational version"
+    Assert-Equal 2 ([int]$manifest.schemaVersion) "manifest schema"
+    Assert-Equal "1.0.0" ([string]$manifest.packageVersion) "manifest package version"
+    Assert-Equal "1.0.0.0" ([string]$manifest.assemblyVersion) "manifest assembly version"
+    Assert-Equal "1.0.0.0" ([string]$manifest.fileVersion) "manifest file version"
+    Assert-Equal "1.0.0" ([string]$manifest.informationalVersion) "manifest informational version"
     Assert-Equal ".NETFramework,Version=v4.7.2" ([string]$manifest.targetFramework) "manifest framework"
     Assert-Equal "win-x64" ([string]$manifest.runtimeIdentifier) "manifest RID"
     Assert-ExactStrings $expectedFiles @($manifest.files) "manifest files"
+    Assert-Equal "BobCoach.dll.sha256" ([string]$manifest.pluginChecksumFile) "manifest plugin checksum file"
 
     $pluginPath = Join-Path $PackageRoot "BobCoach.dll"
     $pluginHash = (Get-FileHash -LiteralPath $pluginPath -Algorithm SHA256).Hash
     Assert-Equal $pluginHash ([string]$manifest.pluginSha256) "manifest plugin hash"
+    Assert-PluginChecksum $pluginPath (Join-Path $PackageRoot "BobCoach.dll.sha256") "built package"
     Assert-Equal (Get-Item -LiteralPath $pluginPath).Length ([long]$manifest.pluginSize) "manifest plugin size"
     $name = [Reflection.AssemblyName]::GetAssemblyName($pluginPath)
     Assert-Equal "BobCoach" $name.Name "plugin assembly name"
-    Assert-Equal "0.2.0.0" $name.Version.ToString() "plugin assembly version"
+    Assert-Equal "1.0.0.0" $name.Version.ToString() "plugin assembly version"
     if (!$SkipReflectionLoad) {
         $bytes = [IO.File]::ReadAllBytes($pluginPath)
         $assembly = [Reflection.Assembly]::ReflectionOnlyLoad($bytes)
@@ -88,7 +91,7 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
     }
 
     $sumLines = @(Get-Content -LiteralPath (Join-Path $PackageRoot "SHA256SUMS.txt") -Encoding UTF8)
-    Assert-Equal 15 $sumLines.Count "SHA256SUMS line count"
+    Assert-Equal 16 $sumLines.Count "SHA256SUMS line count"
     $seen = @{}
     foreach ($line in $sumLines) {
         if ($line -notmatch '^([A-F0-9]{64})  ([^\\:*?"<>|\r\n]+)$') { throw "Invalid SHA256SUMS line: $line" }

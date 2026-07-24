@@ -47,16 +47,20 @@ for (const imagePath of expectedGuideImages) {
 }
 
 for (const [source, label, tokens] of [
-  [markdown, 'Markdown guide', ['完全退出 HDT', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'BobCoach.dll', '根目录', '启用 BobCoach', '可选高级安装']],
-  [html, 'HTML guide', ['完全退出 HDT', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'BobCoach.dll', '根目录', '启用 BobCoach', '可选高级安装']],
-  [chineseReadme, 'Chinese README', ['复制 `BobCoach.dll`', '%AppData%\\HearthstoneDeckTracker\\Plugins', '启用 BobCoach', 'docs/user/INSTALL.html']],
-  [englishReadme, 'English README', ['copy `BobCoach.dll`', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'enable BobCoach', 'optional advanced']],
-  [offlineReadme, 'offline README', ['安装教程.html', '复制 `BobCoach.dll`', '%APPDATA%\\HearthstoneDeckTracker\\Plugins', '可选高级安装']],
+  [markdown, 'Markdown guide', ['完全退出 HDT', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'BobCoach.dll', 'BobCoach.dll.sha256', '根目录', '启用 BobCoach', '可选高级安装']],
+  [html, 'HTML guide', ['完全退出 HDT', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'BobCoach.dll', 'BobCoach.dll.sha256', '根目录', '启用 BobCoach', '可选高级安装']],
+  [chineseReadme, 'Chinese README', ['把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制', '%AppData%\\HearthstoneDeckTracker\\Plugins', '启用 BobCoach', 'docs/user/INSTALL.html']],
+  [englishReadme, 'English README', ['Copy both `BobCoach.dll` and `BobCoach.dll.sha256`', '%AppData%\\HearthstoneDeckTracker\\Plugins', 'enable BobCoach', 'optional advanced']],
+  [offlineReadme, 'offline README', ['安装教程.html', '手动复制 `BobCoach.dll` 和相邻的 `BobCoach.dll.sha256`', '%APPDATA%\\HearthstoneDeckTracker\\Plugins', '可选高级安装']],
 ]) {
   for (const token of tokens) requireText(source, token, `${label}: ${token}`);
 }
 
 requireText(markdown, '[下载或离线打开 HTML 图文教程](INSTALL.html)', 'Markdown link to HTML guide');
+requireText(markdown, '当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`', 'Markdown beta.1 single-file transition');
+requireText(html, '当前公开的 <code>0.2.0-beta.1</code> 只需复制 <code>BobCoach.dll</code>', 'HTML beta.1 single-file transition');
+requireText(chineseReadme, '当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`', 'Chinese README beta.1 single-file transition');
+requireText(englishReadme, 'The current public `0.2.0-beta.1` package only requires `BobCoach.dll`', 'English README beta.1 single-file transition');
 requireText(html, 'overflow-wrap: anywhere', 'mobile wrapping for long paths');
 forbid(html, /<(?:img|script|link|source)\b[^>]+(?:src|href)=["'](?:https?:)?\/\//i, 'remote HTML resource');
 forbid(html, /<script\b/i, 'HTML script');

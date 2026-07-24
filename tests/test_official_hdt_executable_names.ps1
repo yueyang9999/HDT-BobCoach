@@ -250,18 +250,41 @@ try {
             $node -is [Management.Automation.Language.CommandAst] -and
                 $node.GetCommandName() -eq "Replace-BobCoachDll"
         }, $true))
-        Assert-Equal 2 $productionReplaceCalls.Count "production replace call count"
-        foreach ($replaceCall in $productionReplaceCalls) {
+        Assert-Equal 4 $productionReplaceCalls.Count "production replace call count"
+        $publishReplaceCalls = @($productionReplaceCalls | Where-Object {
+            $_.Extent.Text -match 'Replace-BobCoachDll\s+\$tempDll\s+\$targetDll'
+        })
+        $compensationReplaceCalls = @($productionReplaceCalls | Where-Object {
+            $_.Extent.Text -match 'Replace-BobCoachDll\s+\$(currentBackup|backupPathForUpgrade)\s+\$targetDll\s+\$failedCandidate'
+        })
+        Assert-Equal 2 $publishReplaceCalls.Count "production publish replace call count"
+        Assert-Equal 2 $compensationReplaceCalls.Count "production compensation replace call count"
+        foreach ($replaceCall in $publishReplaceCalls) {
             $tryAncestor = $replaceCall.Parent
             while ($null -ne $tryAncestor -and
                 $tryAncestor -isnot [Management.Automation.Language.TryStatementAst]) {
                 $tryAncestor = $tryAncestor.Parent
             }
-            Assert-True ($null -ne $tryAncestor) "production replace call has try ancestor"
-            Assert-True ($null -ne $tryAncestor.Finally) "production replace call has finally"
+            Assert-True ($null -ne $tryAncestor) "production publish replace call has try ancestor"
+            Assert-True ($null -ne $tryAncestor.Finally) "production publish replace call has finally"
             Assert-True ($tryAncestor.Finally.Extent.Text -match
                 'Remove-Item\s+-LiteralPath\s+\$tempDll\s+-Force') `
-                "production replace call finally cleans temp DLL"
+                "production publish replace call finally cleans temp DLL"
+            Assert-True ($tryAncestor.Finally.Extent.Text -match
+                'Remove-Item\s+-LiteralPath\s+\$tempChecksum\s+-Force') `
+                "production publish replace call finally cleans temp checksum"
+        }
+        foreach ($replaceCall in $compensationReplaceCalls) {
+            $tryAncestor = $replaceCall.Parent
+            while ($null -ne $tryAncestor -and
+                $tryAncestor -isnot [Management.Automation.Language.TryStatementAst]) {
+                $tryAncestor = $tryAncestor.Parent
+            }
+            Assert-True ($null -ne $tryAncestor) "production compensation replace call has try ancestor"
+            Assert-True ($null -ne $tryAncestor.Finally) "production compensation replace call has finally"
+            Assert-True ($tryAncestor.Finally.Extent.Text -match
+                'Remove-Item\s+-LiteralPath\s+\$failedCandidate\s+-Force') `
+                "production compensation replace call finally cleans failed candidate"
         }
 
         $replaceError = $null

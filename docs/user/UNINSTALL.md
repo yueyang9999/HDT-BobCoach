@@ -8,9 +8,9 @@
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1
 ```
 
-卸载目标固定为 `%APPDATA%\HearthstoneDeckTracker\Plugins\BobCoach.dll`，不随 HDT 程序安装位置变化。卸载器会拒绝 HDT 程序目录下的 `Plugins`。
+卸载目标固定为 `%APPDATA%\HearthstoneDeckTracker\Plugins` 下的 `BobCoach.dll` 和 `BobCoach.dll.sha256`，不随 HDT 程序安装位置变化。卸载器会拒绝 HDT 程序目录下的 `Plugins`。
 
-默认只删除当前 `BobCoach.dll`。以下内容会保留：
+默认同时删除当前 `BobCoach.dll` 和相邻的 `BobCoach.dll.sha256`。以下内容会保留：
 
 - `BobCoach.dll.backup-*` 回退备份；
 - `%APPDATA%\bob-coach` 下的本地配置、日志、回放和档案；

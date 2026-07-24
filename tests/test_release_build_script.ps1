@@ -22,6 +22,7 @@ $required = [ordered]@{
     '\[string\]\s*\$OutputDirectory' = 'OutputDirectory parameter'
     '\[switch\]\s*\$Force' = 'Force parameter'
     'release_identity\.json' = 'release identity input'
+    "packageVersion -notmatch '\^\\d\+\\\.\\d\+\\\.\\d\+\$'" = 'stable semantic package version gate'
     'hdtBaselineVersion' = 'HDT baseline validation'
     'HearthstoneDeckTracker\.exe' = 'HDT executable validation'
     'HearthDb\.dll' = 'HearthDb validation'
@@ -34,6 +35,10 @@ $required = [ordered]@{
     'BobCoach\.csproj' = 'project input'
     'BobCoach\.dll' = 'DLL output'
     'build_log\.txt' = 'build log output'
+}
+
+if ($source -match 'packageVersion[^\r\n]+beta') {
+    $errors.Add('release build still requires a beta package version')
 }
 foreach ($entry in $required.GetEnumerator()) {
     if ($source -notmatch $entry.Key) { $errors.Add("missing $($entry.Value)") }

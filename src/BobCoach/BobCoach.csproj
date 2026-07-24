@@ -117,6 +117,7 @@
     <Compile Include="Core\GameRuleEvaluator.cs" />
     <Compile Include="Core\TripleRuleEvaluator.cs" />
     <Compile Include="Core\PanelStateMachine.cs" />
+    <Compile Include="Core\PluginIntegrityVerifier.cs" />
     <Compile Include="Core\UiTargetStateMachine.cs" />
     <Compile Include="Core\FeatureExtractor.cs" />
     <Compile Include="Core\CardSemanticFactSource.cs" />

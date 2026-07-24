@@ -42,6 +42,7 @@ foreach ($file in @(
     "test_trinket_rule_evaluator.ps1",
     "test_trinket_recommendation_service.ps1",
     "test_trinket_stats_verifier.ps1",
+    "test_plugin_integrity_verifier.ps1",
     "test_trinket_reason_formatter.ps1",
     "test_card_semantic_rule_evaluator.ps1",
     "test_card_semantic_source.ps1",
