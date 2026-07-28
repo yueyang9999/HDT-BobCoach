@@ -21,7 +21,7 @@ HDT-BobCoach 是运行在用户已安装 Hearthstone Deck Tracker (HDT) 中的 x
 
 当前公开版不请求、不缓存、不展示 Firestone/Zero to Heroes 饰品统计。`BobCoachPlugin` 不创建或驱动外部饰品统计 updater；无已授权来源时只暴露 `SourceUnavailable` 状态，既有历史缓存不读取、不迁移、不删除。
 
-源码发布线为 `1.0.0` 本地候选；GitHub 当前唯一公开 Release 为 `v0.2.0-beta.1`。1.0.0 尚未创建 GitHub Release，不能把本地候选 ZIP 写成公开下载资产。当前离线包构建器拒绝 `-CurrentSeasonPreview`，不会用 1.0.0 身份、DLL 或 hash 重建 beta.1 preview。
+源码与当前正式 Release 均为 `1.0.0`。正式资产是 `BobCoach-1.0.0-win-x64.zip` 及其同名 `.sha256` 文件；自动化测试、包完整性和 CI 已通过，Windows 11 24H2 最终实机 smoke 未完成并按项目所有者明确授权发布。当前离线包构建器拒绝 `-CurrentSeasonPreview`，不会用 1.0.0 身份、DLL 或 hash 重建 beta.1 preview。
 
 饰品报价推荐与已装备效果是两条独立调用链。报价候选的识别、本地评估、推荐服务、面板和渲染代码仍保留，但首发不显示报价选择提示，也不让该提示抢占其他推荐；`TrinketRecommendationsVisible` 只控制最终渲染，不得作为已装备效果服务的启停条件。
 

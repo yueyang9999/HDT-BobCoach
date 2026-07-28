@@ -7,7 +7,7 @@ All notable changes are recorded here. The project follows Semantic Versioning f
 - Established the clean public product repository, CI, community files, and maintainer documentation.
 - Added deterministic repository validation and an official HDT dependency pin for CI.
 
-## 1.0.0 local release candidate (unpublished) - 2026-07-24
+## 1.0.0 - 2026-07-28
 
 - Promoted the package and assembly identity to stable `1.0.0` / `1.0.0.0` naming.
 - Preserved the tested layout v10 overlay alignment fix, including zero default horizontal shop offset and migration of the former default.
