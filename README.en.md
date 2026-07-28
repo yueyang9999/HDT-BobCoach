@@ -8,18 +8,18 @@
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
 
-The latest public version is `0.2.0-beta.1`. The repository source is currently at `1.0.0`, which is only a local release candidate and has no GitHub Release or publicly uploaded installer. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, local candidates, or third-party attachments as published official installers. The current builder does not recreate or fabricate the historical beta.1 preview from 1.0.0 inputs.
+The current source and pending installer version is `1.0.0`, with the package name `BobCoach-1.0.0-win-x64.zip`. It is only a local release candidate and has no GitHub Release or publicly uploaded installer; the only public GitHub Release remains the historical `v0.2.0-beta.1`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, local candidates, or third-party attachments as published official installers. The current builder does not recreate or fabricate the historical beta.1 preview from 1.0.0 inputs.
 
 ## Download and Install
 
 Windows 10 and Windows 11 use the same 64-bit installer package:
 
-| Your system | Download | Validation status |
+| Your system | Current package | Validation status |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [Download Bob Coach 0.2.0-beta.1](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | beta.1 public asset available; 1.0.0 final physical smoke validation is still pending |
-| Windows 10 22H2 x64 | [Download the same Bob Coach 0.2.0-beta.1 package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | Technically compatible; not completed dedicated physical validation |
+| Windows 11 24H2 x64 | `BobCoach-1.0.0-win-x64.zip` ([check Releases for publication](https://github.com/yueyang9999/HDT-BobCoach/releases)) | Not publicly uploaded; final physical smoke validation is still pending |
+| Windows 10 22H2 x64 | The same `BobCoach-1.0.0-win-x64.zip` ([check Releases for publication](https://github.com/yueyang9999/HDT-BobCoach/releases)) | Technically compatible; not completed dedicated physical validation |
 
-[Download the beta.1 SHA-256 checksum file](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+The `1.0.0` Release must include `BobCoach-1.0.0-win-x64.zip.sha256` beside the ZIP. Until both files appear on the Release page, do not treat source archives or other attachments as the installer.
 
 **Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
 
@@ -39,7 +39,7 @@ After installation, the plugin does not require Node.js, administrator privilege
 
 1. Fully exit HDT and extract the complete ZIP.
 2. Press `Win + R` and open `%AppData%\HearthstoneDeckTracker\Plugins`.
-3. The current public `0.2.0-beta.1` package only requires `BobCoach.dll`. The installation changes after version 1.0.0 is published: Copy both `BobCoach.dll` and `BobCoach.dll.sha256` into the root of that directory. Version 1.0.0 refuses to start if the checksum file is missing or does not match the DLL.
+3. Fully extract `BobCoach-1.0.0-win-x64.zip`. Copy both `BobCoach.dll` and `BobCoach.dll.sha256` into the root of that directory. Version 1.0.0 refuses to start if the checksum file is missing or does not match the DLL.
 4. Start HDT, then enable BobCoach under `Options > Tracker > Plugins`.
 
 `INSTALL.ps1` remains an optional advanced installation method for package verification, automatic backup, and rollback. See [UPGRADE](docs/user/UPGRADE.md), [ROLLBACK](docs/user/ROLLBACK.md), and [UNINSTALL](docs/user/UNINSTALL.md) for the corresponding procedures.

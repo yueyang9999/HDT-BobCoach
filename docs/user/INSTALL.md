@@ -1,6 +1,6 @@
 # Bob Coach 中文安装教程
 
-不熟悉终端也能完成。先下载官方安装包 [BobCoach-0.2.0-beta.1-win-x64.zip](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip)。当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`；后续 `1.0.0` 安装包发布后，完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
+不熟悉终端也能完成。当前安装包名称为 `BobCoach-1.0.0-win-x64.zip`；该版本只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。发布后请只从本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 获取，完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
 
 [下载或离线打开 HTML 图文教程](INSTALL.html)
 
@@ -24,7 +24,7 @@
 
 ### 第 3 步：复制 DLL 和校验文件
 
-回到解压后的安装包：当前公开的 `0.2.0-beta.1` 只复制 `BobCoach.dll`；`1.0.0` 发布后，将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个 1.0.0 文件必须来自同一个安装包；缺少校验文件或哈希不匹配时，插件会拒绝启动。升级 1.0.0 时同时替换两个文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
+回到完整解压后的 `BobCoach-1.0.0-win-x64.zip`，将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个文件必须来自同一个安装包；缺少校验文件或哈希不匹配时，插件会拒绝启动。升级时同时替换两个文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
 
 ![将 BobCoach.dll 复制到 Plugins 根目录](images/install/install-03-copy-bobcoach-dll.png)
 
@@ -40,7 +40,7 @@
 
 ## 下载时注意
 
-当前最新公开版本仍为 `0.2.0-beta.1`，官方文件名是 `BobCoach-0.2.0-beta.1-win-x64.zip`。仓库源码版本已调整为 `1.0.0`，目前只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。
+当前源码与待发布安装包版本为 `1.0.0`，文件名是 `BobCoach-1.0.0-win-x64.zip`。该版本目前只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包；GitHub 当前唯一公开 Release 仍是历史版本 `v0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。
 
 - `Windows 11 24H2 x64` 与 `Windows 10 22H2 x64` 使用同一个 64 位安装包。
 - 不要下载 Release 页面底部的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是安装包。
@@ -51,8 +51,8 @@
 
 ### 插件列表没有 BobCoach
 
-1. 确认 HDT 已完全退出后再复制文件；beta.1 只需 DLL，1.0.0 必须同时复制 DLL 和校验文件。
-2. beta.1 确认 `%AppData%\HearthstoneDeckTracker\Plugins\BobCoach.dll` 存在；1.0.0 还要确认相邻的 `BobCoach.dll.sha256` 存在。
+1. 确认 HDT 已完全退出后再复制文件；1.0.0 必须同时复制 DLL 和校验文件。
+2. 确认 `%AppData%\HearthstoneDeckTracker\Plugins\BobCoach.dll` 与相邻的 `BobCoach.dll.sha256` 同时存在。
 3. 右键 `BobCoach.dll`，打开“属性”；如果底部有“解除锁定”，勾选后确定。
 4. 重新启动 HDT，再到 `Options > Tracker > Plugins` 检查。
 

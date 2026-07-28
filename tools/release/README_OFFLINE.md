@@ -16,17 +16,7 @@ Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教
 2. 完整解压 ZIP，保持包内 17 个文件完整，不要从不同版本的包混合文件。
 3. 双击解压目录根部的 `安装教程.html`。它可以离线打开，四个步骤都在文字后附有对应图片。
 {{ZIP_HASH_GUIDANCE}}
-4. 如果 ZIP 或 DLL 的“属性”窗口显示“此文件来自其他计算机，可能被阻止”，先对原始 ZIP 选择“解除锁定”，再重新解压。也可以在 ZIP 所在目录运行：
-
-```powershell
-Unblock-File -LiteralPath .\BobCoach-0.2.0-beta.1-current-season-preview-20260719-win-x64.zip
-```
-
-`PREVIEW ZIP HAS NO EXTERNAL SHA-256`：抢先验证包不附带最终发布用的 ZIP 外 `.sha256` 文件。`Get-FileHash` 可用于故障诊断，但不要把未经发布方确认的外部哈希当成最终发布声明：
-
-```powershell
-Get-FileHash .\BobCoach-0.2.0-beta.1-current-season-preview-20260719-win-x64.zip -Algorithm SHA256
-```
+历史抢先验证包流程已退役；当前构建器不会生成、重建或伪造旧 preview 包。
 {{/ZIP_HASH_GUIDANCE}}
 {{RELEASE_ZIP_HASH_GUIDANCE}}
 4. 如果 ZIP 或 DLL 的“属性”窗口显示“此文件来自其他计算机，可能被阻止”，先对原始 ZIP 选择“解除锁定”，再重新解压。也可以在 ZIP 所在目录运行：
@@ -174,7 +164,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1 -RemoveUserD
 ## 当前已知限制
 
 {{PREVIEW_LIMIT}}
-- `current-season-preview-20260719` 是当前赛季抢先验证版，不是最终 Beta，不含最终发布用 ZIP 外 SHA-256。
+- 历史 preview 构建路径已退役，不属于当前 1.0.0 发布流程。
 {{/PREVIEW_LIMIT}}
 - 自动验证覆盖包完整性、安装、升级、卸载、回退和隔离 HDT 发现；其他普通用户的显卡、缩放、HDT 皮肤及真实对局组合仍需继续收集结果。
 - 炉石及真实酒馆战棋对局必须联网，登录只能由用户本人完成。

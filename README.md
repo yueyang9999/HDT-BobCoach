@@ -8,18 +8,18 @@
 
 Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (HDT) 教练插件。它在本机读取 HDT 已知的对局状态，提供选牌、阵容、站位和战斗决策辅助。
 
-当前最新公开版本为 `0.2.0-beta.1`。仓库当前源码版本为 `1.0.0`，只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物、本地候选包或第三方附件视为已公开的官方安装包。当前构建器不会用 1.0.0 输入重建或伪造历史 beta.1 preview。
+仓库当前源码与待发布安装包版本为 `1.0.0`，安装包名称为 `BobCoach-1.0.0-win-x64.zip`。该版本只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包；GitHub 当前唯一公开 Release 仍是历史版本 `v0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物、本地候选包或第三方附件视为已公开的官方安装包。当前构建器不会用 1.0.0 输入重建或伪造历史 beta.1 preview。
 
 ## 下载与安装
 
 Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
-| 你的系统 | 下载 | 验证状态 |
+| 你的系统 | 当前安装包 | 验证状态 |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [下载 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | beta.1 公开资产可用；1.0.0 候选尚未完成最终实机 smoke |
-| Windows 10 22H2 x64 | [下载同一个 Bob Coach 0.2.0-beta.1 安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+| Windows 11 24H2 x64 | `BobCoach-1.0.0-win-x64.zip`（[查看 Releases 发布状态](https://github.com/yueyang9999/HDT-BobCoach/releases)） | 尚未公开上传；1.0.0 候选尚未完成最终实机 smoke |
+| Windows 10 22H2 x64 | 同一个 `BobCoach-1.0.0-win-x64.zip`（[查看 Releases 发布状态](https://github.com/yueyang9999/HDT-BobCoach/releases)） | 技术兼容，尚未完成专用实机验收 |
 
-[下载 beta.1 SHA-256 校验文件](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/BobCoach-0.2.0-beta.1-win-x64.zip.sha256)
+`1.0.0` 发布时应同时提供 `BobCoach-1.0.0-win-x64.zip.sha256`。Release 页面出现这两个文件前，不要把源码压缩包或其他附件当作安装包。
 
 **不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
 
@@ -40,7 +40,7 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 1. 完全退出 HDT。
 2. 完整解压安装 ZIP。
 3. 打开 HDT，进入“选项 > 插件”，点击“打开插件文件夹”。如果按钮不可用，可手动打开 `%AppData%\HearthstoneDeckTracker\Plugins`。
-4. 当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`。`1.0.0` 发布后，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到该目录根部；1.0.0 缺少校验文件或两者不匹配时会拒绝启动。随后回到插件页面启用 BobCoach。
+4. 从 `BobCoach-1.0.0-win-x64.zip` 完整解压后，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到该目录根部；缺少校验文件或两者不匹配时，插件会拒绝启动。随后回到插件页面启用 BobCoach。
 
 `INSTALL.ps1` 是可选高级安装方式，用于完整性校验、自动备份和回退；普通安装不要求使用 PowerShell。升级、回滚和卸载分别见 [升级教程](docs/user/UPGRADE.md)、[回退教程](docs/user/ROLLBACK.md) 和 [卸载教程](docs/user/UNINSTALL.md)。
 

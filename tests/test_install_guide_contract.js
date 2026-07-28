@@ -57,10 +57,20 @@ for (const [source, label, tokens] of [
 }
 
 requireText(markdown, '[下载或离线打开 HTML 图文教程](INSTALL.html)', 'Markdown link to HTML guide');
-requireText(markdown, '当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`', 'Markdown beta.1 single-file transition');
-requireText(html, '当前公开的 <code>0.2.0-beta.1</code> 只需复制 <code>BobCoach.dll</code>', 'HTML beta.1 single-file transition');
-requireText(chineseReadme, '当前公开的 `0.2.0-beta.1` 只需复制 `BobCoach.dll`', 'Chinese README beta.1 single-file transition');
-requireText(englishReadme, 'The current public `0.2.0-beta.1` package only requires `BobCoach.dll`', 'English README beta.1 single-file transition');
+for (const [source, label] of [
+  [markdown, 'Markdown guide'],
+  [html, 'HTML guide'],
+  [chineseReadme, 'Chinese README'],
+  [englishReadme, 'English README'],
+]) {
+  requireText(source, 'BobCoach-1.0.0-win-x64.zip', `${label}: current package name`);
+  forbid(source, /releases\/download\/v0\.2\.0-beta\.1\//, `${label}: retired beta.1 package link`);
+  forbid(source, /releases\/download\/v1\.0\.0\//, `${label}: unpublished 1.0.0 package link`);
+}
+requireText(markdown, '将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制', 'Markdown 1.0.0 two-file install');
+requireText(html, '将 <code>BobCoach.dll</code> 和 <code>BobCoach.dll.sha256</code> 一起复制', 'HTML 1.0.0 two-file install');
+requireText(chineseReadme, '把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制', 'Chinese README 1.0.0 two-file install');
+requireText(englishReadme, 'Copy both `BobCoach.dll` and `BobCoach.dll.sha256`', 'English README 1.0.0 two-file install');
 requireText(html, 'overflow-wrap: anywhere', 'mobile wrapping for long paths');
 forbid(html, /<(?:img|script|link|source)\b[^>]+(?:src|href)=["'](?:https?:)?\/\//i, 'remote HTML resource');
 forbid(html, /<script\b/i, 'HTML script');
