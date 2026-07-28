@@ -8,7 +8,7 @@
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
 
-The current source and pending installer version is `1.0.0`, with the package name `BobCoach-1.0.0-win-x64.zip`. It is only a local release candidate and has no GitHub Release or publicly uploaded installer; the only public GitHub Release remains the historical `v0.2.0-beta.1`. Official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, local candidates, or third-party attachments as published official installers. The current builder does not recreate or fabricate the historical beta.1 preview from 1.0.0 inputs.
+The current stable version is `1.0.0`. Download [`BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip) from this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers. The current builder does not recreate or fabricate the historical beta.1 preview from 1.0.0 inputs.
 
 ## Download and Install
 
@@ -16,10 +16,10 @@ Windows 10 and Windows 11 use the same 64-bit installer package:
 
 | Your system | Current package | Validation status |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | `BobCoach-1.0.0-win-x64.zip` ([check Releases for publication](https://github.com/yueyang9999/HDT-BobCoach/releases)) | Not publicly uploaded; final physical smoke validation is still pending |
-| Windows 10 22H2 x64 | The same `BobCoach-1.0.0-win-x64.zip` ([check Releases for publication](https://github.com/yueyang9999/HDT-BobCoach/releases)) | Technically compatible; not completed dedicated physical validation |
+| Windows 11 24H2 x64 | [Download `BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip) | Automated tests, package integrity, and CI passed; final physical smoke validation was skipped with explicit owner authorization |
+| Windows 10 22H2 x64 | [Download the same 64-bit package](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip) | Technically compatible; dedicated physical validation has not been completed |
 
-The `1.0.0` Release must include `BobCoach-1.0.0-win-x64.zip.sha256` beside the ZIP. Until both files appear on the Release page, do not treat source archives or other attachments as the installer.
+Download [`BobCoach-1.0.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip.sha256) beside the ZIP to verify package integrity.
 
 **Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
 
@@ -27,7 +27,7 @@ First-time users should follow the illustrated [Chinese installation guide](docs
 
 ## System Requirements
 
-- 1.0.0 release candidate: final physical smoke validation on Windows 11 24H2 x64 is still pending
+- 1.0.0 stable release: automated tests, package integrity, and CI passed; final physical smoke validation on Windows 11 24H2 x64 was not completed and publication was explicitly authorized by the project owner
 - Target compatibility: Windows 10 22H2 x64 (technically compatible, but not yet verified on dedicated physical hardware)
 - Hearthstone Deck Tracker `1.53.5` x64
 - The .NET Framework 4.8/4.8.1 runtime supplied by Windows

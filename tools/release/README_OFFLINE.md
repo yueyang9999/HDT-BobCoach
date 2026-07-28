@@ -1,14 +1,14 @@
-# Bob教练 HDT 插件 1.0.0 本地发布候选
+# Bob教练 HDT 插件 1.0.0 正式版
 
-{{LOCAL_CANDIDATE_NOTICE}}
-> `LOCAL RELEASE CANDIDATE / NOT A PUBLIC GITHUB RELEASE`
+{{RELEASE_NOTICE}}
+> `OFFICIAL GITHUB RELEASE v1.0.0`
 >
-> 本段仅适用于 `1.0.0` 本地发布候选；该包不是 GitHub 公开 Release，不可冒充已公开发布的正式包。它只供受控的本地安装和当前赛季真实对局验证，不代表完整 P0 发布矩阵或 Windows 11 24H2 最终实机 smoke 已经通过，也不得未经单独授权上传或公开发布。
-{{/LOCAL_CANDIDATE_NOTICE}}
+> 本包是 GitHub `v1.0.0` 的正式离线安装包。自动化测试、包完整性和 CI 已通过；Windows 11 24H2 最终实机 smoke 未完成，已按项目所有者明确授权发布。请仅从项目 GitHub Releases 下载 ZIP 和同名 `.sha256` 文件。
+{{/RELEASE_NOTICE}}
 
 Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.53.5 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
 
-`1.0.0` 本地候选尚未完成 Windows 11 24H2 x64 + HDT 1.53.5 最终实机 smoke。Windows 10 22H2 x64 是目标兼容环境，当前仅确认技术兼容，尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
+`1.0.0` 正式版尚未完成 Windows 11 24H2 x64 + HDT 1.53.5 最终实机 smoke，已按项目所有者明确授权发布。Windows 10 22H2 x64 是目标兼容环境，当前仅确认技术兼容，尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
 
 ## 安装前
 

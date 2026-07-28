@@ -18,7 +18,7 @@ GitHub 仓库中的代码、文档、规则快照、议题、PR、镜像、fork�
 
 发布包应以对应版本的 `manifest.json`、外部 ZIP SHA-256 校验文件和本登记中的版本化数据源声明为准，而不是以仓库页面、GitHub 自动生成的源码压缩包、CI 工件或第三方附件为准。Bob Coach 不会自动读取用户的 GitHub 账户、私有仓库、token、议题/PR 内容或本地历史缓存；仓库中的示例、维护者笔记和合成测试数据不会改变这一运行时边界。
 
-当前公开版本事实（2026-07-28 核验）：GitHub 仓库为 public，默认分支为 `main`，唯一公开 Release 为 `v0.2.0-beta.1`。仓库源码的 `1.0.0` 仅是本地 release candidate；未创建 1.0.0 Release，1.0.0 ZIP 和 checksum 不应被写成公开下载地址。
+当前公开版本事实（2026-07-28 核验）：GitHub 仓库为 public，默认分支为 `main`，当前正式 Release 为 `v1.0.0`。正式资产为 `BobCoach-1.0.0-win-x64.zip` 及其同名 `.sha256` 文件；GitHub 自动生成的源码压缩包不是安装包。该版本自动化测试、包完整性和 CI 已通过；Windows 11 24H2 最终实机 smoke 未完成，已按项目所有者明确授权发布。
 
 ## Bob Coach 原创材料
 

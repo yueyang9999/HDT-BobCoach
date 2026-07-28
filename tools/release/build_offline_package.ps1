@@ -255,7 +255,7 @@ try {
     }
 
     $readme = Get-Content -Raw -Encoding UTF8 -LiteralPath $readmeTemplatePath
-    $readme = Resolve-ReadmeBlock $readme "LOCAL_CANDIDATE_NOTICE" (!$CurrentSeasonPreview)
+    $readme = Resolve-ReadmeBlock $readme "RELEASE_NOTICE" (!$CurrentSeasonPreview)
     $readme = Resolve-ReadmeBlock $readme "ZIP_HASH_GUIDANCE" ([bool]$CurrentSeasonPreview)
     $readme = Resolve-ReadmeBlock $readme "PREVIEW_LIMIT" ([bool]$CurrentSeasonPreview)
     $readme = Resolve-ReadmeBlock $readme "RELEASE_ZIP_HASH_GUIDANCE" (!$CurrentSeasonPreview)

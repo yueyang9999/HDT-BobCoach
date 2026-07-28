@@ -1,6 +1,6 @@
 # Bob Coach 中文安装教程
 
-不熟悉终端也能完成。当前安装包名称为 `BobCoach-1.0.0-win-x64.zip`；该版本只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包。发布后请只从本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 获取，完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
+不熟悉终端也能完成。当前正式版本为 `1.0.0`，请下载 [`BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip)。完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
 
 [下载或离线打开 HTML 图文教程](INSTALL.html)
 
@@ -40,7 +40,7 @@
 
 ## 下载时注意
 
-当前源码与待发布安装包版本为 `1.0.0`，文件名是 `BobCoach-1.0.0-win-x64.zip`。该版本目前只处于本地发布候选阶段，尚未创建 GitHub Release，也未公开上传安装包；GitHub 当前唯一公开 Release 仍是历史版本 `v0.2.0-beta.1`。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。
+当前正式版本为 `1.0.0`，文件名是 [`BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip)。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；可用同页的 [`BobCoach-1.0.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip.sha256) 核对完整性。自动化测试、包完整性和 CI 已通过；Windows 11 24H2 最终实机 smoke 未完成，已按项目所有者明确授权发布。
 
 - `Windows 11 24H2 x64` 与 `Windows 10 22H2 x64` 使用同一个 64 位安装包。
 - 不要下载 Release 页面底部的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是安装包。

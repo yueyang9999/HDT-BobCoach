@@ -143,8 +143,11 @@ try {
     Assert-ExtractedPackage $extractedPackageRoot
     $releaseReadme = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $extractedPackageRoot "README_OFFLINE.md")
     Assert-True ($releaseReadme.Contains(
-        "LOCAL RELEASE CANDIDATE / NOT A PUBLIC GITHUB RELEASE"
-    )) "release README identifies the local non-public candidate"
+        "OFFICIAL GITHUB RELEASE v1.0.0"
+    )) "release README identifies the official GitHub release"
+    Assert-True ($releaseReadme.Contains(
+        "Windows 11 24H2 最终实机 smoke 未完成"
+    )) "release README discloses the skipped final physical smoke validation"
     foreach ($previewOnlyText in @(
         "CURRENT SEASON PREVIEW",
         "NOT FINAL BETA",
