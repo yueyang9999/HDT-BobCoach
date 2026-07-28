@@ -16,8 +16,9 @@ const notice = read("NOTICE");
 const architecture = read("docs/maintainer/ARCHITECTURE.md");
 const dependencies = read("docs/maintainer/DEPENDENCIES.md");
 const bilingualDisclosureDesign = read("docs/design/双语自述与第三方声明设计_2026-07-21.md");
-const packageName = "BobCoach-0.2.0-beta.1-win-x64.zip";
-const packageUrl = `https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/${packageName}`;
+const packageName = "BobCoach-1.0.0-win-x64.zip";
+const releasesUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases";
+const retiredPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/";
 const unpublishedPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/";
 
 for (const [name, content] of [
@@ -25,9 +26,10 @@ for (const [name, content] of [
     ["README.en.md", englishReadme],
     ["docs/user/INSTALL.md", installGuide],
 ]) {
-    assert.ok(content.includes(packageName), `${name} must name the official package`);
-    assert.ok(content.includes(packageUrl), `${name} must link directly to the official package`);
-    assert.ok(!content.includes(unpublishedPackageUrl), `${name} must not link to the unpublished beta.2 release`);
+    assert.ok(content.includes(packageName), `${name} must name the current 1.0.0 package`);
+    assert.ok(content.includes(releasesUrl), `${name} must direct users to the Releases page`);
+    assert.ok(!content.includes(retiredPackageUrl), `${name} must not link to the retired beta.1 package`);
+    assert.ok(!content.includes(unpublishedPackageUrl), `${name} must not link to the unpublished 1.0.0 release asset`);
     assert.ok(content.includes("Windows 11 24H2 x64"), `${name} must identify Windows 11`);
     assert.ok(content.includes("Windows 10 22H2 x64"), `${name} must identify Windows 10`);
     assert.ok(content.includes("Source code (zip)"), `${name} must reject the generated ZIP source archive`);
