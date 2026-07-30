@@ -132,13 +132,13 @@ function Write-TestManifestAndSums([string]$PackageRoot) {
     $pluginSize = (Get-Item -LiteralPath $pluginPath).Length
     $manifest = [ordered]@{
         schemaVersion = 2
-        packageVersion = "1.0.0"
-        assemblyVersion = "1.0.0.0"
-        fileVersion = "1.0.0.0"
-        informationalVersion = "1.0.0"
+        packageVersion = "1.1.0"
+        assemblyVersion = "1.1.0.0"
+        fileVersion = "1.1.0.0"
+        informationalVersion = "1.1.0"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
-        hdtBaselineVersion = "1.53.5.7354"
+        hdtBaselineVersion = "1.54.0.7376"
         pluginFile = "BobCoach.dll"
         pluginChecksumFile = "BobCoach.dll.sha256"
         pluginSize = $pluginSize
@@ -219,14 +219,14 @@ function New-PackageFixture([string]$Root, [string]$Name) {
     }
 
     $fixtureRoot = Join-Path $Root $Name
-    $packageRoot = Join-Path $fixtureRoot "BobCoach-1.0.0-win-x64"
+    $packageRoot = Join-Path $fixtureRoot "BobCoach-1.1.0-win-x64"
     $hdtDirectory = Join-Path $fixtureRoot "SyntheticHdt"
     $appDataRoot = Join-Path $fixtureRoot "IsolatedAppData"
     $pluginDirectory = Join-Path (Join-Path $appDataRoot "HearthstoneDeckTracker") "Plugins"
     $evidenceDirectory = Join-Path $fixtureRoot "Evidence"
     $logConfigPath = Join-Path $fixtureRoot "log.config"
     $previousPluginPath = Join-Path $fixtureRoot "previous\BobCoach.dll"
-    $zipPath = Join-Path $fixtureRoot "BobCoach-1.0.0-win-x64.zip"
+    $zipPath = Join-Path $fixtureRoot "BobCoach-1.1.0-win-x64.zip"
     $sha256Path = "$zipPath.sha256"
 
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
