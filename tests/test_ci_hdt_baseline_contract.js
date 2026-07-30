@@ -6,9 +6,14 @@ const path = require("path");
 
 const workflowPath = path.resolve(__dirname, "..", ".github", "workflows", "ci.yml");
 const resolverPath = path.resolve(__dirname, "..", "tools", "build", "prepare_latest_hdt.ps1");
+const buildReleasePath = process.env.BOBCOACH_BUILD_RELEASE_SCRIPT
+    ? path.resolve(process.env.BOBCOACH_BUILD_RELEASE_SCRIPT)
+    : path.resolve(__dirname, "..", "tools", "build", "build_release.ps1");
 const workflow = fs.readFileSync(workflowPath, "utf8");
 assert.ok(fs.existsSync(resolverPath), "latest HDT resolver script must exist");
 const resolver = fs.readFileSync(resolverPath, "utf8");
+assert.ok(fs.existsSync(buildReleasePath), `release build script must exist: ${buildReleasePath}`);
+const buildRelease = fs.readFileSync(buildReleasePath, "utf8");
 const enumerateOfficialExecutablePattern =
     /^[ \t]*\$executables[ \t]*=[ \t]*@\(Get-ChildItem[^\r\n]*-Filter[ \t]+'Hearthstone Deck Tracker\.exe'\)[ \t]*$/m;
 const buildReferencePattern =
@@ -76,6 +81,27 @@ assert.doesNotMatch(
     latestJob,
     /build_offline_package\.ps1/,
     "latest compatibility job must not create a formal release package",
+);
+
+assert.match(
+    buildRelease,
+    /\[switch\]\s*\$AllowNewerHdt/,
+    "release build script must declare the latest-HDT opt-in switch",
+);
+assert.match(
+    buildRelease,
+    /\$baselineVersion\s*=\s*\[Version\]\s*\[string\]\s*\$identity\.hdtBaselineVersion/,
+    "release build script must derive its comparison baseline from release identity",
+);
+assert.match(
+    buildRelease,
+    /if\s*\(\s*\$AllowNewerHdt\s*\)\s*\{\s*if\s*\(\s*\$hdtVersion\s*-lt\s*\$baselineVersion\s*\)/s,
+    "latest-HDT opt-in must still reject versions older than the release baseline",
+);
+assert.match(
+    buildRelease,
+    /\}\s*elseif\s*\(\s*\$hdtVersion\s*-ne\s*\$baselineVersion\s*\)\s*\{/s,
+    "default release builds must require the exact release baseline",
 );
 
 for (const token of [

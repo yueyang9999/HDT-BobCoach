@@ -8,7 +8,9 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$OutputDirectory,
 
-    [switch]$Force
+    [switch]$Force,
+
+    [switch]$AllowNewerHdt
 )
 
 $ErrorActionPreference = "Stop"
@@ -83,8 +85,14 @@ foreach ($fileName in $requiredHdtFiles) {
 
 $hdtExecutable = Join-Path $hdtFullPath "HearthstoneDeckTracker.exe"
 $hdtInfo = Get-ManagedPeInfo $hdtExecutable
-if ($hdtInfo.AssemblyName.Version.ToString() -ne [string]$identity.hdtBaselineVersion) {
-    throw "HDT baseline mismatch: expected $($identity.hdtBaselineVersion), got $($hdtInfo.AssemblyName.Version)"
+$hdtVersion = $hdtInfo.AssemblyName.Version
+$baselineVersion = [Version][string]$identity.hdtBaselineVersion
+if ($AllowNewerHdt) {
+    if ($hdtVersion -lt $baselineVersion) {
+        throw "HDT compatibility mismatch: expected $baselineVersion or newer, got $hdtVersion"
+    }
+} elseif ($hdtVersion -ne $baselineVersion) {
+    throw "HDT baseline mismatch: expected $baselineVersion, got $hdtVersion"
 }
 if ($hdtInfo.Machine -ne [System.Reflection.ImageFileMachine]::AMD64 -or
     ($hdtInfo.PEKind -band [System.Reflection.PortableExecutableKinds]::PE32Plus) -eq 0) {

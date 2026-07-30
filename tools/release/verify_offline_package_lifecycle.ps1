@@ -199,13 +199,13 @@ function Read-StrictInternalSums([string]$Content) {
 function Assert-ManifestContract($Manifest, [hashtable]$EntryHashes, [hashtable]$EntryLengths) {
     if ([int]$Manifest.schemaVersion -ne 2) { throw "Manifest schema version mismatch" }
     $expected = [ordered]@{
-        packageVersion = "1.0.0"
-        assemblyVersion = "1.0.0.0"
-        fileVersion = "1.0.0.0"
-        informationalVersion = "1.0.0"
+        packageVersion = "1.1.0"
+        assemblyVersion = "1.1.0.0"
+        fileVersion = "1.1.0.0"
+        informationalVersion = "1.1.0"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
-        hdtBaselineVersion = "1.53.5.7354"
+        hdtBaselineVersion = "1.54.0.7376"
         pluginFile = "BobCoach.dll"
         pluginChecksumFile = "BobCoach.dll.sha256"
     }
