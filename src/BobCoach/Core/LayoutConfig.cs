@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Web.Script.Serialization;
 
@@ -13,13 +14,17 @@ namespace BobCoach.Engine
         public const double DefaultCalibrationWidth = 1920.0;
         public const double DefaultCalibrationHeight = 1080.0;
         private const int LegacyShopOffsetVersion = 9;
+        private const int PreviousLayoutVersion = 10;
         private const double LegacyDefaultShopOffsetX = -64.5;
 
         // 默认以游戏客户区中轴为商店牌组中轴。F10 校准只保存用户设备上的实际差异，
         // 不把单台设备的负向校准固化为所有用户的默认值。
         public const double DefaultShopOffsetX = 0;
 
-        public int Version { get; set; } = 10;            // v10: migrate the former default half-card shop offset
+        public const double DefaultStatusOffsetX = 8.0;
+        public const double DefaultStatusOffsetY = 105.0;
+
+        public int Version { get; set; } = 11;            // v11: configurable status strip position and font size
         public double CalibrationWidth { get; set; } = DefaultCalibrationWidth;
         public double CalibrationHeight { get; set; } = DefaultCalibrationHeight;
         public bool BoardLeftToRight { get; set; } = true; // false=索引0在最右(默认)
@@ -47,6 +52,10 @@ namespace BobCoach.Engine
         public double PanelOffsetX { get; set; } = 15;    // 面板左上角X(基准px, 屏幕左侧避开中央三选一交互区)
         public double PanelOffsetY { get; set; } = 200;   // 面板左上角Y(基准px, 状态栏下方)
         public double PanelScale { get; set; } = 1.0;     // 面板整体缩放(字号+宽度), 1.0=基准
+
+        public double StatusOffsetX { get; set; } = DefaultStatusOffsetX;
+        public double StatusOffsetY { get; set; } = DefaultStatusOffsetY;
+        public double StatusFontSize { get; set; } = StatusStripLayoutPolicy.DefaultFontSize;
 
         // 商店/战场卡牌尺寸配置（基础值; 按等级分档见下方数组）
         public double ShopCardWidthPct { get; set; } = 7.5;      // 商店/战场卡宽(%客户区宽)
@@ -120,6 +129,7 @@ namespace BobCoach.Engine
             HeroPowerOffsetX *= scaleX; HeroPowerOffsetY *= scaleY;
             HandOffsetX *= scaleX; HandOffsetY *= scaleY;
             PanelOffsetX *= scaleX; PanelOffsetY *= scaleY; // PanelScale 是比例, 不随分辨率 rebase
+            StatusOffsetX *= scaleX; StatusOffsetY *= scaleY;
             HandGap *= scaleX;
             ShopCardGap *= scaleX;
             ShopCardOffsetX *= scaleX;
@@ -153,14 +163,26 @@ namespace BobCoach.Engine
 
         public void Save()
         {
+            string ignored;
+            TrySave(out ignored);
+        }
+
+        public bool TrySave(out string error)
+        {
             try
             {
                 var dir = Path.GetDirectoryName(ConfigPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 var json = new JavaScriptSerializer().Serialize(this);
                 File.WriteAllText(ConfigPath, json);
+                error = null;
+                return true;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
         }
 
         public static LayoutConfig Load()
@@ -170,19 +192,43 @@ namespace BobCoach.Engine
                 if (File.Exists(ConfigPath))
                 {
                     var json = File.ReadAllText(ConfigPath);
-                    var loaded = new JavaScriptSerializer().Deserialize<LayoutConfig>(json);
-                    return NormalizeLoadedConfig(loaded);
+                    return DeserializeConfig(json);
                 }
             }
             catch { }
             return new LayoutConfig();
         }
 
+        internal static LayoutConfig DeserializeConfig(string json)
+        {
+            var serializer = new JavaScriptSerializer();
+            var values = serializer.DeserializeObject(json) as IDictionary<string, object>;
+            if (values == null) return new LayoutConfig();
+
+            SanitizeDouble(values, nameof(StatusOffsetX), DefaultStatusOffsetX);
+            SanitizeDouble(values, nameof(StatusOffsetY), DefaultStatusOffsetY);
+            SanitizeFontSize(values);
+
+            var loaded = serializer.Deserialize<LayoutConfig>(serializer.Serialize(values));
+            return NormalizeLoadedConfig(loaded);
+        }
+
         internal static LayoutConfig NormalizeLoadedConfig(LayoutConfig loaded)
         {
             var current = new LayoutConfig();
             if (loaded == null) return current;
-            if (loaded.Version == current.Version) return loaded;
+            if (loaded.Version == current.Version)
+            {
+                NormalizeStatusValues(loaded);
+                return loaded;
+            }
+
+            if (loaded.Version == PreviousLayoutVersion)
+            {
+                loaded.Version = current.Version;
+                NormalizeStatusValues(loaded);
+                return loaded;
+            }
 
             if (loaded.Version == LegacyShopOffsetVersion)
             {
@@ -194,11 +240,66 @@ namespace BobCoach.Engine
                 if (Math.Abs(loaded.ShopOffsetX - legacyDefault) <= 0.5)
                     loaded.ShopOffsetX = DefaultShopOffsetX;
                 loaded.Version = current.Version;
+                NormalizeStatusValues(loaded);
                 return loaded;
             }
 
             // Unknown older schemas may contain incompatible raw-pixel offsets.
             return current;
+        }
+
+        private static void NormalizeStatusValues(LayoutConfig config)
+        {
+            if (!IsFinite(config.StatusOffsetX))
+                config.StatusOffsetX = DefaultStatusOffsetX;
+            if (!IsFinite(config.StatusOffsetY))
+                config.StatusOffsetY = DefaultStatusOffsetY;
+            config.StatusFontSize = StatusStripLayoutPolicy.NormalizeFontSize(config.StatusFontSize);
+        }
+
+        private static void SanitizeDouble(IDictionary<string, object> values, string key, double fallback)
+        {
+            object raw;
+            if (!values.TryGetValue(key, out raw)) return;
+
+            double parsed;
+            if (!TryConvertDouble(raw, out parsed) || !IsFinite(parsed))
+                values[key] = fallback;
+        }
+
+        private static void SanitizeFontSize(IDictionary<string, object> values)
+        {
+            object raw;
+            if (!values.TryGetValue(nameof(StatusFontSize), out raw)) return;
+
+            double parsed;
+            if (!TryConvertDouble(raw, out parsed))
+                values[nameof(StatusFontSize)] = StatusStripLayoutPolicy.DefaultFontSize;
+        }
+
+        private static bool TryConvertDouble(object value, out double result)
+        {
+            if (value == null)
+            {
+                result = 0;
+                return false;
+            }
+
+            try
+            {
+                result = Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch
+            {
+                result = 0;
+                return false;
+            }
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
     }
 }

@@ -14,6 +14,7 @@ if (!$csc) { throw "Roslyn csc.exe not found; install Visual Studio Build Tools 
 $output = Join-Path $env:TEMP ("bobcoach_layout_resolution_matrix_{0}.exe" -f [Guid]::NewGuid().ToString("N"))
 $sources = @(
     (Join-Path $root "src\BobCoach\Core\BobCoachDataPaths.cs"),
+    (Join-Path $root "src\BobCoach\Core\StatusStripLayoutPolicy.cs"),
     (Join-Path $root "src\BobCoach\Core\LayoutConfig.cs"),
     (Join-Path $root "src\BobCoach\Core\SafeNativeMethods.cs"),
     (Join-Path $root "src\BobCoach\Core\GameLayoutCalculator.cs"),

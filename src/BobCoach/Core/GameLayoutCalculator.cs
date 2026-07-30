@@ -227,7 +227,7 @@ namespace BobCoach.Engine
         /// <summary>顶部状态条: 左上角（避免与HDT胜率条重叠）</summary>
         public LayoutPoint GetStatusStripPosition()
         {
-            return new LayoutPoint(ScaleX(8), ScaleY(105));
+            return new LayoutPoint(OffsetX(_config.StatusOffsetX), OffsetY(_config.StatusOffsetY));
         }
 
         // ══════════════════════════════════

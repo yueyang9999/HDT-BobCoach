@@ -50,6 +50,7 @@
     <Compile Include="BobCoachPlugin.cs" />
     <Compile Include="GameStateExtractor.cs" />
     <Compile Include="OverlayRenderer.cs" />
+    <Compile Include="StatusStripSettingsWindow.cs" />
     <Compile Include="ReleaseAssemblyInfo.cs" />
 
     <!-- Core/ decision engine -->
@@ -207,6 +208,9 @@
     <Compile Include="Core\PrizeSpellRuleEvaluator.cs" />
     <Compile Include="Core\PrizeSpellScorer.cs" />
     <Compile Include="Core\PurchaseDetector.cs" />
+    <Compile Include="Core\ShopEntitySnapshotPolicy.cs" />
+    <Compile Include="Core\ShopLayoutSlotPolicy.cs" />
+    <Compile Include="Core\StatusStripLayoutPolicy.cs" />
     <Compile Include="Core\StrategyAdjuster.cs" />
     <Compile Include="Core\SynergyEngine.cs" />
     <Compile Include="Core\TimewarpPurchaseAdvisor.cs" />

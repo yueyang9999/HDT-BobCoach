@@ -15,6 +15,9 @@ foreach ($file in @(
     "test_panel_statemachine.js",
     "test_ui_target_statemachine.js",
     "test_ui_lifecycle.js",
+    "test_status_strip_ui_contract.js",
+    "test_shop_entity_snapshot.js",
+    "test_shop_layout_slot_policy.js",
     "test_powerlog_choice_batch_behavior.js",
     "test_gold_tracker.js",
     "test_log_config_consent.js"
@@ -23,6 +26,9 @@ foreach ($file in @(
 }
 
 foreach ($file in @(
+    "test_status_strip_layout_policy.ps1",
+    "test_shop_entity_snapshot.ps1",
+    "test_shop_layout_slot_policy.ps1",
     "test_layout_config_migration.ps1",
     "test_layout_resolution_matrix.ps1",
     "test_value_function_weight_contract.ps1",

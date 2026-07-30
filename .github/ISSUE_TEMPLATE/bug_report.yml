@@ -11,14 +11,14 @@ body:
     id: version
     attributes:
       label: Bob Coach version or commit
-      placeholder: 1.0.0 or commit SHA
+      placeholder: 1.1.0 or commit SHA
     validations:
       required: true
   - type: input
     id: environment
     attributes:
       label: Windows and HDT versions
-      placeholder: Windows 11 24H2 x64, HDT 1.53.5
+      placeholder: Windows 11 24H2 x64, HDT 1.54.0
     validations:
       required: true
   - type: textarea

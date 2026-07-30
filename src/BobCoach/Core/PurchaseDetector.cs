@@ -19,8 +19,15 @@ namespace BobCoach.Engine
         {
             if (currentIds == null) currentIds = new List<int>();
 
+            var previousIds = new HashSet<int>(_lastShopIds);
+            bool hasNewEntity = currentIds.Any(id => !previousIds.Contains(id));
+            bool sameEntities = currentIds.Count == _lastShopIds.Count
+                && currentIds.All(previousIds.Contains);
+
             // 数量减少 → 购买了卡牌
-            if (currentCount < _lastShopCount)
+            // A purchase is a strict subset of the previous shop. A partial refresh can also
+            // have fewer entities, so newly observed IDs must take precedence over the count.
+            if (currentCount < _lastShopCount && !hasNewEntity)
             {
                 _lastShopCount = currentCount;
                 _lastShopIds = new List<int>(currentIds);
@@ -28,7 +35,7 @@ namespace BobCoach.Engine
             }
 
             // ID 全变 → 刷新了
-            if (currentIds.Count > 0 && !currentIds.SequenceEqual(_lastShopIds))
+            if (currentIds.Count > 0 && !sameEntities)
             {
                 _lastShopCount = currentCount;
                 _lastShopIds = new List<int>(currentIds);

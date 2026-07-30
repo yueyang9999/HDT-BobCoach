@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using Hearthstone_Deck_Tracker.API;
+using Hearthstone_Deck_Tracker.Utility.Extensions;
 using HearthDb.Enums;
 
 namespace BobCoach
@@ -27,23 +28,38 @@ namespace BobCoach
         private Engine.GameLayoutCalculator _calc;
         private Engine.PhaseDetector _phase;
         private Engine.CalibrationOverlay _calib;
+        private readonly Engine.LayoutConfig _config;
+
+        private Border _statusStripRoot;
+        private StackPanel _statusStripContent;
+        private Engine.StatusInfo _lastStatusInfo;
+        private bool _statusStripUnlocked;
+        private bool _statusDragging;
+        private Point _statusDragStartMouse;
+        private Point _statusDragStartPosition;
 
         private bool _positionLogged;
         public bool FadeInMode { get; set; }
 
-        public OverlayRenderer()
+        public OverlayRenderer() : this(Engine.LayoutConfig.Load())
         {
-            _calc = new Engine.GameLayoutCalculator();
+        }
+
+        public OverlayRenderer(Engine.LayoutConfig config)
+        {
+            _config = config ?? new Engine.LayoutConfig();
+            _calc = new Engine.GameLayoutCalculator(_config);
             _phase = new Engine.PhaseDetector();
-            _calib = new Engine.CalibrationOverlay();
+            _calib = new Engine.CalibrationOverlay(_config);
         }
 
         public void RefreshLayout()
         {
-            _calc = new Engine.GameLayoutCalculator(Engine.LayoutConfig.Load());
             _calc.Refresh();
             RefreshCanvasSize();
             _positionLogged = false;
+            if (_lastStatusInfo != null && !IsCombat())
+                ShowStatusStrip(_lastStatusInfo);
         }
 
         public void SetCalcTier(int tier)
@@ -58,7 +74,11 @@ namespace BobCoach
             {
                 var c = Core.OverlayCanvas;
                 if (c != null && c.ActualWidth > 100)
+                {
                     _calc.RefreshWithSize(c.ActualWidth, c.ActualHeight);
+                    if (_statusStripRoot != null)
+                        PositionStatusStrip(true);
+                }
             }
             catch { }
         }
@@ -382,26 +402,29 @@ namespace BobCoach
         /// 实体离店(被买/刷新)→淡出该组并移除注册。由 OnUpdate 末尾(非战斗+商店阶段)调用。
         /// 与 planHash 重绘互补: planHash 管"内容变化", 本方法管"纯位置漂移"。
         /// </summary>
-        public void SyncShopTagPositions(List<Engine.MinionData> liveShopMinions, int tavernTier, bool denseReplenishingShop = false)
+        internal void SyncShopTagPositions(List<Engine.MinionData> liveShopMinions,
+            Engine.ShopLayoutDecision layoutDecision)
         {
             if (_shopTagElements.Count == 0) return;
             if (IsCombat()) return;
             var canvas = Core.OverlayCanvas;
             if (canvas == null) return;
             if (liveShopMinions == null || liveShopMinions.Count == 0) return;
+            if (layoutDecision == null) return;
 
             var stale = new List<ShopTagElement>();
             var positions = liveShopMinions
                 .Where(m => m != null && m.EntityId > 0 && m.Position >= 0)
                 .GroupBy(m => m.EntityId)
                 .ToDictionary(g => g.Key, g => g.First().Position);
-            // 07072158(确认B): 始终按实际在场卡数居中(与ShopRender一致); 设备差异由用户 ShopOffsetX 校准
-            int layoutCount = Math.Max(1, Math.Min(7, liveShopMinions.Count));
-            var denseSlots = liveShopMinions
-                .OrderBy(m => m.Position)
-                .ThenBy(m => m.EntityId)
-                .Select((m, idx) => new { m.EntityId, DenseSlot = idx })
-                .ToDictionary(x => x.EntityId, x => x.DenseSlot);
+            int layoutCount = layoutDecision.LayoutCount;
+            var denseSlots = layoutDecision.UseDenseSlots
+                ? liveShopMinions
+                    .OrderBy(m => m.Position)
+                    .ThenBy(m => m.EntityId)
+                    .Select((m, idx) => new { m.EntityId, DenseSlot = idx })
+                    .ToDictionary(x => x.EntityId, x => x.DenseSlot)
+                : null;
 
             foreach (var tag in _shopTagElements)
             {
@@ -703,10 +726,11 @@ namespace BobCoach
         {
             if (IsCombat()) return;
             var canvas = Core.OverlayCanvas;
-            if (canvas == null) return;
+            if (canvas == null || s == null) return;
 
-            // 清除旧状态栏防重叠: 多路径(RefreshPersistentUI/DispatchRender)可能重复调用
-            ClearTaggedElements("status_strip");
+            _lastStatusInfo = s;
+            EnsureStatusStripRoot(canvas);
+            _statusStripContent.Children.Clear();
 
             string paceLabel = s.Pace == "Sprint" ? "冲" : s.Pace == "Cruise" ? "稳" : s.Pace == "Conserve" ? "守" : s.Pace == "AllIn" ? "赌" : s.Pace;
             string turnStr = int.TryParse(s.Phase, out var t) ? ("回合" + t) : s.Phase;
@@ -718,34 +742,36 @@ namespace BobCoach
                 ? string.Format("{0} | {1}", turnStr, paceLabel)
                 : string.Format("{0} | {1} | {2}", turnStr, paceLabel, compStr);
 
-            var stack = new StackPanel { IsHitTestVisible = false, Tag = "status_strip" };
+            var metrics = Engine.StatusStripLayoutPolicy.CreateMetrics(_config.StatusFontSize);
             var bgBrush = new SolidColorBrush(Color.FromArgb(160, 10, 10, 10));
-            double statusMaxWidth = _calc.ScaleX(260);
-            double statusWideMaxWidth = _calc.ScaleX(280);
+            double canvasWidth = canvas.ActualWidth > 0 ? canvas.ActualWidth : _calc.ClientWidth;
+            double statusMaxWidth = Math.Max(1, Math.Min(metrics.NarrowMaxWidth, canvasWidth));
+            double statusWideMaxWidth = Math.Max(1, Math.Min(metrics.WideMaxWidth, canvasWidth));
+            double pad = metrics.HorizontalPadding;
 
             var row1 = new TextBlock
             {
-                Text = line1, FontSize = 13, FontWeight = FontWeights.Medium,
+                Text = line1, FontSize = metrics.PrimaryFontSize, FontWeight = FontWeights.Medium,
                 Foreground = s.IsDesperate ? ParseBrush("#FF7043") : ParseBrush("#E0E0E0"),
                 Background = bgBrush,
-                Padding = new Thickness(6, 1, 6, 0), IsHitTestVisible = false,
+                Padding = new Thickness(pad, metrics.Scale, pad, 0), IsHitTestVisible = false,
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = statusMaxWidth,
-                LineHeight = 18,
+                LineHeight = metrics.PrimaryLineHeight,
             };
-            stack.Children.Add(row1);
+            _statusStripContent.Children.Add(row1);
 
             // 畸变首购免费提示
             if (s.ShowFirstBuyFree)
             {
                 var rowFF = new TextBlock
                 {
-                    Text = "首购免费", FontSize = 12, FontWeight = FontWeights.Medium,
+                    Text = "首购免费", FontSize = metrics.SecondaryFontSize, FontWeight = FontWeights.Medium,
                     Foreground = ParseBrush("#FFD700"),
                     Background = bgBrush,
-                    Padding = new Thickness(6, 0, 6, 0), IsHitTestVisible = false,
+                    Padding = new Thickness(pad, 0, pad, 0), IsHitTestVisible = false,
                 };
-                stack.Children.Add(rowFF);
+                _statusStripContent.Children.Add(rowFF);
             }
 
             // 绝望警告
@@ -754,13 +780,13 @@ namespace BobCoach
                 var warnRow = new TextBlock
                 {
                     Text = "战力鸿沟! 找科技卡!",
-                    FontSize = 12, FontWeight = FontWeights.Bold,
+                    FontSize = metrics.SecondaryFontSize, FontWeight = FontWeights.Bold,
                     Foreground = ParseBrush("#FF7043"),
                     Background = bgBrush,
-                    Padding = new Thickness(6, 0, 6, 0), IsHitTestVisible = false,
+                    Padding = new Thickness(pad, 0, pad, 0), IsHitTestVisible = false,
                     TextWrapping = TextWrapping.Wrap, MaxWidth = statusMaxWidth,
                 };
-                stack.Children.Add(warnRow);
+                _statusStripContent.Children.Add(warnRow);
             }
 
             // 行3: 动作序列 (浅黄)
@@ -768,45 +794,45 @@ namespace BobCoach
             {
                 var row3 = new TextBlock
                 {
-                    Text = s.HintLine, FontSize = 13, FontWeight = FontWeights.Bold,
+                    Text = s.HintLine, FontSize = metrics.PrimaryFontSize, FontWeight = FontWeights.Bold,
                     Foreground = ParseBrush("#FFFACD"),
                     Background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10)),
-                    Padding = new Thickness(6, 0, 6, 1), IsHitTestVisible = false,
+                    Padding = new Thickness(pad, 0, pad, metrics.Scale), IsHitTestVisible = false,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = statusWideMaxWidth,
-                    LineHeight = 19,
+                    LineHeight = metrics.EmphasisLineHeight,
                 };
-                stack.Children.Add(row3);
+                _statusStripContent.Children.Add(row3);
             }
             // 行4: 升级提示 (独立一行, 绿/金色, 不与动作序列重叠)
             if (!string.IsNullOrEmpty(s.UpgradeLine))
             {
                 var upgradeRow = new TextBlock
                 {
-                    Text = s.UpgradeLine, FontSize = 13, FontWeight = FontWeights.Bold,
+                    Text = s.UpgradeLine, FontSize = metrics.PrimaryFontSize, FontWeight = FontWeights.Bold,
                     Foreground = ParseBrush("#69F0AE"),  // 绿色
                     Background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10)),
-                    Padding = new Thickness(6, 0, 6, 1), IsHitTestVisible = false,
+                    Padding = new Thickness(pad, 0, pad, metrics.Scale), IsHitTestVisible = false,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = statusWideMaxWidth,
-                    LineHeight = 19,
+                    LineHeight = metrics.EmphasisLineHeight,
                 };
-                stack.Children.Add(upgradeRow);
+                _statusStripContent.Children.Add(upgradeRow);
             }
             // 行5: 战斗预测 (橙色 — BobsBuddy胜率)
             if (!string.IsNullOrEmpty(s.CombatLine))
             {
                 var combatRow = new TextBlock
                 {
-                    Text = s.CombatLine, FontSize = 12, FontWeight = FontWeights.Medium,
+                    Text = s.CombatLine, FontSize = metrics.SecondaryFontSize, FontWeight = FontWeights.Medium,
                     Foreground = ParseBrush("#FFAB40"),
                     Background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10)),
-                    Padding = new Thickness(6, 0, 6, 1), IsHitTestVisible = false,
+                    Padding = new Thickness(pad, 0, pad, metrics.Scale), IsHitTestVisible = false,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = statusWideMaxWidth,
-                    LineHeight = 18,
+                    LineHeight = metrics.PrimaryLineHeight,
                 };
-                stack.Children.Add(combatRow);
+                _statusStripContent.Children.Add(combatRow);
             }
             // 行6: 饰品/发现 (金/天蓝)
             if (!string.IsNullOrEmpty(s.PickLine))
@@ -815,22 +841,244 @@ namespace BobCoach
                 string pickColor = isTrinket ? "#FFD700" : "#87CEEB";
                 var row4 = new TextBlock
                 {
-                    Text = s.PickLine, FontSize = 13, FontWeight = FontWeights.Bold,
+                    Text = s.PickLine, FontSize = metrics.PrimaryFontSize, FontWeight = FontWeights.Bold,
                     Foreground = ParseBrush(pickColor),
                     Background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10)),
-                    Padding = new Thickness(6, 0, 6, 2), IsHitTestVisible = false,
+                    Padding = new Thickness(pad, 0, pad, 2 * metrics.Scale), IsHitTestVisible = false,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = statusWideMaxWidth,
-                    LineHeight = 19,
+                    LineHeight = metrics.EmphasisLineHeight,
                 };
-                stack.Children.Add(row4);
+                _statusStripContent.Children.Add(row4);
             }
 
+            _statusStripRoot.Measure(new Size(Math.Max(1, canvasWidth),
+                Math.Max(1, canvas.ActualHeight > 0 ? canvas.ActualHeight : _calc.ClientHeight)));
+            if (_statusDragging)
+                ClampCurrentStatusStripPosition(false);
+            else
+                PositionStatusStrip(true);
+        }
+
+        public double StatusStripFontSize => _config.StatusFontSize;
+        public bool StatusStripUnlocked => _statusStripUnlocked;
+        public event EventHandler StatusStripUnlockedChanged;
+
+        public void SetStatusStripFontSize(double fontSize, bool save)
+        {
+            _config.StatusFontSize = Engine.StatusStripLayoutPolicy.NormalizeFontSize(fontSize);
+            if (_lastStatusInfo != null && !IsCombat())
+                ShowStatusStrip(_lastStatusInfo);
+            if (save)
+                SaveStatusStripSettings();
+        }
+
+        public void SetStatusStripUnlocked(bool unlocked)
+        {
+            if (!unlocked)
+                EndStatusStripDrag(true);
+
+            if (_statusStripUnlocked == unlocked) return;
+            _statusStripUnlocked = unlocked;
+            ApplyStatusStripInteractionState();
+            StatusStripUnlockedChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ResetStatusStripCustomization()
+        {
+            EndStatusStripDrag(false);
+            _config.StatusOffsetX = Engine.LayoutConfig.DefaultStatusOffsetX;
+            _config.StatusOffsetY = Engine.LayoutConfig.DefaultStatusOffsetY;
+            _config.StatusFontSize = Engine.StatusStripLayoutPolicy.DefaultFontSize;
+            if (_lastStatusInfo != null && !IsCombat())
+                ShowStatusStrip(_lastStatusInfo);
+            SaveStatusStripSettings();
+        }
+
+        public void SaveStatusStripSettings()
+        {
+            string error;
+            if (!_config.TrySave(out error))
+                RendererLog("Status strip settings save failed: " + error);
+        }
+
+        private void EnsureStatusStripRoot(Canvas canvas)
+        {
+            if (_statusStripRoot != null && canvas.Children.Contains(_statusStripRoot)) return;
+
+            DetachStatusStrip(false);
+            _statusStripContent = new StackPanel { IsHitTestVisible = false };
+            _statusStripRoot = new Border
+            {
+                Child = _statusStripContent,
+                Background = Brushes.Transparent,
+                Tag = "status_strip",
+            };
+            _statusStripRoot.MouseLeftButtonDown += StatusStripMouseLeftButtonDown;
+            _statusStripRoot.MouseMove += StatusStripMouseMove;
+            _statusStripRoot.MouseLeftButtonUp += StatusStripMouseLeftButtonUp;
+            _statusStripRoot.LostMouseCapture += StatusStripLostMouseCapture;
+            Panel.SetZIndex(_statusStripRoot, 997);
+            canvas.Children.Add(_statusStripRoot);
+            _activeElements.Add(_statusStripRoot);
+            ApplyStatusStripInteractionState();
+        }
+
+        private void ApplyStatusStripInteractionState()
+        {
+            if (_statusStripRoot == null) return;
+            _statusStripRoot.IsHitTestVisible = _statusStripUnlocked;
+            OverlayExtensions.SetIsOverlayHitTestVisible(_statusStripRoot, _statusStripUnlocked);
+            _statusStripRoot.Cursor = _statusStripUnlocked ? Cursors.SizeAll : null;
+            _statusStripRoot.BorderBrush = _statusStripUnlocked
+                ? new SolidColorBrush(Color.FromArgb(210, 220, 220, 220))
+                : Brushes.Transparent;
+            _statusStripRoot.BorderThickness = new Thickness(1);
+            PositionStatusStrip(false);
+        }
+
+        private void StatusStripMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_statusStripUnlocked || _statusStripRoot == null) return;
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null || canvas.ActualWidth <= 0 || canvas.ActualHeight <= 0) return;
+
+            if (!_statusStripRoot.CaptureMouse()) return;
+            _statusDragging = true;
+            _statusDragStartMouse = e.GetPosition(canvas);
+            _statusDragStartPosition = new Point(GetCanvasCoordinate(_statusStripRoot, true),
+                GetCanvasCoordinate(_statusStripRoot, false));
+            e.Handled = true;
+        }
+
+        private void StatusStripMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_statusDragging || _statusStripRoot == null) return;
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null) return;
+
+            Point current = e.GetPosition(canvas);
+            SetStatusStripCanvasPosition(
+                _statusDragStartPosition.X + current.X - _statusDragStartMouse.X,
+                _statusDragStartPosition.Y + current.Y - _statusDragStartMouse.Y,
+                true);
+            e.Handled = true;
+        }
+
+        private void StatusStripMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_statusDragging) return;
+            EndStatusStripDrag(true);
+            e.Handled = true;
+        }
+
+        private void StatusStripLostMouseCapture(object sender, MouseEventArgs e)
+        {
+            if (_statusDragging)
+                EndStatusStripDrag(true);
+        }
+
+        private void EndStatusStripDrag(bool savePosition)
+        {
+            if (!_statusDragging) return;
+            _statusDragging = false;
+            if (_statusStripRoot != null && _statusStripRoot.IsMouseCaptured)
+                _statusStripRoot.ReleaseMouseCapture();
+            UpdateStatusConfigFromCanvasPosition();
+            if (savePosition)
+                SaveStatusStripSettings();
+        }
+
+        private void PositionStatusStrip(bool saveCorrection)
+        {
+            if (_statusStripRoot == null) return;
             var pos = _calc.GetStatusStripPosition();
-            Canvas.SetLeft(stack, pos.X);
-            Canvas.SetTop(stack, pos.Y);
-            Panel.SetZIndex(stack, 997);
-            canvas.Children.Add(stack); _activeElements.Add(stack);
+            bool corrected = SetStatusStripCanvasPosition(pos.X, pos.Y, false);
+            if (corrected)
+            {
+                UpdateStatusConfigFromCanvasPosition();
+                if (saveCorrection)
+                    SaveStatusStripSettings();
+            }
+        }
+
+        private void ClampCurrentStatusStripPosition(bool saveCorrection)
+        {
+            if (_statusStripRoot == null) return;
+            bool corrected = SetStatusStripCanvasPosition(
+                GetCanvasCoordinate(_statusStripRoot, true),
+                GetCanvasCoordinate(_statusStripRoot, false), false);
+            if (corrected)
+            {
+                UpdateStatusConfigFromCanvasPosition();
+                if (saveCorrection)
+                    SaveStatusStripSettings();
+            }
+        }
+
+        private bool SetStatusStripCanvasPosition(double x, double y, bool updateConfig)
+        {
+            if (_statusStripRoot == null) return false;
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null || canvas.ActualWidth <= 0 || canvas.ActualHeight <= 0) return false;
+
+            _statusStripRoot.Measure(new Size(canvas.ActualWidth, canvas.ActualHeight));
+            var clamped = Engine.StatusStripLayoutPolicy.ClampPosition(x, y,
+                canvas.ActualWidth, canvas.ActualHeight,
+                _statusStripRoot.DesiredSize.Width, _statusStripRoot.DesiredSize.Height);
+            Canvas.SetLeft(_statusStripRoot, clamped.X);
+            Canvas.SetTop(_statusStripRoot, clamped.Y);
+            if (updateConfig)
+                UpdateStatusConfigFromCanvasPosition();
+            return Math.Abs(clamped.X - x) > 0.01 || Math.Abs(clamped.Y - y) > 0.01;
+        }
+
+        private void UpdateStatusConfigFromCanvasPosition()
+        {
+            if (_statusStripRoot == null || _calc.ClientWidth <= 0 || _calc.ClientHeight <= 0) return;
+            double calibrationWidth = _config.CalibrationWidth > 100
+                ? _config.CalibrationWidth
+                : Engine.LayoutConfig.DefaultCalibrationWidth;
+            double calibrationHeight = _config.CalibrationHeight > 100
+                ? _config.CalibrationHeight
+                : Engine.LayoutConfig.DefaultCalibrationHeight;
+            _config.StatusOffsetX = GetCanvasCoordinate(_statusStripRoot, true)
+                * calibrationWidth / _calc.ClientWidth;
+            _config.StatusOffsetY = GetCanvasCoordinate(_statusStripRoot, false)
+                * calibrationHeight / _calc.ClientHeight;
+        }
+
+        private static double GetCanvasCoordinate(FrameworkElement element, bool horizontal)
+        {
+            double value = horizontal ? Canvas.GetLeft(element) : Canvas.GetTop(element);
+            return double.IsNaN(value) || double.IsInfinity(value) ? 0 : value;
+        }
+
+        private void DetachStatusStrip(bool lockStatusStrip = true)
+        {
+            EndStatusStripDrag(true);
+            if (_statusStripRoot == null)
+            {
+                if (lockStatusStrip)
+                    SetStatusStripUnlocked(false);
+                return;
+            }
+
+            OverlayExtensions.SetIsOverlayHitTestVisible(_statusStripRoot, false);
+            _statusStripRoot.MouseLeftButtonDown -= StatusStripMouseLeftButtonDown;
+            _statusStripRoot.MouseMove -= StatusStripMouseMove;
+            _statusStripRoot.MouseLeftButtonUp -= StatusStripMouseLeftButtonUp;
+            _statusStripRoot.LostMouseCapture -= StatusStripLostMouseCapture;
+            var parent = _statusStripRoot.Parent as Panel;
+            if (parent != null)
+            {
+                try { parent.Children.Remove(_statusStripRoot); } catch { }
+            }
+            _activeElements.Remove(_statusStripRoot);
+            _statusStripRoot = null;
+            _statusStripContent = null;
+            if (lockStatusStrip)
+                SetStatusStripUnlocked(false);
         }
 
         // ═══════════════════════════════════════
@@ -1422,7 +1670,7 @@ namespace BobCoach
             {
                 // 保留饰品/发现面板(它们自行管理生命周期)
                 var tag = (el as FrameworkElement)?.Tag as string;
-                if (tag == "trinket_panel" || tag == "discover_panel"
+                if (tag == "status_strip" || tag == "trinket_panel" || tag == "discover_panel"
                     || tag == "timewarp_purchase") continue;
                 try { el.BeginAnimation(UIElement.OpacityProperty, null); } catch { }
                 try { canvas.Children.Remove(el); } catch { }
@@ -1437,6 +1685,7 @@ namespace BobCoach
         public void Clear([System.Runtime.CompilerServices.CallerMemberName] string caller = "",
             [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
         {
+            DetachStatusStrip();
             var canvas = Core.OverlayCanvas;
             if (canvas == null) return;
             // 防御并发修改: 复制列表再遍历
@@ -1460,8 +1709,11 @@ namespace BobCoach
             var canvas = Core.OverlayCanvas;
             if (canvas == null || _activeElements.Count == 0) return;
 
-            var elements = new List<UIElement>(_activeElements);
-            _activeElements.Clear();
+            var elements = _activeElements
+                .Where(el => !ReferenceEquals(el, _statusStripRoot))
+                .ToList();
+            foreach (var el in elements)
+                _activeElements.Remove(el);
 
             foreach (var el in elements)
             {

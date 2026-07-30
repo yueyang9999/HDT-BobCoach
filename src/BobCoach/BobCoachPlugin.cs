@@ -27,6 +27,8 @@ namespace BobCoach
         private DecisionEngine _engine;
         private FeatureExtractor _fe;
         private OverlayRenderer _renderer;
+        private StatusStripSettingsWindow _statusStripSettingsWindow;
+        private MenuItem _settingsMenuItem;
         private CardPoolTracker _poolTracker;
         private ProbabilityCalculator _probCalc;
         private ProfileEngine _profileEngine;
@@ -87,8 +89,6 @@ namespace BobCoach
         private DateTime _lastDiscoverTriggerTime = DateTime.MinValue;  // zone6/三连/技能触发时间(3s扫描窗口)
         private readonly HashSet<string> _triggeredScheduledDiscoverOccurrenceIds =
             new HashSet<string>(StringComparer.Ordinal);
-        private string _lastShopContentHash = ""; // 上次商店内容指纹(检测刷新)
-        private int _lastShopRefreshTier = 1;     // 上次刷新时的酒馆等级
         private HashSet<int> _prevHandIds = new HashSet<int>();
         private int _prevTavernTier = 1;
         private int _lastUpgradeTurn = 0;  // 0=未升过本, 防止T1误判justLeveled
@@ -127,6 +127,8 @@ namespace BobCoach
 
         // 购买平滑重绘: 检测购买/刷新事件, 控制淡入淡出时序
         private Engine.PurchaseDetector _purchaseDetector = new Engine.PurchaseDetector();
+        private readonly Engine.ShopLayoutSlotPolicy _shopLayoutSlotPolicy = new Engine.ShopLayoutSlotPolicy();
+        private Engine.ShopLayoutDecision _shopLayoutDecision = new Engine.ShopLayoutDecision(1, true);
         private bool _redrawPending = false;           // 购买后等待重绘
         private DateTime _redrawRequestedAt = DateTime.MinValue;
         private System.Windows.Threading.DispatcherTimer _combatWatchTimer; // 兜底战斗监控(唯一)
@@ -154,7 +156,18 @@ namespace BobCoach
         public string ButtonText { get { return "Bob教练"; } }
         public string Author { get { return "BobCoach"; } }
         public Version Version { get { return Assembly.GetExecutingAssembly().GetName().Version; } }
-        public System.Windows.Controls.MenuItem MenuItem { get { return null; } }
+        public System.Windows.Controls.MenuItem MenuItem
+        {
+            get
+            {
+                if (_settingsMenuItem == null)
+                {
+                    _settingsMenuItem = new MenuItem { Header = "Bob教练设置" };
+                    _settingsMenuItem.Click += (sender, args) => OpenStatusStripSettings();
+                }
+                return _settingsMenuItem;
+            }
+        }
 
         public void OnLoad()
         {
@@ -230,10 +243,52 @@ namespace BobCoach
         public void OnUnload()
         {
             _inBattlegrounds = false;
+            CloseStatusStripSettings();
             ClearSuggestions();
             try { UnsubscribePowerLogWatcherEvents(); } catch { }
             try { _powerLogWatcher?.StopWatching(); } catch { }
             Log("BobCoach unloaded");
+        }
+
+        private void OpenStatusStripSettings()
+        {
+            if (_renderer == null)
+            {
+                Log("Status strip settings unavailable: renderer is not initialized");
+                return;
+            }
+
+            if (_statusStripSettingsWindow != null)
+            {
+                if (_statusStripSettingsWindow.WindowState == WindowState.Minimized)
+                    _statusStripSettingsWindow.WindowState = WindowState.Normal;
+                _statusStripSettingsWindow.Activate();
+                return;
+            }
+
+            var window = new StatusStripSettingsWindow(_renderer);
+            window.Closed += StatusStripSettingsWindowClosed;
+            _statusStripSettingsWindow = window;
+            window.Show();
+            window.Activate();
+        }
+
+        private void StatusStripSettingsWindowClosed(object sender, EventArgs e)
+        {
+            if (ReferenceEquals(_statusStripSettingsWindow, sender))
+                _statusStripSettingsWindow = null;
+        }
+
+        private void CloseStatusStripSettings()
+        {
+            var window = _statusStripSettingsWindow;
+            _statusStripSettingsWindow = null;
+            if (window != null)
+            {
+                window.Closed -= StatusStripSettingsWindowClosed;
+                window.Close();
+            }
+            _renderer?.SetStatusStripUnlocked(false);
         }
 
         public void OnButtonPress()
@@ -458,7 +513,11 @@ namespace BobCoach
                     return;
                 }
                 // 战斗结束检测: 记录时间, 发现扫描冷却2秒防战斗衍生物
-                if (_wasInCombat) _combatEndedAt = DateTime.Now;
+                if (_wasInCombat)
+                {
+                    _combatEndedAt = DateTime.Now;
+                    _shopLayoutSlotPolicy.BeginRefresh();
+                }
                 _wasInCombat = false;
                 // 记录招募阶段开始时间(用于提前2-3秒清UI防战斗残留)
                 if (_recruitStartTime == DateTime.MinValue)
@@ -510,7 +569,7 @@ namespace BobCoach
                         if (e == null) continue;
                         if (e.GetTag(HearthDb.Enums.GameTag.ZONE) != 5) continue;
                         int ct = e.HasTag(HearthDb.Enums.GameTag.CARDTYPE) ? e.GetTag(HearthDb.Enums.GameTag.CARDTYPE) : 0;
-                        if (ct != 4 && ct != 5) continue;
+                        if (!Engine.ShopEntitySnapshotPolicy.IsChangeDetectionCandidate((CardType)ct)) continue;
                         shopIds.Add(e.Id);
                     }
                     shopIds.Sort();
@@ -524,6 +583,10 @@ namespace BobCoach
                     var changeType = _purchaseDetector.DetectChange(shopIds.Count, shopIds);
                     if (changeType == Engine.ShopChangeType.Purchased || changeType == Engine.ShopChangeType.Refreshed)
                     {
+                        if (changeType == Engine.ShopChangeType.Refreshed)
+                            _shopLayoutSlotPolicy.MarkRefreshDetected();
+                        else if (!_shopLayoutSlotPolicy.AwaitingCompleteShop)
+                            _shopLayoutSlotPolicy.ObservePurchase();
                         RequestShopUiRefresh(DateTime.Now);
                         if (changeType == Engine.ShopChangeType.Purchased)
                         {
@@ -570,8 +633,7 @@ namespace BobCoach
                 {
                     if (_cachedState != null)
                     {
-                        int layoutTier = _lastShopRefreshTier > 0 ? _lastShopRefreshTier : _cachedState.TavernTier;
-                        _renderer.SyncShopTagPositions(_cachedState.ShopMinions, layoutTier, _cachedState.ReplenishingShopActive);
+                        _renderer.SyncShopTagPositions(_cachedState.ShopMinions, _shopLayoutDecision);
                     }
                 }
                 catch (Exception ex) { Log("SyncShopTagPositions error: " + ex.Message); }
@@ -611,8 +673,9 @@ namespace BobCoach
             if ((now - _lastShopUiClearAt).TotalMilliseconds < ShopUiClearCooldownMs)
                 return;
 
-            // 商店实体过渡期 ID 会连续抖动，限制全量 Clear 频率，避免标签/状态条反复闪烁。
-            _renderer.Clear();
+            // 商店实体过渡期 ID 会连续抖动，限制建议元素清理频率。
+            // 独立面板由各自状态机管理；状态条必须保留稳定根元素，避免中断解锁拖动。
+            _renderer.ClearNonPanel();
             _renderVersion++; // 废止该帧前的异步dispatch
             _lastShopUiClearAt = now;
         }
@@ -678,6 +741,8 @@ namespace BobCoach
                 _extractor.Reset();  // 清除上局幽灵实体累积
                 _visualizer.Reset();  // 重置流派锁+手牌标记缓存
                 _purchaseDetector.Reset();  // 重置购买检测
+                _shopLayoutSlotPolicy.Reset(1);
+                _shopLayoutDecision = new Engine.ShopLayoutDecision(1, true);
                 _redrawPending = false;
                 _lastShopUiClearAt = DateTime.MinValue;
                 _poolFiltered = false;  // 新局需要重新过滤卡池
@@ -706,8 +771,6 @@ namespace BobCoach
                 _trinketTargetState.Reset();
                 _discoverTargetState.Reset();
                 _lastHeroHintTurn = 0;
-                _lastShopContentHash = "";
-                _lastShopRefreshTier = 1;
 
                 // 强制刷新布局计算器 (游戏窗口此时已存在)
                 try
@@ -1023,6 +1086,7 @@ namespace BobCoach
             }
             if (_inBattlegrounds && _engineReady)
             {
+                _shopLayoutSlotPolicy.BeginRefresh();
                 _lastStateHash = null; _lastRenderedHash = null;
                 _updateSkippedNoChange = 0;
                 _updateSkippedCombat = 0;
@@ -1088,6 +1152,11 @@ namespace BobCoach
             var state = _extractor.Extract();
             if (state == null) return;
 
+            // 只有实体刷新事件可以推进商店布局等级。购买、升本和冻结跨回合
+            // 都保留上一次真实刷新的槽位宽度，避免旧商店被新等级错误扩宽。
+            if (_shopLayoutSlotPolicy.ObserveShopTier(state.TavernTier, state.ShopMinions.Count))
+                _renderer.SetCalcTier(_shopLayoutSlotPolicy.LastRefreshTier);
+
             bool shouldEnableBuddyPool = CardPoolSampler.IsBuddyRegistryCompatible()
                 && BuddyCardPoolEvaluator.IsEnabled(state.EffectiveRules, state.Turn);
             if (shouldEnableBuddyPool != _buddyPoolEnabled)
@@ -1147,15 +1216,6 @@ namespace BobCoach
             _lastRenderGold = state.Gold;
             _lastRenderTrinketCount = state.TrinketOffer?.Count ?? 0;
             _lastRenderDiscoverCount = state.DiscoverOptions?.Count ?? 0;
-
-            // 刷新感知: 商店内容变化 → 记录刷新时的酒馆等级
-            var shopHash = string.Join(",", state.ShopMinions.Select(m => m.EntityId));
-            if (shopHash != _lastShopContentHash && state.ShopMinions.Count > 0)
-            {
-                _lastShopContentHash = shopHash;
-                _lastShopRefreshTier = state.TavernTier;
-                _renderer.SetCalcTier(state.TavernTier);
-            }
 
             // 卡池种族过滤: 当局种族首次检测到时应用
             if (!_poolFiltered && state.AvailableTribes != null && state.AvailableTribes.Count >= 3)
@@ -1951,6 +2011,13 @@ namespace BobCoach
         private void DispatchRender(GameState state, string heroHint, VisualPlan plan, string heroUseSuggestion = null)
         {
             if (state == null || plan == null) return;
+            int layoutTier = _shopLayoutSlotPolicy.LastRefreshTier;
+            int tierSlots = layoutTier <= 1 ? 4 : (layoutTier <= 3 ? 5 : (layoutTier <= 5 ? 6 : 7));
+            var layoutDecision = _shopLayoutSlotPolicy.Resolve(
+                tierSlots,
+                state.ShopMinions.Select(minion => minion.Position),
+                state.ReplenishingShopActive);
+            _shopLayoutDecision = layoutDecision;
             // 防重复渲染: plan内容未变化时跳过
             // 包含ShopMarkers的EntityId+ShopPosition，确保位置变化触发重绘
             var markerIds = plan.ShopMarkers.Count > 0
@@ -1965,6 +2032,7 @@ namespace BobCoach
                 // 此时面板 Phase/候选数均不变；批次身份必须进入 hash，否则第二批提示被去重吞掉。
                 + "|" + (_trinketTargetState.State.BatchId ?? "-")
                 + "|" + (_discoverTargetState.State.BatchId ?? "-")
+                + "|L" + layoutDecision.LayoutCount + (layoutDecision.UseDenseSlots ? "D" : "R")
                 // 07062242: 金币归零/恢复边界必须触发重绘 — gold=0后若plan其余不变则不dispatch,
                 // 旧刷新光晕残留(T8末段gold=0仍见"找核心牌"提示的根因)
                 + "|" + (state.Gold < 1 && state.FreeRefreshCount == 0 ? "G0" : "G+");
@@ -2284,20 +2352,16 @@ namespace BobCoach
                     // 布局数量使用酒馆理论槽位, 并被 live 最大原始槽位撑开。
                     // ShopPosition 保留 ZONE_POSITION-1, 不能用实际卡数压缩成 dense index。
                     bool loggedShopDiag = false;
-                    int layoutTier = _lastShopRefreshTier > 0 ? _lastShopRefreshTier : state.TavernTier;
-                    int tierSlots = layoutTier <= 1 ? 4 : (layoutTier <= 3 ? 5 : (layoutTier <= 5 ? 6 : 7));
                     int liveCardCount = state.ShopMinions.Count > 0 ? state.ShopMinions.Count : tierSlots;
                     int maxRawShopSlot = state.ShopMinions.Count > 0 ? state.ShopMinions.Max(m => m.Position) : -1;
-                    bool denseReplenishingShop = state.ReplenishingShopActive && state.ShopMinions.Count > 0;
-                    // 07072158(用户确认B: 买卡后向中心轴靠拢=始终按实际在场卡数居中)。所有商店按实际卡数居中。
-                    // 默认以游戏客户区中轴为基准；设备差异仅由用户的 ShopOffsetX 校准覆盖。
-                    bool denseVisibleShop = true;
-                    int slotCountForLayout = Math.Max(1, Math.Min(7, state.ShopMinions.Count));
-                    var denseShopSlots = state.ShopMinions
-                        .OrderBy(sm => sm.Position)
-                        .ThenBy(sm => sm.EntityId)
-                        .Select((sm, idx) => new { sm.EntityId, DenseSlot = idx })
-                        .ToDictionary(x => x.EntityId, x => x.DenseSlot);
+                    int slotCountForLayout = layoutDecision.LayoutCount;
+                    var denseShopSlots = layoutDecision.UseDenseSlots
+                        ? state.ShopMinions
+                            .OrderBy(sm => sm.Position)
+                            .ThenBy(sm => sm.EntityId)
+                            .Select((sm, idx) => new { sm.EntityId, DenseSlot = idx })
+                            .ToDictionary(x => x.EntityId, x => x.DenseSlot)
+                        : null;
                     foreach (var m in plan.ShopMarkers)
                     {
                         float normScore = (float)m.Score;
@@ -2306,7 +2370,7 @@ namespace BobCoach
                         {
                             Log(string.Format("DIAG ShopRender: markers={0} tier={1} layoutTier={2} liveCards={3} shopCards={4} layoutSlots={5} maxRawSlot={6} dense={7}",
                                 plan.ShopMarkers.Count, state.TavernTier, layoutTier, liveCardCount, state.ShopMinions.Count,
-                                slotCountForLayout, maxRawShopSlot, denseVisibleShop));
+                                slotCountForLayout, maxRawShopSlot, layoutDecision.UseDenseSlots));
                             loggedShopDiag = true;
                         }
                         _renderer.SetCalcTier(layoutTier);
@@ -3101,7 +3165,11 @@ namespace BobCoach
                             && !e.CardId.StartsWith("TB_BaconShop_HERO") && e.Health > 0)
                             boardCount++;
                         // 收集商店实体ID用于检测刷新
-                        if (!e.IsInPlay && !e.IsInHand && e.Health > 0
+                        var cardType = (CardType)(e.HasTag(GameTag.CARDTYPE)
+                            ? e.GetTag(GameTag.CARDTYPE)
+                            : 0);
+                        if (!e.IsInPlay && !e.IsInHand
+                            && Engine.ShopEntitySnapshotPolicy.IsStateHashCandidate(cardType, e.Health)
                             && !string.IsNullOrEmpty(e.CardId)
                             && (e.CardId.StartsWith("BG") || e.CardId.StartsWith("TB_Bacon"))
                             && !e.CardId.StartsWith("TB_BaconShop_HERO")

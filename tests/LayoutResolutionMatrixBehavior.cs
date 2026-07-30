@@ -125,6 +125,21 @@ internal static class LayoutResolutionMatrixBehavior
             Math.Abs((calibratedArea.Left + calibratedArea.Width / 2.0) - (640 + 80)) <= 0.01,
             "center=" + (calibratedArea.Left + calibratedArea.Width / 2.0));
 
+        var statusConfig = new LayoutConfig
+        {
+            CalibrationWidth = 1920,
+            CalibrationHeight = 1080,
+            StatusOffsetX = 150,
+            StatusOffsetY = 225,
+        };
+        var statusCalc = new GameLayoutCalculator(statusConfig);
+        statusCalc.RefreshWithSize(1280, 720);
+        LayoutPoint configuredStatus = statusCalc.GetStatusStripPosition();
+        Check("status strip uses configured calibrated position",
+            Math.Abs(configuredStatus.X - 100) <= 0.01
+                && Math.Abs(configuredStatus.Y - 150) <= 0.01,
+            "position=" + configuredStatus.X + "," + configuredStatus.Y);
+
         if (_failures == 0)
             Console.WriteLine("PASS layout resolution matrix (" + layoutsChecked + " shop layouts)");
         return _failures == 0 ? 0 : 1;

@@ -31,8 +31,14 @@ namespace BobCoach.Engine
         private int _activeTier = 1;        // 当前校准的酒馆等级(1-6), 影响保存到哪个分档
 
         public CalibrationOverlay()
+            : this(LayoutConfig.Load())
         {
-            _config = LayoutConfig.Load();
+        }
+
+        public CalibrationOverlay(LayoutConfig config)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            _config = config;
             _calc = new GameLayoutCalculator(_config);
         }
 
@@ -210,6 +216,10 @@ namespace BobCoach.Engine
             var def = new LayoutConfig();
             switch (_selectedZone)
             {
+                case "Status":
+                    _config.StatusOffsetX = def.StatusOffsetX;
+                    _config.StatusOffsetY = def.StatusOffsetY;
+                    break;
                 case "Shop":
                 case "Board":
                     _config.ShopOffsetX = def.ShopOffsetX; _config.ShopOffsetY = def.ShopOffsetY;
@@ -258,6 +268,8 @@ namespace BobCoach.Engine
             switch (_selectedZone)
             {
                 case "Status":
+                    _config.StatusOffsetX += dx;
+                    _config.StatusOffsetY += dy;
                     break;
                 case "Shop":
                     _config.ShopOffsetX += dx; _config.ShopOffsetY += dy;
@@ -354,6 +366,9 @@ namespace BobCoach.Engine
                 _calc.ScaleY(160) * psc);
             DrawZone(canvas, panelRect, "#FFD700", "PANEL [9]");
 
+            // 状态面板使用实战相同的坐标、字号和边界策略，方向键调整时可立即看到结果。
+            DrawStatusPreview(canvas);
+
             // 商店标签按酒馆等级展示槽数定位；辛达苟萨少随从不改变展示槽锚点。
             int shopCnt = _selectedZone == "Shop" ? _previewCardCount : GetShopLayoutCardCount(_activeTier);
             var shopRects = _calc.GetShopCardRects(shopCnt);
@@ -400,6 +415,84 @@ namespace BobCoach.Engine
             if (canvas == null) return;
             foreach (var el in _elements) canvas.Children.Remove(el);
             _elements.Clear();
+        }
+
+        private void DrawStatusPreview(Canvas canvas)
+        {
+            var metrics = StatusStripLayoutPolicy.CreateMetrics(_config.StatusFontSize);
+            double canvasWidth = Math.Max(1, _calc.ClientWidth);
+            double canvasHeight = Math.Max(1, _calc.ClientHeight);
+            double maxWidth = Math.Max(1, Math.Min(metrics.WideMaxWidth, canvasWidth));
+            double pad = metrics.HorizontalPadding;
+            var background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10));
+
+            var content = new StackPanel { IsHitTestVisible = false };
+            content.Children.Add(new TextBlock
+            {
+                Text = "回合8 | 稳 | 推荐机械",
+                FontSize = metrics.PrimaryFontSize,
+                FontWeight = FontWeights.Medium,
+                Foreground = ParseBrush("#E0E0E0"),
+                Background = background,
+                Padding = new Thickness(pad, metrics.Scale, pad, 0),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = maxWidth,
+                LineHeight = metrics.PrimaryLineHeight,
+                IsHitTestVisible = false,
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = "买核心牌 → 刷新",
+                FontSize = metrics.PrimaryFontSize,
+                FontWeight = FontWeights.Bold,
+                Foreground = ParseBrush("#FFFACD"),
+                Background = background,
+                Padding = new Thickness(pad, 0, pad, metrics.Scale),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = maxWidth,
+                LineHeight = metrics.EmphasisLineHeight,
+                IsHitTestVisible = false,
+            });
+
+            var preview = new Border
+            {
+                Child = content,
+                Background = Brushes.Transparent,
+                BorderBrush = ParseBrush(_selectedZone == "Status" ? "#FFD700" : "#BDBDBD"),
+                BorderThickness = new Thickness(1),
+                IsHitTestVisible = false,
+            };
+            preview.Measure(new Size(canvasWidth, canvasHeight));
+
+            var requested = _calc.GetStatusStripPosition();
+            var position = StatusStripLayoutPolicy.ClampPosition(
+                requested.X, requested.Y, canvasWidth, canvasHeight,
+                preview.DesiredSize.Width, preview.DesiredSize.Height);
+            UpdateStatusConfigFromCanvasPosition(position.X, position.Y, canvasWidth, canvasHeight);
+
+            Add(canvas, preview, position.X, position.Y);
+            var label = new TextBlock
+            {
+                Text = "STATUS [1]",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = ParseBrush(_selectedZone == "Status" ? "#FFD700" : "#BDBDBD"),
+                IsHitTestVisible = false,
+            };
+            Add(canvas, label, position.X + 3, Math.Max(0, position.Y - 16));
+        }
+
+        private void UpdateStatusConfigFromCanvasPosition(
+            double x, double y, double canvasWidth, double canvasHeight)
+        {
+            double calibrationWidth = _config.CalibrationWidth > 100
+                ? _config.CalibrationWidth
+                : LayoutConfig.DefaultCalibrationWidth;
+            double calibrationHeight = _config.CalibrationHeight > 100
+                ? _config.CalibrationHeight
+                : LayoutConfig.DefaultCalibrationHeight;
+            _config.StatusOffsetX = x * calibrationWidth / canvasWidth;
+            _config.StatusOffsetY = y * calibrationHeight / canvasHeight;
         }
 
         private void DrawZone(Canvas canvas, LayoutRect rect, string colorHex, string label)
@@ -681,7 +774,7 @@ namespace BobCoach.Engine
 
             string info = string.Format(
                 "F10校准 | 选中:{0} | 步长:{1}px\n" +
-                "Shop偏移:({2:F0},{3:F0}) Board:({4:F0},{5:F0})\n" +
+                "Status:({18:F0},{19:F0}) 字号:{20:F0} | Shop:({2:F0},{3:F0}) Board:({4:F0},{5:F0})\n" +
                 "Tavern:({6:F0},{7:F0}) Refresh:({8:F0},{9:F0}) Hero:({10:F0},{11:F0})\n" +
                 "Hand:({12:F0},{13:F0}){17}\n" +
                 "客户区:{14:F0}x{15:F0} | S=保存 R=重置当前区{16}",
@@ -694,7 +787,8 @@ namespace BobCoach.Engine
                 _config.HandOffsetX, _config.HandOffsetY,
                 snap.GameWidth, snap.GameHeight,
                 saveHint,
-                extraParams);
+                extraParams,
+                _config.StatusOffsetX, _config.StatusOffsetY, _config.StatusFontSize);
 
             var panel = new Border
             {

@@ -114,11 +114,12 @@ function warn(name, msg) {
 {
     const overlaySrc = readFile("src/BobCoach/OverlayRenderer.cs");
 
-    // ClearTaggedElements 在 Show* 方法体内（可能在入口后几行）
-    test("[ClearSpec] ShowStatusStrip 调用了 ClearTaggedElements", () => {
+    test("[StatusStrip] ShowStatusStrip 复用稳定根元素", () => {
         const idx = overlaySrc.indexOf("public void ShowStatusStrip");
-        const block = overlaySrc.slice(idx, idx + 800);
-        if (!block.includes("ClearTaggedElements")) return "未找到 ClearTaggedElements 调用";
+        const block = overlaySrc.slice(idx, idx + 1600);
+        if (!block.includes("EnsureStatusStripRoot")) return "状态面板未复用稳定根元素";
+        if (block.includes('ClearTaggedElements("status_strip")'))
+            return "状态刷新仍会删除根元素并中断拖动";
     });
 
     test("[ClearSpec] ShowLevelUpGlow 调用了 ClearTaggedElements", () => {
@@ -195,8 +196,8 @@ function warn(name, msg) {
     const calibSrc = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
 
     test("[LayoutResolution] LayoutConfig records calibration canvas size", () => {
-        if (!configSrc.includes("Version { get; set; } = 10"))
-            return "LayoutConfig version must bump to v10 so the legacy default shop offset can be migrated";
+        if (!configSrc.includes("Version { get; set; } = 11"))
+            return "LayoutConfig version must bump to v11 for status strip settings";
         if (!configSrc.includes("CalibrationWidth") || !configSrc.includes("CalibrationHeight"))
             return "missing CalibrationWidth/CalibrationHeight";
         if (!configSrc.includes("ScaleX(") || !configSrc.includes("ScaleY("))
@@ -245,8 +246,59 @@ function warn(name, msg) {
         const block = calcSrc.slice(idx, idx + 260);
         if (block.includes("new LayoutPoint(8, 105)"))
             return "status strip still uses raw 1080p coordinates";
-        if (!block.includes("ScaleX(8)") || !block.includes("ScaleY(105)"))
-            return "status strip position should use ScaleX/ScaleY";
+        if (!block.includes("_config.StatusOffsetX") || !block.includes("_config.StatusOffsetY"))
+            return "status strip position should use persisted config offsets";
+    });
+
+    test("[StatusStrip] renderer and calibration share one LayoutConfig", () => {
+        if (!overlaySrc.includes("OverlayRenderer(Engine.LayoutConfig config)"))
+            return "renderer missing shared LayoutConfig constructor";
+        if (!overlaySrc.includes("new Engine.CalibrationOverlay(_config)"))
+            return "calibration overlay does not use renderer config";
+        const refreshIdx = overlaySrc.indexOf("public void RefreshLayout");
+        const refreshBlock = overlaySrc.slice(refreshIdx, refreshIdx + 420);
+        if (refreshBlock.includes("LayoutConfig.Load()"))
+            return "RefreshLayout replaces the shared config instance";
+    });
+
+    test("[StatusStrip] F10 Status updates position and reset preserves font size", () => {
+        const statusApply = calibSrc.indexOf('case "Status":');
+        const applyBlock = calibSrc.slice(statusApply, statusApply + 260);
+        if (!applyBlock.includes("StatusOffsetX") || !applyBlock.includes("StatusOffsetY"))
+            return "F10 Status arrow keys do not update status offsets";
+        const resetIdx = calibSrc.indexOf("private void ResetCurrentZone");
+        const resetBlock = calibSrc.slice(resetIdx, resetIdx + 2200);
+        const statusReset = resetBlock.indexOf('case "Status":');
+        if (statusReset < 0) return "F10 Status reset is missing";
+        const statusResetBlock = resetBlock.slice(statusReset, statusReset + 260);
+        if (!statusResetBlock.includes("StatusOffsetX") || !statusResetBlock.includes("StatusOffsetY"))
+            return "F10 Status reset does not restore position";
+        if (statusResetBlock.includes("StatusFontSize"))
+            return "F10 Status reset must preserve the player font size";
+    });
+
+    test("[StatusStrip] drag lifecycle preserves the stable root during routine refresh", () => {
+        if (!overlaySrc.includes("CaptureMouse()") || !overlaySrc.includes("ReleaseMouseCapture()")
+            || !overlaySrc.includes("LostMouseCapture"))
+            return "status drag must capture the mouse and handle lost capture";
+        const clearIdx = overlaySrc.indexOf("public void Clear(");
+        const clearBlock = overlaySrc.slice(clearIdx, clearIdx + 900);
+        const nonPanelIdx = overlaySrc.indexOf("public void ClearNonPanel");
+        const nonPanelBlock = overlaySrc.slice(nonPanelIdx, nonPanelIdx + 900);
+        if (!clearBlock.includes("DetachStatusStrip"))
+            return "full clear must remove status handlers and restore lock";
+        if (nonPanelBlock.includes("DetachStatusStrip"))
+            return "routine redraw must preserve the status root and an active drag";
+        if (!nonPanelBlock.includes('tag == "status_strip"'))
+            return "routine redraw must retain the status root registration";
+        const fadeIdx = overlaySrc.indexOf("public void FadeOutActiveElements");
+        const fadeBlock = overlaySrc.slice(fadeIdx, fadeIdx + 900);
+        if (fadeBlock.includes("DetachStatusStrip") || !fadeBlock.includes("ReferenceEquals(el, _statusStripRoot)"))
+            return "routine fade must preserve the status root and an active drag";
+        const mouseDownIdx = overlaySrc.indexOf("private void StatusStripMouseLeftButtonDown");
+        const mouseDownBlock = overlaySrc.slice(mouseDownIdx, mouseDownIdx + 900);
+        if (!/if\s*\(\s*!_statusStripRoot\.CaptureMouse\(\)\s*\)\s*return;[\s\S]*?_statusDragging\s*=\s*true;/.test(mouseDownBlock))
+            return "status drag must start only after mouse capture succeeds";
     });
 
     test("[LayoutResolution] top-right suggestion badge stays inside the canvas", () => {
@@ -770,7 +822,8 @@ function warn(name, msg) {
     test("[07062107][Render] 渲染被拦截后 planHash 必须清空重试", () => {
         const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
         const idx = pluginSrc.indexOf("private void DispatchRender");
-        const block = pluginSrc.slice(idx, idx + 4000);
+        const nextMethod = pluginSrc.indexOf("\n        private ", idx + "private void DispatchRender".length);
+        const block = pluginSrc.slice(idx, nextMethod >= 0 ? nextMethod : pluginSrc.length);
         const resetCount = (block.match(/_lastRenderedPlanHash = null/g) || []).length;
         if (resetCount < 4)
             return `combat-lag/version/shopGone return paths must reset planHash (found ${resetCount}/4+ resets) — T2 LEVEL_UP suggestion was swallowed by hash-dedup after combat-lag return`;
@@ -928,14 +981,14 @@ function warn(name, msg) {
             return "resolved local spell facts must not be written to diagnostic logs";
     });
 
-    test("[07072158][#1] 商店按实际卡数居中(确认B:买卡向心靠拢); 设备差异可由ShopOffsetX校准", () => {
+    test("[07072158][#1] 正常商店与购买后按实际卡数居中; 补货瞬态保留理论槽位", () => {
         const p = readFile("src/BobCoach/BobCoachPlugin.cs");
-        // 用户确认B: 游戏买卡后向中心轴靠拢=始终按实际卡数居中。默认基准是客户区中轴, 设备差异才由ShopOffsetX校准。
-        if (!/slotCountForLayout = Math\.Max\(1, Math\.Min\(7, state\.ShopMinions\.Count\)\)/.test(p))
-            return "商店须按实际在场卡数居中(实测B: 买卡后向心靠拢)";
+        if (!p.includes("_shopLayoutSlotPolicy.Resolve(")
+            || !p.includes("int slotCountForLayout = layoutDecision.LayoutCount"))
+            return "初始商店渲染必须消费布局策略决策";
         const o = readFile("src/BobCoach/OverlayRenderer.cs");
-        if (!/layoutCount = Math\.Max\(1, Math\.Min\(7, liveShopMinions\.Count\)\)/.test(o))
-            return "SyncShopTagPositions 须按实际在场卡数居中(与ShopRender一致)";
+        if (!o.includes("int layoutCount = layoutDecision.LayoutCount"))
+            return "SyncShopTagPositions 必须复用初始渲染的布局决策";
     });
 
     test("[07062242][Refresh] planHash 含金币归零边界(残留光晕清除)", () => {
@@ -1001,7 +1054,10 @@ function warn(name, msg) {
             return "extractor must detect Timewarped New Recruit / 时空扭曲物色新人";
         if (!simulatorSrc.includes("ReplenishingShopActive = src.ReplenishingShopActive"))
             return "Simulator.ShallowCopy must preserve replenishing shop state";
-        if (!pluginSrc.includes("denseReplenishingShop") || !pluginSrc.includes("state.ShopMinions.Count"))
+        const slotPolicySrc = readFile("src/BobCoach/Core/ShopLayoutSlotPolicy.cs");
+        if (!pluginSrc.includes("state.ReplenishingShopActive")
+            || !slotPolicySrc.includes("if (replenishingShopActive)")
+            || !slotPolicySrc.includes("new ShopLayoutDecision(Math.Max(1, visibleCount), true)"))
             return "shop render must use actual visible count for replenishing shops";
         if (!pluginSrc.includes("renderShopPosition"))
             return "shop render must remap raw slot to dense visible slot for replenishing shops";
@@ -1359,7 +1415,7 @@ function warn(name, msg) {
     const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
 
     test("[ShopTag] OverlayRenderer 有 SyncShopTagPositions 方法", () => {
-        if (!overlaySrc.includes("public void SyncShopTagPositions"))
+        if (!/(?:public|internal) void SyncShopTagPositions/.test(overlaySrc))
             return "缺少 SyncShopTagPositions 方法";
     });
 
@@ -1369,7 +1425,7 @@ function warn(name, msg) {
     });
 
     test("[ShopTag] SyncShopTagPositions 离店淡出 (不再zonePos平移/不重建)", () => {
-        const idx = overlaySrc.indexOf("public void SyncShopTagPositions");
+        const idx = overlaySrc.indexOf("void SyncShopTagPositions");
         const block = overlaySrc.slice(idx, idx + 3600);
         // 新设计(0611 06111155 问题1+4修复): zonePos买卖后跳号→平移会右偏/越界飘左上,
         // 已废除 zonePos 漂移跟随。位置由 planHash 全量重绘按密集名次处理, 此方法仅保留离店淡出。
@@ -1385,15 +1441,15 @@ function warn(name, msg) {
     });
 
     test("[ShopTag] OnUpdate 调用 SyncShopTagPositions", () => {
-        if (!pluginSrc.includes("SyncShopTagPositions(_cachedState.ShopMinions, layoutTier, _cachedState.ReplenishingShopActive)"))
+        if (!pluginSrc.includes("SyncShopTagPositions(_cachedState.ShopMinions, _shopLayoutDecision)"))
             return "OnUpdate 未调用 SyncShopTagPositions";
     });
 
     test("[ShopTag] SyncShopTagPositions 不在渲染层读取 Core.Game.Entities 猜补牌机制", () => {
-        const idx = overlaySrc.indexOf("public void SyncShopTagPositions");
+        const idx = overlaySrc.indexOf("void SyncShopTagPositions");
         const block = overlaySrc.slice(idx, idx + 1800);
-        if (!block.includes("bool denseReplenishingShop"))
-            return "SyncShopTagPositions should accept replenishing state from extractor/plugin";
+        if (!block.includes("Engine.ShopLayoutDecision layoutDecision"))
+            return "SyncShopTagPositions should accept the shared layout decision from the plugin";
         if (block.includes("Core.Game.Entities"))
             return "renderer should not inspect HDT entity dictionary while syncing tag positions";
     });
@@ -1420,12 +1476,14 @@ function warn(name, msg) {
             return "shop refresh must still force next render";
         if (!block.includes("TotalMilliseconds < ShopUiClearCooldownMs"))
             return "shop clear cooldown guard is missing";
-        if (!block.includes("_renderer.Clear()") || !block.includes("_lastShopUiClearAt = now"))
-            return "shop clear helper must still clear and record cooldown time";
+        if (!block.includes("_renderer.ClearNonPanel()") || !block.includes("_lastShopUiClearAt = now"))
+            return "shop refresh helper must clear non-panel elements and record cooldown time";
+        if (block.includes("_renderer.Clear()"))
+            return "shop refresh must preserve the status root instead of performing a full clear";
     });
 
     test("[ShopTag] layout uses shop refresh tier, not post-upgrade tier", () => {
-        if (!pluginSrc.includes("_lastShopRefreshTier > 0 ? _lastShopRefreshTier"))
+        if (!pluginSrc.includes("_shopLayoutSlotPolicy.LastRefreshTier"))
             return "shop tag layout should use the tier from the last shop refresh";
         if (!pluginSrc.includes("layoutTier") || !pluginSrc.includes("_renderer.SetCalcTier(layoutTier)"))
             return "shop render should pass layoutTier into the renderer";
@@ -1532,17 +1590,17 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
     const pluginSrcDense = readFile("src/BobCoach/BobCoachPlugin.cs");
     const overlaySrcDense = readFile("src/BobCoach/OverlayRenderer.cs");
 
-    test("[ShopTag][07072158] 商店标签按实际在场卡数居中(确认B); 设备差异由ShopOffsetX校准", () => {
-        // 反复历程(以实测为准): 07072052全dense→截图疑似右偏 → 07072158回退raw → 用户确认B(买卡向心靠拢=居中)→恢复dense。
-        // 结论: 居中逻辑使用实际卡数; 默认基准为客户区中轴, ShopOffsetX仅保留给设备差异校准。
+    test("[ShopTag][07072158] 初始渲染与逐帧跟随共享布局决策", () => {
         const renderIdx = pluginSrcDense.indexOf("int slotCountForLayout");
         const renderBlock = pluginSrcDense.slice(Math.max(0, renderIdx - 600), renderIdx + 900);
-        if (!renderBlock.includes("Math.Max(1, Math.Min(7, state.ShopMinions.Count))"))
-            return "shop render 须按实际在场卡数居中(state.ShopMinions.Count)";
-        const syncIdx = overlaySrcDense.indexOf("public void SyncShopTagPositions");
+        if (!renderBlock.includes("layoutDecision.LayoutCount")
+            || !renderBlock.includes("layoutDecision.UseDenseSlots"))
+            return "shop render 须使用布局策略给出的槽位数量和dense模式";
+        const syncIdx = overlaySrcDense.indexOf("void SyncShopTagPositions");
         const syncBlock = overlaySrcDense.slice(syncIdx, syncIdx + 1400);
-        if (!syncBlock.includes("Math.Max(1, Math.Min(7, liveShopMinions.Count))"))
-            return "shop tag follow 须与初始渲染一致, 按实际在场卡数居中";
+        if (!syncBlock.includes("layoutDecision.LayoutCount")
+            || !syncBlock.includes("layoutDecision.UseDenseSlots"))
+            return "shop tag follow 须与初始渲染共享布局决策";
     });
 }
 
