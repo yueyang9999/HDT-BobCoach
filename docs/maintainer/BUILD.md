@@ -5,9 +5,9 @@
 - Windows x64；
 - .NET Framework 4.7.2 Developer Pack；
 - Node.js（仅执行无第三方依赖的合同测试）；
-- HDT `1.53.5.7354` x64 官方发布目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
+- HDT `1.54.0.7376` x64 官方发布目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
 
-HDT 程序集由用户本地提供，不能提交或打包进仓库。`hdtBaselineVersion` 是官方 `v1.53.5` 发布资产写入的精确程序集版本，不是源码项目文件中的三段基础版本 `1.53.5`。
+HDT 程序集由用户本地提供，不能提交或打包进仓库。`hdtBaselineVersion` 是官方 `v1.54.0` 发布资产写入的精确程序集版本 `1.54.0.7376`。
 
 ## 构建
 
@@ -31,7 +31,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\validate_r
 git diff --check
 ```
 
-`npm test` 不安装 npm 运行时依赖；它执行 Node 合同测试和 PowerShell 测试。`validate_repository.ps1` 是仓库内容、敏感数据、个人路径、大文件、发布身份与包白名单的最终检查。CI 会在真实 HDT `1.53.5` 基线上执行仓库验证、全部测试、Release 构建和正式离线包构建；任一门禁缺失或失败都不能视为通过。
+`npm test` 不安装 npm 运行时依赖；它执行 Node 合同测试和 PowerShell 测试。`validate_repository.ps1` 是仓库内容、敏感数据、个人路径、大文件、发布身份与包白名单的最终检查。CI 在精确 HDT `1.54.0.7376` 基线上执行仓库验证、全部测试、Release 构建和正式离线包构建；独立的 latest compatibility 任务还会在每次 push、pull request 及每日定时运行时解析、校验并构建官方最新稳定版，但不生成正式发布包。每日定时运行会跳过正式基线和离线包任务。任一门禁缺失或失败都不能视为通过。
 
 日常更新应先按 [更新版本验证流程](UPDATE_VALIDATION.md) 判定变更等级：开发中可使用与风险匹配的快速反馈，合并前仍需执行本节完整门禁；只有最终候选版本才进入对应的 VM 验收矩阵。
 

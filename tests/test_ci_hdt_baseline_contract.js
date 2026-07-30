@@ -5,7 +5,10 @@ const fs = require("fs");
 const path = require("path");
 
 const workflowPath = path.resolve(__dirname, "..", ".github", "workflows", "ci.yml");
+const resolverPath = path.resolve(__dirname, "..", "tools", "build", "prepare_latest_hdt.ps1");
 const workflow = fs.readFileSync(workflowPath, "utf8");
+assert.ok(fs.existsSync(resolverPath), "latest HDT resolver script must exist");
+const resolver = fs.readFileSync(resolverPath, "utf8");
 const enumerateOfficialExecutablePattern =
     /^[ \t]*\$executables[ \t]*=[ \t]*@\(Get-ChildItem[^\r\n]*-Filter[ \t]+'Hearthstone Deck Tracker\.exe'\)[ \t]*$/m;
 const buildReferencePattern =
@@ -39,4 +42,54 @@ assert.doesNotMatch(
     "CI must not enumerate the normalized alias before it has been created",
 );
 
-console.log("PASS CI HDT baseline normalization contract");
+assert.match(workflow, /Download and verify HDT 1\.54\.0 baseline/, "CI must pin the validated baseline");
+assert.match(
+    workflow,
+    /releases\/download\/v1\.54\.0\/Hearthstone\.Deck\.Tracker-v1\.54\.0\.zip/,
+    "CI must use the exact validated baseline asset",
+);
+assert.match(
+    workflow,
+    /c7dd6093d28e68876ea8971659b10aa1eb379d4c6cf91eb809ea13a43ab1c673/,
+    "CI must verify the validated baseline SHA-256",
+);
+assert.doesNotMatch(workflow, /v1\.53\.5|1\.53\.14/, "CI must not retain an obsolete HDT baseline");
+
+const latestJobMarker = "  latest-hdt-compatibility:";
+const latestJobIndex = workflow.indexOf(latestJobMarker);
+assert.notStrictEqual(latestJobIndex, -1, "CI must include a latest HDT compatibility job");
+assert.match(
+    workflow,
+    /^  schedule:\r?\n    - cron: '[^']+'$/m,
+    "CI must schedule automatic latest HDT compatibility checks",
+);
+const baselineJob = workflow.slice(0, latestJobIndex);
+assert.match(
+    baselineJob,
+    /^    if: github\.event_name != 'schedule'$/m,
+    "scheduled runs must skip the pinned release-baseline job",
+);
+const latestJob = workflow.slice(latestJobIndex);
+assert.match(latestJob, /prepare_latest_hdt\.ps1/, "latest job must use the shared resolver");
+assert.match(latestJob, /-AllowNewerHdt/, "latest job must opt into compatibility mode");
+assert.doesNotMatch(
+    latestJob,
+    /build_offline_package\.ps1/,
+    "latest compatibility job must not create a formal release package",
+);
+
+for (const token of [
+    "api.github.com/repos/HearthSim/Hearthstone-Deck-Tracker/releases/latest",
+    "prerelease",
+    "draft",
+    "digest",
+    "Hearthstone.Deck.Tracker-v",
+    "Hearthstone Deck Tracker.exe",
+    "HearthstoneDeckTracker.exe",
+    "HearthDb.dll",
+    "Newtonsoft.Json.dll",
+]) {
+    assert.ok(resolver.includes(token), `latest HDT resolver missing ${token}`);
+}
+
+console.log("PASS CI pinned baseline and latest HDT compatibility contract");

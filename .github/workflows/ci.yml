@@ -3,12 +3,15 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '17 2 * * *'
 
 permissions:
   contents: read
 
 jobs:
   validate:
+    if: github.event_name != 'schedule'
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -18,19 +21,19 @@ jobs:
         shell: powershell
         run: git diff --check 4b825dc642cb6eb9a060e54bf8d69288fbee4904 HEAD
 
-      - name: Download and verify HDT 1.53.5 baseline
+      - name: Download and verify HDT 1.54.0 baseline
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $ProgressPreference = 'SilentlyContinue'
-          $url = 'https://github.com/HearthSim/Hearthstone-Deck-Tracker/releases/download/v1.53.5/Hearthstone.Deck.Tracker-v1.53.5.zip'
-          $archive = Join-Path $env:RUNNER_TEMP 'Hearthstone.Deck.Tracker-v1.53.5.zip'
-          $extractRoot = Join-Path $env:RUNNER_TEMP 'hdt-1.53.5'
+          $url = 'https://github.com/HearthSim/Hearthstone-Deck-Tracker/releases/download/v1.54.0/Hearthstone.Deck.Tracker-v1.54.0.zip'
+          $archive = Join-Path $env:RUNNER_TEMP 'Hearthstone.Deck.Tracker-v1.54.0.zip'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'hdt-1.54.0'
           Invoke-WebRequest -Uri $url -OutFile $archive
           $archiveInfo = Get-Item -LiteralPath $archive
-          if ($archiveInfo.Length -ne 19715198) { throw "Unexpected HDT archive size: $($archiveInfo.Length)" }
+          if ($archiveInfo.Length -ne 20282106) { throw "Unexpected HDT archive size: $($archiveInfo.Length)" }
           $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($archiveHash -ne '551ab1a125c9fc0d674513bd20fee572345cbb0b87c8d7cda78759855612d477') {
+          if ($archiveHash -ne 'c7dd6093d28e68876ea8971659b10aa1eb379d4c6cf91eb809ea13a43ab1c673') {
             throw "Unexpected HDT archive SHA-256: $archiveHash"
           }
           Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
@@ -68,4 +71,32 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\build_offline_package.ps1
           -HdtDirectory "$env:BOBCOACH_HDT_DIR"
           -OutputDirectory "$env:RUNNER_TEMP\bobcoach-package"
+          -Force
+
+  latest-hdt-compatibility:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Resolve and verify latest stable HDT
+        shell: powershell
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\prepare_latest_hdt.ps1
+          -OutputDirectory "$env:RUNNER_TEMP\bobcoach-latest-hdt"
+          -GitHubEnvironmentFile "$env:GITHUB_ENV"
+
+      - name: Run contracts and behavior tests against latest HDT
+        shell: powershell
+        run: |
+          npm run test:contracts
+          npm run test:behavior
+
+      - name: Build plugin against latest HDT
+        shell: powershell
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\build_release.ps1
+          -HdtDirectory "$env:BOBCOACH_HDT_DIR"
+          -OutputDirectory "$env:RUNNER_TEMP\bobcoach-latest-build"
+          -AllowNewerHdt
           -Force
