@@ -1,7 +1,7 @@
 {
-  "packageVersion": "1.0.0",
-  "assemblyVersion": "1.0.0.0",
+  "packageVersion": "1.1.0",
+  "assemblyVersion": "1.1.0.0",
   "targetFramework": "net472",
   "runtimeIdentifier": "win-x64",
-  "hdtBaselineVersion": "1.53.5.7354"
+  "hdtBaselineVersion": "1.54.0.7376"
 }
