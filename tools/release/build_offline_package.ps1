@@ -39,6 +39,9 @@ $PackageFiles = @(
     "images/install/install-02-open-plugins-folder.png",
     "images/install/install-03-copy-bobcoach-dll.png",
     "images/install/install-04-enable-bobcoach.png",
+    "images/features/status-strip-settings-entry.jpg",
+    "images/features/status-strip-controls.jpg",
+    "images/features/status-strip-result.jpg",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -242,6 +245,17 @@ try {
         $copyMap += [pscustomobject]@{
             Source = Join-Path $guideImageDirectory $imageName
             Name = "images/install/$imageName"
+        }
+    }
+    $featureImageDirectory = Join-Path $repoRoot "docs\user\images\features"
+    foreach ($imageName in @(
+        "status-strip-settings-entry.jpg",
+        "status-strip-controls.jpg",
+        "status-strip-result.jpg"
+    )) {
+        $copyMap += [pscustomobject]@{
+            Source = Join-Path $featureImageDirectory $imageName
+            Name = "images/features/$imageName"
         }
     }
     foreach ($entry in $copyMap) {

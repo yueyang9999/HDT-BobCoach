@@ -9,6 +9,8 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const chineseReadme = read("README.md");
 const englishReadme = read("README.en.md");
 const installGuide = read("docs/user/INSTALL.md");
+const featuresGuide = read("docs/user/FEATURES.md");
+const featuresHtml = read("docs/user/FEATURES.html");
 const docsIndex = read("docs/README.md");
 const dataSources = read("DATA_SOURCES.md");
 const privacy = read("PRIVACY.md");
@@ -16,21 +18,21 @@ const notice = read("NOTICE");
 const architecture = read("docs/maintainer/ARCHITECTURE.md");
 const dependencies = read("docs/maintainer/DEPENDENCIES.md");
 const bilingualDisclosureDesign = read("docs/design/双语自述与第三方声明设计_2026-07-21.md");
-const packageName = "BobCoach-1.0.0-win-x64.zip";
+const packageName = "BobCoach-1.1.0-win-x64.zip";
 const releasesUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases";
 const retiredPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/";
-const stablePackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/";
+const stablePackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/";
 
 for (const [name, content] of [
     ["README.md", chineseReadme],
     ["README.en.md", englishReadme],
     ["docs/user/INSTALL.md", installGuide],
 ]) {
-    assert.ok(content.includes(packageName), `${name} must name the current 1.0.0 package`);
+    assert.ok(content.includes(packageName), `${name} must name the current 1.1.0 package`);
     assert.ok(content.includes(releasesUrl), `${name} must direct users to the Releases page`);
     assert.ok(!content.includes(retiredPackageUrl), `${name} must not link to the retired beta.1 package`);
-    assert.ok(content.includes(`${stablePackageUrl}${packageName}`), `${name} must link the official 1.0.0 installer`);
-    assert.ok(content.includes(`${stablePackageUrl}${packageName}.sha256`), `${name} must link the official 1.0.0 checksum`);
+    assert.ok(content.includes(`${stablePackageUrl}${packageName}`), `${name} must link the official 1.1.0 installer`);
+    assert.ok(content.includes(`${stablePackageUrl}${packageName}.sha256`), `${name} must link the official 1.1.0 checksum`);
     assert.ok(content.includes("Windows 11 24H2 x64"), `${name} must identify Windows 11`);
     assert.ok(content.includes("Windows 10 22H2 x64"), `${name} must identify Windows 10`);
     assert.ok(content.includes("Source code (zip)"), `${name} must reject the generated ZIP source archive`);
@@ -41,11 +43,11 @@ assert.ok(
     chineseReadme.includes("[中文安装教程（新手从这里开始）](docs/user/INSTALL.md)"),
     "Chinese README must expose the beginner installation guide",
 );
-assert.ok(chineseReadme.includes("最终实机 smoke 未完成"), "Chinese README must disclose that 1.0.0 final Win11 smoke was not completed");
+assert.ok(chineseReadme.includes("候选"), "Chinese README must identify v1.1.0 as a release candidate");
 assert.ok(chineseReadme.includes("尚未完成专用实机验收"), "Chinese README must preserve Win10 limitation");
 assert.ok(
-    englishReadme.includes("final physical smoke validation on Windows 11 24H2 x64 was not completed"),
-    "English README must disclose that 1.0.0 final Win11 smoke was not completed",
+    englishReadme.includes("release candidate"),
+    "English README must identify v1.1.0 as a release candidate",
 );
 assert.ok(
     englishReadme.includes("dedicated physical validation has not been completed"),
@@ -174,17 +176,24 @@ for (const [name, content, statements] of [
     }
 }
 
-assert.ok(notice.includes("v1.0.0"), "NOTICE must acknowledge the current stable release");
-assert.ok(notice.includes("stable GitHub Release"), "NOTICE must state that 1.0.0 is published");
+assert.ok(notice.includes("v1.0.0"), "NOTICE must preserve the historical stable release disclosure");
+assert.ok(notice.includes("v1.1.0"), "NOTICE must identify the current release candidate");
+assert.ok(notice.includes("not published"), "NOTICE must not claim the v1.1.0 candidate is published");
 assert.ok(notice.includes("Final physical smoke validation on Windows 11 24H2 x64 was not"), "NOTICE must disclose the skipped final physical smoke validation");
 assert.ok(notice.includes("separate explicit owner authorization"), "NOTICE must require authorization for each future release");
 
 for (const [name, content, statement] of [
-    ["README.md", chineseReadme, "releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip"],
-    ["README.en.md", englishReadme, "releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip"],
-    ["docs/user/INSTALL.md", installGuide, "releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip"],
+    ["README.md", chineseReadme, "releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip"],
+    ["README.en.md", englishReadme, "releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip"],
+    ["docs/user/INSTALL.md", installGuide, "releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip"],
 ]) {
-    assert.ok(content.includes(statement), `${name} must link the official 1.0.0 installer`);
+    assert.ok(content.includes(statement), `${name} must link the official 1.1.0 installer`);
+}
+
+for (const [name, content] of [["docs/user/FEATURES.md", featuresGuide], ["docs/user/FEATURES.html", featuresHtml]]) {
+    for (const token of ["选项 > 插件 > Bob教练设置", "字体大小", "解锁状态面板", "Hearthstone 窗口", "鼠标穿透", "恢复默认"]) {
+        assert.ok(content.includes(token), `${name} must document status-strip workflow token: ${token}`);
+    }
 }
 
 console.log("PASS public documentation contract");

@@ -4,6 +4,22 @@ BobCoach 会根据当前对局给出醒目的操作建议，帮助你在回合�
 
 [离线打开 HTML 功能展示页](FEATURES.html) · [查看安装教程](INSTALL.md)
 
+## 状态提示面板
+
+从 `选项 > 插件 > Bob教练设置` 打开状态面板设置。
+
+![从插件页面进入 Bob教练状态面板设置](images/features/status-strip-settings-entry.jpg)
+
+先调节 `字体大小`；需要调整位置时启用 `解锁状态面板`，只在 `Hearthstone 窗口` 内拖动提示面板。
+
+![状态面板的字体大小和解锁状态面板控件](images/features/status-strip-controls.jpg)
+
+完成后禁用 `解锁状态面板` 或关闭设置，面板会恢复 `鼠标穿透`。必要时使用 `恢复默认` 重置位置和字号。
+
+![调整后的状态提示面板显示效果](images/features/status-strip-result.jpg)
+
+“恢复默认”会同时恢复默认位置和 `16` 号字。F10 校准模式中的 `1 = Status` 仍可调整同一面板的位置，并保留玩家选择的字号。
+
 ## 购买建议
 
 商店里同时出现多个随从时，BobCoach 会标出当前阵容更值得购买的目标，减少反复比较的时间。

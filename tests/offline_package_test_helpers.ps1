@@ -8,6 +8,9 @@ $script:OfflinePackageFiles = @(
     "images/install/install-02-open-plugins-folder.png",
     "images/install/install-03-copy-bobcoach-dll.png",
     "images/install/install-04-enable-bobcoach.png",
+    "images/features/status-strip-settings-entry.jpg",
+    "images/features/status-strip-controls.jpg",
+    "images/features/status-strip-result.jpg",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -174,7 +177,10 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
         "images/install/install-01-exit-hdt.png",
         "images/install/install-02-open-plugins-folder.png",
         "images/install/install-03-copy-bobcoach-dll.png",
-        "images/install/install-04-enable-bobcoach.png"
+        "images/install/install-04-enable-bobcoach.png",
+        "images/features/status-strip-settings-entry.jpg",
+        "images/features/status-strip-controls.jpg",
+        "images/features/status-strip-result.jpg"
     )) {
         $destination = Join-Path $packageRoot $relativePath
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
@@ -231,7 +237,8 @@ function Invoke-TestPowerShell([string]$ScriptPath, [string[]]$Arguments) {
             "'{0}'" -f $argument.Replace("'", "''")
         }
     }
-    $command = "& '{0}' {1}" -f $escapedScript, ($commandArguments -join " ")
+    $escapedAppData = $env:APPDATA.Replace("'", "''")
+    $command = "`$env:APPDATA = '{0}'; & '{1}' {2}" -f $escapedAppData, $escapedScript, ($commandArguments -join " ")
     $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"

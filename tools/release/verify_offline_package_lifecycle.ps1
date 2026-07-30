@@ -27,6 +27,9 @@ $script:PackageFiles = @(
     "images/install/install-02-open-plugins-folder.png",
     "images/install/install-03-copy-bobcoach-dll.png",
     "images/install/install-04-enable-bobcoach.png",
+    "images/features/status-strip-settings-entry.jpg",
+    "images/features/status-strip-controls.jpg",
+    "images/features/status-strip-result.jpg",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -568,7 +571,7 @@ function Expand-ValidatedPackage($Preflight) {
             $_.FullName.Substring($packageRoot.Length).TrimStart('\').Replace('\', '/')
         }
     )
-    Assert-ExactSet @("images", "images/install") $directories "Extracted package directories"
+    Assert-ExactSet @("images", "images/install", "images/features") $directories "Extracted package directories"
     foreach ($fileName in $script:PackageFiles) {
         $filePath = Join-Path $packageRoot $fileName
         Assert-NoReparseInExistingChain $filePath "ExtractedFile"

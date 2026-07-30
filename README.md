@@ -8,7 +8,7 @@
 
 Bob Coach 是面向《炉石传说》酒馆战棋的 Hearthstone Deck Tracker (HDT) 教练插件。它在本机读取 HDT 已知的对局状态，提供选牌、阵容、站位和战斗决策辅助。
 
-当前正式版本为 `1.0.0`，安装包名称为 [`BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip)。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；请勿将源码、CI 产物或第三方附件视为官方安装包。当前构建器不会用 1.0.0 输入重建或伪造历史 beta.1 preview。
+当前候选版本为 `1.1.0`，安装包名称为 [`BobCoach-1.1.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip)。该候选尚未发布；正式安装包只会通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供。请勿将源码、CI 产物或第三方附件视为官方安装包。
 
 ## 下载与安装
 
@@ -16,10 +16,10 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 | 你的系统 | 当前安装包 | 验证状态 |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [下载 `BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip) | 自动化测试、包完整性和 CI 已通过；最终实机 smoke 按所有者授权跳过 |
-| Windows 10 22H2 x64 | [下载同一个 64 位安装包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip) | 技术兼容，尚未完成专用实机验收 |
+| Windows 11 24H2 x64 | [候选 `BobCoach-1.1.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip) | 尚未发布；Windows 11 实机 smoke 尚未完成 |
+| Windows 10 22H2 x64 | [同一个 64 位候选包](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip) | 目标兼容环境，尚未完成专用实机验收 |
 
-可同时下载 [`BobCoach-1.0.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip.sha256) 核对安装包完整性。
+可同时下载 [`BobCoach-1.1.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip.sha256) 核对安装包完整性。
 
 **不要下载** Release 页面底部由 GitHub 自动生成的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是 Bob Coach 安装包。
 
@@ -27,9 +27,9 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 ## 系统要求
 
-- 1.0.0 正式版：自动化测试、包完整性和 CI 已通过；Windows 11 24H2 x64 最终实机 smoke 未完成，按项目所有者明确授权发布
+- 1.1.0 候选包：尚未发布；Windows 11 24H2 x64 最终实机 smoke 未完成
 - 目标兼容环境：Windows 10 22H2 x64（技术兼容，尚未完成专用实机验证）
-- Hearthstone Deck Tracker `1.53.5` x64
+- Hearthstone Deck Tracker `1.54.0.7376` x64
 - 系统提供的 .NET Framework 4.8/4.8.1 运行时
 - 标准 Windows 用户权限
 
@@ -40,7 +40,7 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 1. 完全退出 HDT。
 2. 完整解压安装 ZIP。
 3. 打开 HDT，进入“选项 > 插件”，点击“打开插件文件夹”。如果按钮不可用，可手动打开 `%AppData%\HearthstoneDeckTracker\Plugins`。
-4. 从 `BobCoach-1.0.0-win-x64.zip` 完整解压后，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到该目录根部；缺少校验文件或两者不匹配时，插件会拒绝启动。随后回到插件页面启用 BobCoach。
+4. 从 `BobCoach-1.1.0-win-x64.zip` 完整解压后，把 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到该目录根部；缺少校验文件或两者不匹配时，插件会拒绝启动。随后回到插件页面启用 BobCoach。
 
 `INSTALL.ps1` 是可选高级安装方式，用于完整性校验、自动备份和回退；普通安装不要求使用 PowerShell。升级、回滚和卸载分别见 [升级教程](docs/user/UPGRADE.md)、[回退教程](docs/user/ROLLBACK.md) 和 [卸载教程](docs/user/UNINSTALL.md)。
 
@@ -56,7 +56,7 @@ GitHub 仓库中的代码、文档、规则快照、议题、PR、镜像、fork�
 
 ## 构建与测试
 
-仓库不包含 HDT 二进制。构建需要本机安装 .NET Framework 4.7.2 Developer Pack，并提供 HDT `1.53.5` 目录：
+仓库不包含 HDT 二进制。构建需要本机安装 .NET Framework 4.7.2 Developer Pack，并提供 HDT `1.54.0.7376` 目录：
 
 ```powershell
 $env:BOBCOACH_HDT_DIR = 'C:\path\to\HDT'

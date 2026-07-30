@@ -22,6 +22,9 @@ $script:PackageFiles = @(
     "images/install/install-02-open-plugins-folder.png",
     "images/install/install-03-copy-bobcoach-dll.png",
     "images/install/install-04-enable-bobcoach.png",
+    "images/features/status-strip-settings-entry.jpg",
+    "images/features/status-strip-controls.jpg",
+    "images/features/status-strip-result.jpg",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -249,6 +252,15 @@ function New-PackageFixture([string]$Root, [string]$Name) {
         $destination = Join-Path $packageRoot "images\install\$imageName"
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
         Copy-Item -LiteralPath (Join-Path $repoRoot "docs\user\images\install\$imageName") -Destination $destination
+    }
+    foreach ($imageName in @(
+        "status-strip-settings-entry.jpg",
+        "status-strip-controls.jpg",
+        "status-strip-result.jpg"
+    )) {
+        $destination = Join-Path $packageRoot "images\features\$imageName"
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repoRoot "docs\user\images\features\$imageName") -Destination $destination
     }
     foreach ($fileName in @("README_OFFLINE.md", "LICENSE", "NOTICE", "DATA_SOURCES.md", "PRIVACY.md", "SUPPORT.md")) {
         $source = if ($fileName -eq "README_OFFLINE.md") {

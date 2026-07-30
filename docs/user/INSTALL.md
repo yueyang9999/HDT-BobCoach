@@ -1,6 +1,6 @@
 # Bob Coach 中文安装教程
 
-不熟悉终端也能完成。当前正式版本为 `1.0.0`，请下载 [`BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip)。完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
+不熟悉终端也能完成。当前 `1.1.0` 为尚未发布的候选包，请下载 [`BobCoach-1.1.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip)。完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
 
 [下载或离线打开 HTML 图文教程](INSTALL.html)
 
@@ -24,11 +24,11 @@
 
 ### 第 3 步：复制 DLL 和校验文件
 
-回到完整解压后的 `BobCoach-1.0.0-win-x64.zip`，将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个文件必须来自同一个安装包；缺少校验文件或哈希不匹配时，插件会拒绝启动。升级时同时替换两个文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
+回到完整解压后的 `BobCoach-1.1.0-win-x64.zip`，将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个文件必须来自同一个安装包；缺少校验文件或哈希不匹配时，插件会拒绝启动。升级时同时替换两个文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
 
 ![将 BobCoach.dll 复制到 Plugins 根目录](images/install/install-03-copy-bobcoach-dll.png)
 
-图示：`BobCoach.dll` 应直接位于 `Plugins` 根目录；`1.0.0` 还必须在同目录放置 `BobCoach.dll.sha256`。
+图示：`BobCoach.dll` 应直接位于 `Plugins` 根目录；还必须在同目录放置 `BobCoach.dll.sha256`。
 
 ### 第 4 步：开启 BobCoach
 
@@ -40,7 +40,7 @@
 
 ## 下载时注意
 
-当前正式版本为 `1.0.0`，文件名是 [`BobCoach-1.0.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip)。官方安装包只通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；可用同页的 [`BobCoach-1.0.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.0.0/BobCoach-1.0.0-win-x64.zip.sha256) 核对完整性。自动化测试、包完整性和 CI 已通过；Windows 11 24H2 最终实机 smoke 未完成，已按项目所有者明确授权发布。
+当前 `1.1.0` 为尚未发布的候选包，文件名是 [`BobCoach-1.1.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip)。正式安装包只会通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；可用同页的 [`BobCoach-1.1.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip.sha256) 核对完整性。Windows 11 24H2 最终实机 smoke 尚未完成。
 
 - `Windows 11 24H2 x64` 与 `Windows 10 22H2 x64` 使用同一个 64 位安装包。
 - 不要下载 Release 页面底部的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是安装包。
@@ -51,7 +51,7 @@
 
 ### 插件列表没有 BobCoach
 
-1. 确认 HDT 已完全退出后再复制文件；1.0.0 必须同时复制 DLL 和校验文件。
+1. 确认 HDT 已完全退出后再复制文件；必须同时复制 DLL 和校验文件。
 2. 确认 `%AppData%\HearthstoneDeckTracker\Plugins\BobCoach.dll` 与相邻的 `BobCoach.dll.sha256` 同时存在。
 3. 右键 `BobCoach.dll`，打开“属性”；如果底部有“解除锁定”，勾选后确定。
 4. 重新启动 HDT，再到 `Options > Tracker > Plugins` 检查。

@@ -14,6 +14,9 @@ const expectedFiles = [
   'images/install/install-02-open-plugins-folder.png',
   'images/install/install-03-copy-bobcoach-dll.png',
   'images/install/install-04-enable-bobcoach.png',
+  'images/features/status-strip-settings-entry.jpg',
+  'images/features/status-strip-controls.jpg',
+  'images/features/status-strip-result.jpg',
   'README_OFFLINE.md',
   'INSTALL.ps1',
   'UNINSTALL.ps1',
@@ -106,6 +109,7 @@ for (const [token, label] of [
   ['CurrentSeasonPreview is retained only for historical 0.2.0-beta.1 artifacts', 'builder retired preview gate'],
   ['docs\\user\\INSTALL.html', 'builder local HTML guide source'],
   ['docs\\user\\images\\install', 'builder local guide image source'],
+  ['docs\\user\\images\\features', 'builder local status-strip image source'],
   ['Get-ChildItem -LiteralPath $packageDirectory -Recurse -File -Force -Name', 'builder relative package enumeration'],
 ]) requireText(builder, token, label);
 
@@ -137,7 +141,7 @@ forbid(
   /\.FullName\.Substring\(/i,
   'offline package builder test absolute-path substring enumeration',
 );
-for (const token of ['1.0.0', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
+for (const token of ['1.1.0', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
 

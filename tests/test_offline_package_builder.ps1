@@ -33,6 +33,9 @@ $expectedFiles = @(
     "images/install/install-02-open-plugins-folder.png",
     "images/install/install-03-copy-bobcoach-dll.png",
     "images/install/install-04-enable-bobcoach.png",
+    "images/features/status-strip-settings-entry.jpg",
+    "images/features/status-strip-controls.jpg",
+    "images/features/status-strip-result.jpg",
     "README_OFFLINE.md",
     "INSTALL.ps1",
     "UNINSTALL.ps1",
@@ -91,7 +94,7 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
     }
 
     $sumLines = @(Get-Content -LiteralPath (Join-Path $PackageRoot "SHA256SUMS.txt") -Encoding UTF8)
-    Assert-Equal 16 $sumLines.Count "SHA256SUMS line count"
+    Assert-Equal 19 $sumLines.Count "SHA256SUMS line count"
     $seen = @{}
     foreach ($line in $sumLines) {
         if ($line -notmatch '^([A-F0-9]{64})  ([^\\:*?"<>|\r\n]+)$') { throw "Invalid SHA256SUMS line: $line" }
@@ -143,10 +146,10 @@ try {
     Assert-ExtractedPackage $extractedPackageRoot
     $releaseReadme = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $extractedPackageRoot "README_OFFLINE.md")
     Assert-True ($releaseReadme.Contains(
-        "OFFICIAL GITHUB RELEASE v1.1.0"
-    )) "release README identifies the official GitHub release"
+        "RELEASE CANDIDATE v1.1.0 / NOT PUBLISHED"
+    )) "release README identifies the unpublished release candidate"
     Assert-True ($releaseReadme.Contains(
-        "Windows 11 24H2 最终实机 smoke 未完成"
+        "Windows 11 24H2 最终实机 smoke 尚未完成"
     )) "release README discloses the skipped final physical smoke validation"
     foreach ($previewOnlyText in @(
         "CURRENT SEASON PREVIEW",
