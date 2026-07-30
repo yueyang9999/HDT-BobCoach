@@ -46,6 +46,9 @@ const shopRefreshMethod = plugin.slice(shopRefreshStart, shopRefreshEnd);
 const calibrationRenderStart = calibration.indexOf("public void Render(Canvas canvas)");
 const calibrationRenderEnd = calibration.indexOf("\n        public void Clear", calibrationRenderStart + 1);
 const calibrationRenderMethod = calibration.slice(calibrationRenderStart, calibrationRenderEnd);
+const calibrationStatusPreviewStart = calibration.indexOf("private void DrawStatusPreview");
+const calibrationStatusPreviewEnd = calibration.indexOf("\n        private void ", calibrationStatusPreviewStart + 1);
+const calibrationStatusPreviewMethod = calibration.slice(calibrationStatusPreviewStart, calibrationStatusPreviewEnd);
 
 check("plugin menu exposes settings entry", !/MenuItem\s*\{\s*get\s*\{\s*return null;/.test(plugin));
 check("settings window is held by the plugin", plugin.includes("StatusStripSettingsWindow"));
@@ -111,6 +114,9 @@ check("F10 status preview uses the shared position, font metrics, and bounds pol
     calibration.includes("GetStatusStripPosition()")
     && calibration.includes("StatusStripLayoutPolicy.CreateMetrics")
     && calibration.includes("StatusStripLayoutPolicy.ClampPosition"));
+check("F10 status preview does not mutate shared position during rendering",
+    !calibrationStatusPreviewMethod.includes("_config.StatusOffset")
+    && !calibrationStatusPreviewMethod.includes("UpdateStatusConfigFromCanvasPosition"));
 
 if (failures.length) {
     for (const failure of failures) console.error("FAIL " + failure);

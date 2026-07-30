@@ -468,7 +468,6 @@ namespace BobCoach.Engine
             var position = StatusStripLayoutPolicy.ClampPosition(
                 requested.X, requested.Y, canvasWidth, canvasHeight,
                 preview.DesiredSize.Width, preview.DesiredSize.Height);
-            UpdateStatusConfigFromCanvasPosition(position.X, position.Y, canvasWidth, canvasHeight);
 
             Add(canvas, preview, position.X, position.Y);
             var label = new TextBlock
@@ -480,19 +479,6 @@ namespace BobCoach.Engine
                 IsHitTestVisible = false,
             };
             Add(canvas, label, position.X + 3, Math.Max(0, position.Y - 16));
-        }
-
-        private void UpdateStatusConfigFromCanvasPosition(
-            double x, double y, double canvasWidth, double canvasHeight)
-        {
-            double calibrationWidth = _config.CalibrationWidth > 100
-                ? _config.CalibrationWidth
-                : LayoutConfig.DefaultCalibrationWidth;
-            double calibrationHeight = _config.CalibrationHeight > 100
-                ? _config.CalibrationHeight
-                : LayoutConfig.DefaultCalibrationHeight;
-            _config.StatusOffsetX = x * calibrationWidth / canvasWidth;
-            _config.StatusOffsetY = y * calibrationHeight / canvasHeight;
         }
 
         private void DrawZone(Canvas canvas, LayoutRect rect, string colorHex, string label)

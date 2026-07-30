@@ -24,7 +24,10 @@ $allowedFeatureImagePaths = @(
     "docs/user/images/features/feature-02-upgrade.jpg",
     "docs/user/images/features/feature-03-hero-power.jpg",
     "docs/user/images/features/feature-04-trinket.jpg",
-    "docs/user/images/features/feature-05-discover.jpg"
+    "docs/user/images/features/feature-05-discover.jpg",
+    "docs/user/images/features/status-strip-settings-entry.jpg",
+    "docs/user/images/features/status-strip-controls.jpg",
+    "docs/user/images/features/status-strip-result.jpg"
 )
 $binaryExtensions = $forbiddenBinaryExtensions + @(
     ".7z", ".rar", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".pdf", ".mp3", ".mp4", ".wav", ".woff", ".woff2", ".ttf", ".pdb"
