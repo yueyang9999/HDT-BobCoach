@@ -105,4 +105,4 @@ PASS model loader rejects corruption, schema drift, and invalid numbers
 
 ## Required Conclusion
 
-新算法基础设施已完成一部分，但当前没有可靠的、版本匹配的新赛季标注数据；实际决策提升尚未验证。新策略继续保持 Shadow，`legacy-v1.1.0` 仍承担可见推荐和回退。
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
