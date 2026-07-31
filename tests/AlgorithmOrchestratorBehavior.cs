@@ -116,8 +116,10 @@ internal static class AlgorithmOrchestratorBehavior
             ShadowPreservesLegacyOutputAndRecordsDifferences();
             LegacyOnlyAvoidsUnifiedPolicyAndComparison();
             InvalidRuntimeModeDegradesToLegacyOnly();
+            UnifiedModeRemainsShadowUntilActivationApproved();
             UnifiedFailureFallsBackToLegacy();
             NullPolicyResultsAreContainedAndFallback();
+            MalformedRankedActionsAreContainedInShadowModes();
             RecorderAndDiagnosticFailuresAreContained();
             ComparisonFingerprintIsStableAndDecisionScoped();
             ProductionRecorderRejectsBlankDecisionIdAndDeduplicates();
@@ -179,7 +181,24 @@ internal static class AlgorithmOrchestratorBehavior
             DecisionRuntimeMode.Unified).Decide(State(), "decision-1");
 
         AssertEqual("legacy-v1.1.0", safe.PolicyId, "exception fallback policy");
-        AssertEqual(FallbackReason.ModelUnavailable, safe.FallbackReason, "exception fallback reason");
+        AssertEqual(FallbackReason.None, safe.FallbackReason,
+            "unified failure preserves the legacy fallback reason");
+    }
+
+    private static void UnifiedModeRemainsShadowUntilActivationApproved()
+    {
+        var legacy = new StaticPolicy("legacy-v1.1.0", Result("legacy-v1.1.0", "Refresh|-1||", 0.8d));
+        var unified = new CountingPolicy("unified-linear-v1",
+            Result("unified-linear-v1", "BuyMinion|0|CARD_A|shop", 0.6d));
+        var sink = new CollectingShadowComparisonSink();
+        var visible = new DecisionOrchestrator(legacy, unified, sink, DecisionRuntimeMode.Unified)
+            .Decide(State(), "unified-before-activation");
+
+        AssertEqual("legacy-v1.1.0", visible.PolicyId, "unified mode keeps legacy visible");
+        AssertEqual("Refresh|-1||", ActionKey(visible.SelectedAction),
+            "unified mode keeps legacy selected action");
+        AssertEqual(1, unified.DecideCount, "unified mode evaluates for local comparison");
+        AssertEqual(1, sink.Comparisons.Count, "unified mode records local comparison");
     }
 
     private static void NullPolicyResultsAreContainedAndFallback()
@@ -199,6 +218,26 @@ internal static class AlgorithmOrchestratorBehavior
         AssertEqual("unavailable", legacyFallback.PolicyId, "null legacy uses unavailable policy");
         AssertEqual(FallbackReason.NoSafeAction, legacyFallback.FallbackReason,
             "null legacy uses the existing conservative fallback");
+    }
+
+    private static void MalformedRankedActionsAreContainedInShadowModes()
+    {
+        foreach (var mode in new[] { DecisionRuntimeMode.Shadow, DecisionRuntimeMode.Unified })
+        {
+            var diagnostics = new CollectingDecisionDiagnostics();
+            var sink = new CollectingShadowComparisonSink();
+            var visible = new DecisionOrchestrator(
+                new StaticPolicy("legacy-v1.1.0", Result("legacy-v1.1.0", "Refresh|-1||", 0.8d)),
+                new StaticPolicy("unified-linear-v1", MalformedRankedResult()), sink, mode, diagnostics)
+                .Decide(State(), "malformed-ranked-" + mode);
+
+            AssertEqual("legacy-v1.1.0", visible.PolicyId,
+                "malformed comparison keeps legacy visible " + mode);
+            AssertEqual(0, sink.Comparisons.Count, "malformed comparison is not recorded " + mode);
+            AssertEqual(1, diagnostics.Entries.Count, "malformed comparison is diagnostic input " + mode);
+            AssertEqual("shadow-comparison", diagnostics.Entries[0],
+                "malformed comparison diagnostic source " + mode);
+        }
     }
 
     private static void RecorderAndDiagnosticFailuresAreContained()
@@ -277,6 +316,13 @@ internal static class AlgorithmOrchestratorBehavior
         return new DecisionResult(policyId, action,
             new List<RankedAction> { new RankedAction(action, actionKey, 1d, null) }, confidence,
             PlannerStatus.Completed, FallbackReason.None, policyId);
+    }
+
+    private static DecisionResult MalformedRankedResult()
+    {
+        return new DecisionResult("unified-linear-v1", Action("BuyMinion|0|CARD_A|shop"),
+            new List<RankedAction> { null }, 0.6d, PlannerStatus.Completed,
+            FallbackReason.None, "malformed ranked list");
     }
 
     private static GameAction Action(string actionKey)

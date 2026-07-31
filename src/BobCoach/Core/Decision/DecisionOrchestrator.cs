@@ -166,17 +166,18 @@ namespace BobCoach.Engine.Decision
             if (_mode == DecisionRuntimeMode.LegacyOnly) return legacy;
 
             var unified = SafeDecide(_unified, state, FallbackReason.ModelUnavailable);
-            TryRecordComparison(ShadowComparison.Create(decisionId, state, legacy, unified));
-            if (_mode == DecisionRuntimeMode.Shadow) return legacy;
-            return unified.FallbackReason == FallbackReason.None
-                ? unified
-                : WithFallback(legacy, unified.FallbackReason);
+            TryRecordComparison(decisionId, state, legacy, unified);
+            return legacy;
         }
 
-        private void TryRecordComparison(ShadowComparison comparison)
+        private void TryRecordComparison(string decisionId, GameState state,
+            DecisionResult legacy, DecisionResult unified)
         {
-            try { _comparisonSink.RecordComparison(comparison); }
-            catch (Exception ex) { TryRecordDiagnostic("shadow-comparison-sink", ex); }
+            try
+            {
+                _comparisonSink.RecordComparison(ShadowComparison.Create(decisionId, state, legacy, unified));
+            }
+            catch (Exception ex) { TryRecordDiagnostic("shadow-comparison", ex); }
         }
 
         private DecisionResult SafeDecide(IDecisionPolicy policy, GameState state,
@@ -199,15 +200,6 @@ namespace BobCoach.Engine.Decision
         {
             try { _diagnostics.RecordRateLimited(source, exception); }
             catch { }
-        }
-
-        private static DecisionResult WithFallback(DecisionResult legacy, FallbackReason reason)
-        {
-            var effectiveReason = legacy.FallbackReason == FallbackReason.None
-                ? reason
-                : legacy.FallbackReason;
-            return new DecisionResult(legacy.PolicyId, legacy.SelectedAction, legacy.RankedActions,
-                legacy.Confidence, legacy.PlannerStatus, effectiveReason, legacy.Explanation);
         }
     }
 }
