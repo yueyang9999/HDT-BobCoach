@@ -23,7 +23,7 @@ namespace BobCoach.Engine
         {
             if (state == null || action == null) return state;
 
-            var next = ShallowCopy(state);
+            var next = DetachedCopy(state);
 
             switch (action.Type)
             {
@@ -170,6 +170,7 @@ namespace BobCoach.Engine
             {
                 CardId = source.CardId,
                 CardName = source.CardName,
+                EntityId = source.EntityId,
                 Attack = source.Attack,
                 Health = source.Health,
                 Tier = source.Tier,
@@ -189,6 +190,7 @@ namespace BobCoach.Engine
                 CardText = source.CardText,
                 Tribe = source.Tribe,
                 IsSpell = source.IsSpell,
+                GrantsStats = source.GrantsStats,
                 Cost = source.Cost,
                 IsFrozen = source.IsFrozen,
             };
@@ -380,9 +382,9 @@ namespace BobCoach.Engine
             state.DiscoverOptions.Clear(); // 选完后清除
         }
 
-        // ── 浅拷贝 ──
+        // ── Detached copy ──
 
-        private GameState ShallowCopy(GameState src)
+        private GameState DetachedCopy(GameState src)
         {
             return new GameState
             {
@@ -411,15 +413,22 @@ namespace BobCoach.Engine
                 Phase = src.Phase,
                 FrozenShop = src.FrozenShop,
                 FreeRefreshCount = src.FreeRefreshCount,
-                BoardMinions = new List<MinionData>(src.BoardMinions),
-                HandMinions = new List<MinionData>(src.HandMinions),
-                ShopMinions = new List<MinionData>(src.ShopMinions),
+                GameBuild = src.GameBuild,
+                SeasonId = src.SeasonId,
+                CardPoolIdentity = src.CardPoolIdentity,
+                BoardMinions = src.BoardMinions != null
+                    ? src.BoardMinions.Select(CloneMinion).ToList() : new List<MinionData>(),
+                HandMinions = src.HandMinions != null
+                    ? src.HandMinions.Select(CloneMinion).ToList() : new List<MinionData>(),
+                ShopMinions = src.ShopMinions != null
+                    ? src.ShopMinions.Select(CloneMinion).ToList() : new List<MinionData>(),
                 HeroOptions = src.HeroOptions != null
                     ? new List<HeroOption>(src.HeroOptions) : new List<HeroOption>(),
                 TrinketOffer = src.TrinketOffer != null
                     ? new List<TrinketOption>(src.TrinketOffer) : new List<TrinketOption>(),
                 DiscoverOptions = src.DiscoverOptions != null
                     ? new List<TrinketOption>(src.DiscoverOptions) : new List<TrinketOption>(),
+                DiscoverGatePassed = src.DiscoverGatePassed,
                 Opponents = src.Opponents != null
                     ? new List<OpponentData>(src.Opponents) : new List<OpponentData>(),
                 LastUpgradeTurn = src.LastUpgradeTurn,

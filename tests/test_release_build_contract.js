@@ -44,9 +44,13 @@ const compileDigest = crypto.createHash("sha256")
     .digest("hex");
 assert.ok(compileItems.includes("Core\\PluginIntegrityVerifier.cs"),
     "runtime integrity verifier must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 185, "unexpected compile item count");
+assert.ok(compileItems.includes("Core\\Decision\\ActionFeatureSchema.cs"),
+    "versioned action feature schema must be compiled into BobCoach.dll");
+assert.ok(compileItems.includes("Core\\Decision\\ActionFeatureExtractor.cs"),
+    "action feature extractor must be compiled into BobCoach.dll");
+assert.strictEqual(compileItems.length, 187, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "06d883889dfb4ccad60d2d88b6b09315e662b57a07526e0e6cff212d493303f1",
+    "35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e",
     "compile set changed");
 
 for (const token of [

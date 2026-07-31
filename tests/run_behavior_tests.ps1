@@ -32,6 +32,7 @@ foreach ($file in @(
     "test_layout_config_migration.ps1",
     "test_layout_resolution_matrix.ps1",
     "test_value_function_weight_contract.ps1",
+    "test_algorithm_features.ps1",
     "test_algorithm_policy_contract.ps1",
     "test_algorithm_candidates.ps1",
     "test_algorithm_decision_events.ps1",

@@ -136,6 +136,8 @@
     <Compile Include="Core\DecisionEngine.cs" />
     <Compile Include="Core\Decision\Contracts.cs" />
     <Compile Include="Core\Decision\ActionDescriptor.cs" />
+    <Compile Include="Core\Decision\ActionFeatureSchema.cs" />
+    <Compile Include="Core\Decision\ActionFeatureExtractor.cs" />
     <Compile Include="Core\Decision\CandidateGenerator.cs" />
     <Compile Include="Core\Decision\HardConstraintFilter.cs" />
     <Compile Include="Core\Decision\LegacyDecisionPolicy.cs" />
