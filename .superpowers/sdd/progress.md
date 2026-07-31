@@ -25,7 +25,7 @@ Data boundary approved 2026-07-31: season-independent engineering may proceed, b
 - Algorithm Task 7: complete (commits 9163eb1..9322b0e, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 BED76B33CA50B2D17B27ECF5BC1927D4D2F2CD4AD7A1BCE5EFEB6F0992D69D84, 74568 bytes)
 - Algorithm Task 8: complete (commits 4922095..3131c56, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 8D23732DE768413105A11E9260C72EA77CA37F71ECFF15668D27040679516BE6, 74775 bytes)
 - Algorithm Task 9: complete (commits 4583189..89429b9, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 90785E8492BE6236BEF7454FF4305E389A01EA4EE26373A9E51281C6EABD51E9, 67769 bytes; calibration and approval are bound to exact model identity, and malformed feature vectors fail closed)
-- Algorithm Task 10: pending
+- Algorithm Task 10: complete (commits a387f8e..21f47bd, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 A5430A11D5237C9286C9F4829B9D536E1315AE076162B7F5D93C5B71B79FFAE7, 76990 bytes; beam planning remains deterministic, bounded, score-independent beyond ranked roots, diagnostic-only, and fails closed for unavailable or malformed continuations)
 - Algorithm Task 11: pending
 - Algorithm Task 12: pending
 - Final whole-branch review: pending
