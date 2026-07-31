@@ -10,31 +10,53 @@ namespace BobCoach.Engine.Decision
 {
     public sealed class RankingModelEnvelope
     {
+        [JsonProperty(Required = Required.Always)]
         public int ArtifactSchemaVersion { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string PayloadBase64 { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string PayloadSha256 { get; set; }
     }
 
     public sealed class RankingModelPayload
     {
+        [JsonProperty(Required = Required.Always)]
         public string ModelId { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public int FeatureSchemaVersion { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string[] FeatureNames { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double[] Means { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double[] StandardDeviations { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double[] Minimums { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double[] Maximums { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double[] Weights { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double[] ActionTypeBiases { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double Intercept { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public double OodDistanceThreshold { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string TrainingSetIdentity { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string SeasonRange { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public IDictionary<string, double> BenchmarkMetrics { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string CreatedAtUtc { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string GameBuild { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string SeasonId { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string CardPoolIdentity { get; set; }
+        [JsonProperty(Required = Required.Always)]
         public string EffectAcceptanceStatus { get; set; }
 
         [JsonIgnore]
@@ -67,6 +89,7 @@ namespace BobCoach.Engine.Decision
     public static class RankingModelLoader
     {
         private const int MaximumArtifactBytes = 1024 * 1024;
+        private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
         private static readonly JsonSerializerSettings StrictJson = new JsonSerializerSettings
         {
             MissingMemberHandling = MissingMemberHandling.Error,
@@ -100,13 +123,22 @@ namespace BobCoach.Engine.Decision
             if (context == null || !context.HasEffectAcceptance) throw Invalid("effect acceptance");
             if (!IsResolvedIdentity(context.GameBuild) || !IsResolvedIdentity(context.SeasonId)
                 || !IsResolvedIdentity(context.CardPoolIdentity)) throw Invalid("runtime identity");
+            RequireResolvedIdentity(model.ModelId, "artifact model identity");
+            RequireResolvedIdentity(model.TrainingSetIdentity, "artifact training set identity");
+            RequireResolvedIdentity(model.SeasonRange, "artifact season range");
+            RequireResolvedIdentity(model.GameBuild, "artifact game build identity");
+            RequireResolvedIdentity(model.SeasonId, "artifact season identity");
+            RequireResolvedIdentity(model.CardPoolIdentity, "artifact card pool identity");
+            RequireResolvedIdentity(model.EffectAcceptanceStatus, "artifact effect acceptance");
             if (!string.Equals("accepted", model.EffectAcceptanceStatus, StringComparison.Ordinal))
                 throw Invalid("artifact effect acceptance");
             if (IsSynthetic(model)) throw Invalid("synthetic artifact");
-            if (!string.Equals(model.GameBuild, context.GameBuild, StringComparison.Ordinal)
-                || !string.Equals(model.SeasonId, context.SeasonId, StringComparison.Ordinal)
-                || !string.Equals(model.CardPoolIdentity, context.CardPoolIdentity, StringComparison.Ordinal))
-                throw Invalid("artifact identity mismatch");
+            if (!string.Equals(model.GameBuild, context.GameBuild, StringComparison.Ordinal))
+                throw Invalid("artifact game build mismatch");
+            if (!string.Equals(model.SeasonId, context.SeasonId, StringComparison.Ordinal))
+                throw Invalid("artifact season identity mismatch");
+            if (!string.Equals(model.CardPoolIdentity, context.CardPoolIdentity, StringComparison.Ordinal))
+                throw Invalid("artifact card pool identity mismatch");
             return model;
         }
 
@@ -127,7 +159,7 @@ namespace BobCoach.Engine.Decision
                         copy.Write(buffer, 0, read);
                     }
                     var envelope = JsonConvert.DeserializeObject<RankingModelEnvelope>(
-                        Encoding.UTF8.GetString(copy.ToArray()), StrictJson);
+                        DecodeStrictUtf8(copy.ToArray(), "artifact utf-8"), StrictJson);
                     if (envelope == null) throw Invalid("artifact json");
                     return envelope;
                 }
@@ -141,7 +173,7 @@ namespace BobCoach.Engine.Decision
             try
             {
                 var model = JsonConvert.DeserializeObject<RankingModelPayload>(
-                    Encoding.UTF8.GetString(payload), StrictJson);
+                DecodeStrictUtf8(payload, "payload utf-8"), StrictJson);
                 if (model == null) throw Invalid("payload json");
                 return model;
             }
@@ -205,10 +237,21 @@ namespace BobCoach.Engine.Decision
             if (string.IsNullOrWhiteSpace(value)) throw Invalid(name);
         }
 
+        private static string DecodeStrictUtf8(byte[] value, string reason)
+        {
+            try { return StrictUtf8.GetString(value); }
+            catch (DecoderFallbackException ex) { throw Invalid(reason, ex); }
+        }
+
         private static bool IsResolvedIdentity(string value)
         {
             return !string.IsNullOrWhiteSpace(value)
                 && !string.Equals(value.Trim(), "unknown", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void RequireResolvedIdentity(string value, string reason)
+        {
+            if (!IsResolvedIdentity(value)) throw Invalid(reason);
         }
 
         private static bool IsSynthetic(RankingModelPayload model)

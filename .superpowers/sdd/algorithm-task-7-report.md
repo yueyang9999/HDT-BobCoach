@@ -103,6 +103,56 @@ PASS model loader rejects corruption, schema drift, and invalid numbers
    confidence gates; compare in Shadow; then obtain human review and effect
    acceptance before any production embedding or visible-policy change.
 
+## Review Remediation TDD Evidence
+
+The focused command for every review-remediation cycle was:
+
+```powershell
+$env:BOBCOACH_HDT_DIR='E:\HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
+```
+
+RED evidence was recorded before each production fix:
+
+```text
+FAIL artifact model identity did not throw ModelValidationException
+FAIL missing envelope checksum expected message=artifact json actual=Invalid ranking model artifact: payload checksum
+FAIL invalid envelope UTF-8 expected message=artifact utf-8 actual=Invalid ranking model artifact: checksum
+FAIL artifact game build mismatch expected message=artifact game build mismatch actual=Invalid ranking model artifact: artifact identity mismatch
+```
+
+After the respective fixes for unresolved artifact identity rejection, required
+JSON fields, strict UTF-8 decoding, and specific runtime mismatch diagnostics,
+the same focused command produced:
+
+```text
+PASS model loader rejects corruption, schema drift, and invalid numbers
+```
+
+Additional boundary tests for unknown JSON fields, invalid Base64, envelope
+size, all array dimensions, numeric bounds, payload UTF-8, and accepted
+resolved runtime loading were added as regression coverage. Those paths were
+already fail-closed, so this coverage expansion did not have a production
+change or a new RED result.
+
+## Review Remediation Final Verification
+
+Fresh verification after the remediation completed with exit code 0:
+
+- `tests/test_algorithm_model_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1`: PASS. The existing
+  `CardSemanticFactSource.CardId` CS0649 warning appeared twice and was not
+  suppressed.
+- `tests/run_contract_tests.ps1`: PASS. All 13 contracts completed.
+- `node tests/test_release_build_contract.js`: PASS. Compile set `188` and
+  SHA-256 `0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849`
+  matched.
+- `tools/build/validate_repository.ps1`: PASS. Scanned 408 tracked or
+  unignored files.
+- Direct `Release|x64` build against HDT `1.54.0`: PASS. The external
+  validation directory contains `BobCoach.dll`, 734,720 bytes, SHA-256
+  `F8D36D7F295B29FE81ADB8A2FDE10320FE8E720A5B8F67357BD0BBBAAF795FC5`.
+
 ## Required Conclusion
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
