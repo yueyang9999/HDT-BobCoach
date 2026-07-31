@@ -1,7 +1,7 @@
 # BobCoach next-season algorithm optimization design
 
 Date: 2026-07-31
-Status: user-approved direction and metrics; pending written-spec review
+Status: owner-approved for implementation planning
 
 ## 1. Decision summary
 
