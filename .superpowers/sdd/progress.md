@@ -24,11 +24,11 @@ Data boundary approved 2026-07-31: season-independent engineering may proceed, b
 - Algorithm Task 6: complete (commits 0070303..d2e4990, fresh review approved with Critical/Important/Minor all zero; season extensions require exact resolved build/season/card-pool provenance, and missing or incomplete simulator observations fail closed to value=0/coverage=0)
 - Algorithm Task 7: complete (commits 9163eb1..9322b0e, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 BED76B33CA50B2D17B27ECF5BC1927D4D2F2CD4AD7A1BCE5EFEB6F0992D69D84, 74568 bytes)
 - Algorithm Task 8: complete (commits 4922095..3131c56, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 8D23732DE768413105A11E9260C72EA77CA37F71ECFF15668D27040679516BE6, 74775 bytes)
-- Algorithm Task 9: pending
+- Algorithm Task 9: complete (commits 4583189..89429b9, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 90785E8492BE6236BEF7454FF4305E389A01EA4EE26373A9E51281C6EABD51E9, 67769 bytes; calibration and approval are bound to exact model identity, and malformed feature vectors fail closed)
 - Algorithm Task 10: pending
 - Algorithm Task 11: pending
 - Algorithm Task 12: pending
 - Final whole-branch review: pending
 - Final validation and branch handoff: pending
 
-Validation note: full `npm test` currently reaches package checks but the local AppData installation-directory contract exits 1; focused release contract, contracts, behavior, deterministic DLL/ZIP, repository validation, and `git diff --check` pass. Re-evaluate during final validation.
+Validation note: Task 9 fresh full `npm test` passes when `BOBCOACH_HDT_DIR` is explicitly set to the exact local HDT 1.54.0 installation directory. Focused confidence, ranker, Shadow orchestrator, release contract, deterministic DLL/ZIP, repository validation, and `git diff --check` also pass; repository validation retains only the pre-existing Task 7 report absolute-path finding. Re-evaluate all evidence during final validation.
