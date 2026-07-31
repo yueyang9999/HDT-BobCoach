@@ -33,6 +33,15 @@ assert.strictEqual(golden.benchmarkId, 'v1.1.0-golden-synthetic-v1');
 assert.strictEqual(golden.policyId, 'legacy-v1.1.0');
 assert.strictEqual(golden.scenarioSchemaVersion, 1);
 assert.strictEqual(golden.scenarios.length, 1);
+assert.strictEqual(golden.scenarios[0].category, 'level');
+assert.strictEqual(golden.scenarios[0].severity, 'high-impact');
+assert.deepStrictEqual(golden.scenarios[0].state, {
+  gameActive: true,
+  turn: 2,
+  gold: 5,
+  tavernTier: 1,
+  tavernUpgradeCost: 5
+});
 assert.strictEqual(golden.scenarios[0].candidates[0].type, 'Upgrade');
 assert.strictEqual(golden.scenarios[0].candidates[0].targetIndex, -1);
 assert.strictEqual(golden.scenarios[0].actionLabels[0].actionKey, 'Upgrade|-1||');
