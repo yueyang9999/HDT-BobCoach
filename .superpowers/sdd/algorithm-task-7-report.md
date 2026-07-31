@@ -153,6 +153,72 @@ Fresh verification after the remediation completed with exit code 0:
   validation directory contains `BobCoach.dll`, 734,720 bytes, SHA-256
   `F8D36D7F295B29FE81ADB8A2FDE10320FE8E720A5B8F67357BD0BBBAAF795FC5`.
 
+## Review Remediation Approval Binding TDD Evidence
+
+The focused RED/GREEN command was:
+
+```powershell
+$env:BOBCOACH_HDT_DIR='E:\HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
+```
+
+RED output before binding an effect-accepted runtime context to its specific
+artifact was:
+
+```text
+FAIL approved payload checksum did not throw ModelValidationException
+```
+
+The focused regression now covers exact ordinal approval matching for the
+payload SHA-256, model ID, training-set identity, and season range. Each
+resolved-but-different approval value is isolated so the other approved values
+match the candidate. It also covers `unknown` and empty approval values, plus
+a fully matching accepted baseline.
+
+After adding explicit approved-artifact fields to `RankingModelRuntimeContext`
+and fail-closed comparisons in `LoadForRuntime`, GREEN output was:
+
+```text
+PASS model loader rejects corruption, schema drift, and invalid numbers
+```
+
+## Review Remediation Approval Binding Final Verification
+
+Fresh verification after exact approval binding completed with exit code 0:
+
+- `tests/test_algorithm_model_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1`: PASS. The existing
+  `CardSemanticFactSource.CardId` CS0649 warning was emitted and not
+  suppressed.
+- `tests/run_contract_tests.ps1`: PASS. All 13 contracts completed.
+- `node tests/test_release_build_contract.js`: PASS. Compile set `188` and
+  SHA-256 `0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849`
+  matched.
+- `tools/build/validate_repository.ps1`: PASS. Scanned 408 tracked or
+  unignored files.
+- Direct `Release|x64` build against HDT `1.54.0`: PASS. The external
+  validation directory contains `BobCoach.dll`, 736,256 bytes, SHA-256
+  `B656A895E1FB78D13A63BC0F78483C00B469ECB7F968C86C1C688F096EB28E44`.
+
+## Approval Binding Final Rerun
+
+After adding the empty approved-identity regressions, the complete final
+verification was rerun against the final working tree with exit code 0:
+
+- `tests/test_algorithm_model_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1`: PASS. The existing
+  `CardSemanticFactSource.CardId` CS0649 warning was emitted and not
+  suppressed.
+- `tests/run_contract_tests.ps1`: PASS. All 13 contracts completed.
+- `node tests/test_release_build_contract.js`: PASS. Compile set `188` and
+  SHA-256 `0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849`
+  matched.
+- `tools/build/validate_repository.ps1`: PASS. Scanned 408 tracked or
+  unignored files.
+- Direct `Release|x64` build against HDT `1.54.0`: PASS. The external
+  validation directory contains `BobCoach.dll`, 736,256 bytes, SHA-256
+  `B656A895E1FB78D13A63BC0F78483C00B469ECB7F968C86C1C688F096EB28E44`.
+
 ## Required Conclusion
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。

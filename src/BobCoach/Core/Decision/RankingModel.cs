@@ -69,14 +69,23 @@ namespace BobCoach.Engine.Decision
         public string SeasonId { get; private set; }
         public string CardPoolIdentity { get; private set; }
         public bool HasEffectAcceptance { get; private set; }
+        public string ApprovedPayloadSha256 { get; private set; }
+        public string ApprovedModelId { get; private set; }
+        public string ApprovedTrainingSetIdentity { get; private set; }
+        public string ApprovedSeasonRange { get; private set; }
 
         public RankingModelRuntimeContext(string gameBuild, string seasonId, string cardPoolIdentity,
-            bool hasEffectAcceptance)
+            bool hasEffectAcceptance, string approvedPayloadSha256, string approvedModelId,
+            string approvedTrainingSetIdentity, string approvedSeasonRange)
         {
             GameBuild = gameBuild;
             SeasonId = seasonId;
             CardPoolIdentity = cardPoolIdentity;
             HasEffectAcceptance = hasEffectAcceptance;
+            ApprovedPayloadSha256 = approvedPayloadSha256;
+            ApprovedModelId = approvedModelId;
+            ApprovedTrainingSetIdentity = approvedTrainingSetIdentity;
+            ApprovedSeasonRange = approvedSeasonRange;
         }
     }
 
@@ -123,6 +132,10 @@ namespace BobCoach.Engine.Decision
             if (context == null || !context.HasEffectAcceptance) throw Invalid("effect acceptance");
             if (!IsResolvedIdentity(context.GameBuild) || !IsResolvedIdentity(context.SeasonId)
                 || !IsResolvedIdentity(context.CardPoolIdentity)) throw Invalid("runtime identity");
+            RequireResolvedIdentity(context.ApprovedPayloadSha256, "approved payload checksum");
+            RequireResolvedIdentity(context.ApprovedModelId, "approved model identity");
+            RequireResolvedIdentity(context.ApprovedTrainingSetIdentity, "approved training set identity");
+            RequireResolvedIdentity(context.ApprovedSeasonRange, "approved season range");
             RequireResolvedIdentity(model.ModelId, "artifact model identity");
             RequireResolvedIdentity(model.TrainingSetIdentity, "artifact training set identity");
             RequireResolvedIdentity(model.SeasonRange, "artifact season range");
@@ -139,6 +152,14 @@ namespace BobCoach.Engine.Decision
                 throw Invalid("artifact season identity mismatch");
             if (!string.Equals(model.CardPoolIdentity, context.CardPoolIdentity, StringComparison.Ordinal))
                 throw Invalid("artifact card pool identity mismatch");
+            if (!string.Equals(model.PayloadSha256, context.ApprovedPayloadSha256, StringComparison.Ordinal))
+                throw Invalid("approved payload checksum mismatch");
+            if (!string.Equals(model.ModelId, context.ApprovedModelId, StringComparison.Ordinal))
+                throw Invalid("approved model identity mismatch");
+            if (!string.Equals(model.TrainingSetIdentity, context.ApprovedTrainingSetIdentity,
+                StringComparison.Ordinal)) throw Invalid("approved training set identity mismatch");
+            if (!string.Equals(model.SeasonRange, context.ApprovedSeasonRange, StringComparison.Ordinal))
+                throw Invalid("approved season range mismatch");
             return model;
         }
 

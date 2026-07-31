@@ -41,6 +41,7 @@ internal static class AlgorithmModelContractBehavior
             VerifiesInvalidUtf8IsRejected(args[0]);
             VerifiesCoreFailClosedBoundaries(args[0]);
             VerifiesRuntimeRequiresResolvedArtifactIdentities(args[0]);
+            VerifiesRuntimeApprovalBindsExactArtifact(args[0]);
             Console.WriteLine("PASS model loader rejects corruption, schema drift, and invalid numbers");
             return 0;
         }
@@ -139,42 +140,107 @@ internal static class AlgorithmModelContractBehavior
 
     private static void VerifiesRuntimeRequiresResolvedArtifactIdentities(string root)
     {
-        var context = new RankingModelRuntimeContext("test-build-v1", "test-season-v1",
-            "test-card-pool-v1", true);
         using (var baseline = ResolvedRuntimeEnvelope(root, model => { }))
         {
+            var approval = RankingModelLoader.Load(baseline);
+            baseline.Position = 0;
+            var context = ApprovedRuntimeContext(approval);
             var loaded = RankingModelLoader.LoadForRuntime(baseline, context);
             AssertEqual("test-model-v1", loaded.ModelId, "resolved runtime baseline");
-        }
 
-        AssertRuntimeRejects(root, context, model => model.ModelId = "unknown",
-            "artifact model identity");
-        AssertRuntimeRejects(root, context, model => model.TrainingSetIdentity = "unknown",
-            "artifact training set identity");
-        AssertRuntimeRejects(root, context, model => model.SeasonRange = "unknown",
-            "artifact season range");
-        AssertRuntimeRejects(root, context, model => model.GameBuild = "unknown",
-            "artifact game build identity");
-        AssertRuntimeRejects(root, context, model => model.SeasonId = "unknown",
-            "artifact season identity");
-        AssertRuntimeRejects(root, context, model => model.CardPoolIdentity = "unknown",
-            "artifact card pool identity");
-        AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "unknown",
-            "artifact effect acceptance");
-        AssertRuntimeRejects(root, context, model => model.GameBuild = "test-build-v2",
-            "artifact game build mismatch");
-        AssertRuntimeRejects(root, context, model => model.SeasonId = "test-season-v2",
-            "artifact season identity mismatch");
-        AssertRuntimeRejects(root, context, model => model.CardPoolIdentity = "test-card-pool-v2",
-            "artifact card pool identity mismatch");
-        AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
-            "synthetic artifact", model => model.ModelId = "synthetic-model");
-        using (var unknownContext = ResolvedRuntimeEnvelope(root, model => { }))
-        {
-            AssertThrows<ModelValidationException>(() => RankingModelLoader.LoadForRuntime(unknownContext,
-                new RankingModelRuntimeContext("unknown", "test-season-v1", "test-card-pool-v1", true)),
-                "unknown runtime identity", "runtime identity");
+            AssertRuntimeRejects(root, context, model => model.ModelId = "unknown",
+                "artifact model identity");
+            AssertRuntimeRejects(root, context, model => model.TrainingSetIdentity = "unknown",
+                "artifact training set identity");
+            AssertRuntimeRejects(root, context, model => model.SeasonRange = "unknown",
+                "artifact season range");
+            AssertRuntimeRejects(root, context, model => model.GameBuild = "unknown",
+                "artifact game build identity");
+            AssertRuntimeRejects(root, context, model => model.SeasonId = "unknown",
+                "artifact season identity");
+            AssertRuntimeRejects(root, context, model => model.CardPoolIdentity = "unknown",
+                "artifact card pool identity");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "unknown",
+                "artifact effect acceptance");
+            AssertRuntimeRejects(root, context, model => model.GameBuild = "test-build-v2",
+                "artifact game build mismatch");
+            AssertRuntimeRejects(root, context, model => model.SeasonId = "test-season-v2",
+                "artifact season identity mismatch");
+            AssertRuntimeRejects(root, context, model => model.CardPoolIdentity = "test-card-pool-v2",
+                "artifact card pool identity mismatch");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.ModelId = "synthetic-model");
+            using (var unknownContext = ResolvedRuntimeEnvelope(root, model => { }))
+            {
+                AssertThrows<ModelValidationException>(() => RankingModelLoader.LoadForRuntime(unknownContext,
+                    new RankingModelRuntimeContext("unknown", "test-season-v1", "test-card-pool-v1", true,
+                        approval.PayloadSha256, approval.ModelId, approval.TrainingSetIdentity, approval.SeasonRange)),
+                    "unknown runtime identity", "runtime identity");
+            }
         }
+    }
+
+    private static void VerifiesRuntimeApprovalBindsExactArtifact(string root)
+    {
+        AssertRuntimeApprovalRejects(root, model => model.CreatedAtUtc = "2026-07-31T00:00:00Z",
+            approval => ApprovedRuntimeContext(approval, payloadSha256: new string('0', 64)),
+            "approved payload checksum");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, modelId: "test-model-v2"),
+            "approved model identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, trainingSetIdentity: "test-training-v2"),
+            "approved training set identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, seasonRange: "test-season-range-v2"),
+            "approved season range");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, payloadSha256: "unknown"),
+            "unknown approved payload checksum", "approved payload checksum");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, modelId: "unknown"),
+            "unknown approved model identity", "approved model identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, trainingSetIdentity: "unknown"),
+            "unknown approved training set identity", "approved training set identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, seasonRange: "unknown"),
+            "unknown approved season range", "approved season range");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, payloadSha256: string.Empty),
+            "empty approved payload checksum", "approved payload checksum");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, modelId: string.Empty),
+            "empty approved model identity", "approved model identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, trainingSetIdentity: string.Empty),
+            "empty approved training set identity", "approved training set identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, seasonRange: string.Empty),
+            "empty approved season range", "approved season range");
+    }
+
+    private static void AssertRuntimeApprovalRejects(string root, Action<RankingModelPayload> mutation,
+        Func<RankingModelPayload, RankingModelRuntimeContext> contextFactory, string label,
+        string expectedMessage = null)
+    {
+        using (var stream = ResolvedRuntimeEnvelope(root, mutation))
+        {
+            var approval = RankingModelLoader.Load(stream);
+            stream.Position = 0;
+            AssertThrows<ModelValidationException>(() => RankingModelLoader.LoadForRuntime(stream,
+                contextFactory(approval)), label, expectedMessage ?? label);
+        }
+    }
+
+    private static RankingModelRuntimeContext ApprovedRuntimeContext(RankingModelPayload approval,
+        string payloadSha256 = null, string modelId = null, string trainingSetIdentity = null,
+        string seasonRange = null)
+    {
+        return new RankingModelRuntimeContext(approval.GameBuild, approval.SeasonId,
+            approval.CardPoolIdentity, true, payloadSha256 ?? approval.PayloadSha256,
+            modelId ?? approval.ModelId, trainingSetIdentity ?? approval.TrainingSetIdentity,
+            seasonRange ?? approval.SeasonRange);
     }
 
     private static void AssertRuntimeRejects(string root, RankingModelRuntimeContext context,
