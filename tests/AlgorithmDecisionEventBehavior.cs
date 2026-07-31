@@ -82,6 +82,17 @@ namespace BobCoach.Engine.Decision
         public DecisionResult(string policyId) { PolicyId = policyId; }
         public string PolicyId { get; private set; }
     }
+
+    public interface IShadowComparisonSink
+    {
+        void RecordComparison(ShadowComparison comparison);
+    }
+
+    public sealed class ShadowComparison
+    {
+        public string DecisionId { get; set; }
+        public string ComparisonId { get; set; }
+    }
 }
 
 internal static class AlgorithmDecisionEventBehavior

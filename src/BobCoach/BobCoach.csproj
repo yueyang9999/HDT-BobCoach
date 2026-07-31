@@ -141,6 +141,7 @@
     <Compile Include="Core\Decision\LegacyDecisionPolicy.cs" />
     <Compile Include="Core\Decision\DecisionEventRecord.cs" />
     <Compile Include="Core\Decision\DecisionEventRecorder.cs" />
+    <Compile Include="Core\Decision\DecisionOrchestrator.cs" />
     <Compile Include="Core\Decision\DecisionLifecycleTracker.cs" />
     <Compile Include="Core\HeroPowerDisplayTextResolver.cs" />
     <Compile Include="Core\CardNameService.cs" />

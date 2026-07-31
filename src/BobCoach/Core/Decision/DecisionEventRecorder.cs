@@ -16,7 +16,7 @@ namespace BobCoach.Engine.Decision
         }
     }
 
-    public sealed class DecisionEventRecorder
+    public sealed class DecisionEventRecorder : IShadowComparisonSink
     {
         private readonly string _path;
         private readonly object _sync = new object();
@@ -39,6 +39,13 @@ namespace BobCoach.Engine.Decision
             if (record == null) throw new ArgumentNullException("record");
             RequireDecisionId(record.DecisionId);
             AppendOnce(record.DecisionId + "|created", "DecisionCreated", record);
+        }
+
+        public void RecordComparison(ShadowComparison comparison)
+        {
+            if (comparison == null) throw new ArgumentNullException("comparison");
+            RequireDecisionId(comparison.DecisionId);
+            AppendOnce(comparison.ComparisonId, "ShadowComparison", comparison);
         }
 
         public void AttachRecommendation(string decisionId, DecisionResult result, string observedAtUtc)
