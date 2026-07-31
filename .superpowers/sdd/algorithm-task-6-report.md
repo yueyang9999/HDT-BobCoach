@@ -100,6 +100,53 @@ Result: `PASS 45 named state-action features are deterministic and preference-fr
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
 
+## Final Fresh-Review Remediation: Entity And Phase Boundaries
+
+The complete-range fresh review of `0070303..16e6fc5` found two remaining
+Important fail-closed gaps and one stale comment:
+
+- blank or whitespace-wrapped `unknown` card identities could receive trusted
+  pair/triple coverage;
+- any non-empty phase, including `combat`, contributed to shop observation
+  completeness;
+- `Simulator` comments still described the old shallow-copy behavior.
+
+### RED
+
+Regression coverage was added before implementation for blank and
+whitespace-wrapped unknown entity identities, plus combat and blank phases.
+
+```text
+FAIL unresolved entity pair   coverage expected=0 actual=1
+```
+
+### GREEN Implementation
+
+- Card identity checks now use the same trim-aware resolved identity predicate
+  in both the coverage gate and `OwnedCounts`.
+- Observation completeness counts phase presence only when the value is exactly
+  `shop` using ordinal comparison.
+- Simulator documentation now describes detached copies consistently with the
+  implementation.
+
+These changes only tighten missing-observation handling. They introduce no
+season facts, learned values, strategic thresholds, or visible-policy changes.
+
+### Final Verification
+
+- `tests/test_algorithm_features.ps1`: PASS.
+- `tests/test_value_function_weight_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1` with the local HDT `1.54.0` baseline: PASS;
+  the existing `CardSemanticFactSource.CardId` compiler warning remains.
+- `tests/run_contract_tests.ps1` with the same baseline: PASS.
+- `node tests/test_release_build_contract.js`: PASS, compile set `187`, SHA-256
+  `35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e`.
+- `tools/build/validate_repository.ps1`: PASS, 402 files scanned.
+- `git diff --check`: PASS; Git reports only existing LF-to-CRLF conversion
+  notices for three modified source/test files.
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+
 ## Review Remediation: Version-Matched Fact Boundary
 
 The review found that `ActionFeatureExtractor` treated static `ActionType`

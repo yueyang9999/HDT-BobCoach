@@ -5,7 +5,7 @@ using System.Linq;
 namespace BobCoach.Engine
 {
     /// <summary>
-    /// 轻量级状态模拟器。避免深拷贝，使用字段级浅拷贝 + 增量修改。
+    /// 轻量级状态模拟器。使用字段级分离副本 + 增量修改。
     /// 模拟购买/刷新/升本/出售后的下一状态，不模拟战斗细节。
     /// </summary>
     public class Simulator
@@ -17,7 +17,7 @@ namespace BobCoach.Engine
         };
 
         /// <summary>
-        /// 模拟执行 action 后的下一状态（浅拷贝，不修改原始状态）。
+        /// 模拟执行 action 后的下一状态（分离副本，不修改原始状态）。
         /// </summary>
         public GameState Simulate(GameState state, GameAction action)
         {
@@ -47,7 +47,7 @@ namespace BobCoach.Engine
                     SimulatePickDiscover(next, action);
                     break;
                 case ActionType.FreezeShop:
-                    // 冻结商店: 无状态变化(仅flag, ShallowCopy已拷贝)
+                    // 冻结商店: 无状态变化（仅 flag，分离副本已创建）
                     break;
                 case ActionType.PickTrinket:
                     // 饰品选择: 状态不变(本回合不消耗金币)

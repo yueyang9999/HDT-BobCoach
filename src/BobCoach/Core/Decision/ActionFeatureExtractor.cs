@@ -136,8 +136,7 @@ namespace BobCoach.Engine.Decision
         private static bool HasResolvedCardIdentities(params IEnumerable<MinionData>[] groups)
         {
             return groups.All(group => group != null && group.All(card => card != null
-                && !string.IsNullOrEmpty(card.CardId)
-                && !string.Equals(card.CardId, "unknown", StringComparison.OrdinalIgnoreCase)));
+                && IsKnownIdentity(card.CardId)));
         }
 
         private static Dictionary<string, int> OwnedCounts(GameState state)
@@ -145,7 +144,7 @@ namespace BobCoach.Engine.Decision
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var card in (state.BoardMinions ?? new List<MinionData>()).Concat(state.HandMinions ?? new List<MinionData>()))
             {
-                if (card == null || card.Golden || card.IsSpell || string.IsNullOrEmpty(card.CardId)) continue;
+                if (card == null || card.Golden || card.IsSpell || !IsKnownIdentity(card.CardId)) continue;
                 counts[card.CardId] = counts.ContainsKey(card.CardId) ? counts[card.CardId] + 1 : 1;
             }
             return counts;
@@ -158,7 +157,7 @@ namespace BobCoach.Engine.Decision
         {
             var present = 0;
             if (state.GameActive) present++;
-            if (!string.IsNullOrEmpty(state.Phase)) present++;
+            if (string.Equals(state.Phase, "shop", StringComparison.Ordinal)) present++;
             if (state.Gold >= 0) present++;
             if (state.TavernTier > 0) present++;
             if (state.MaxHealth > 0) present++;

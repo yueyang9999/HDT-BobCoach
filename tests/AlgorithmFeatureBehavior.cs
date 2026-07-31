@@ -17,6 +17,8 @@ internal static class AlgorithmFeatureBehavior
             VerifiesMissingBoardsFailClosed();
             VerifiesNonFiniteSeasonExtensionValuesFailClosed();
             VerifiesWhitespaceUnknownSeasonProvenanceFailsClosed();
+            VerifiesUnresolvedCardIdentitiesFailClosed();
+            VerifiesOnlyShopPhaseCountsAsObserved();
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
@@ -218,6 +220,34 @@ internal static class AlgorithmFeatureBehavior
         missingNextBoard.BoardMinions = null;
         AssertBoardDeltasUnavailable(new ActionFeatureExtractor().Extract(
             sourceWithBoard, Buy(sourceWithBoard), missingNextBoard), "missing next board");
+    }
+
+    private static void VerifiesUnresolvedCardIdentitiesFailClosed()
+    {
+        foreach (var identity in new[] { " ", " unknown " })
+        {
+            var state = State(20);
+            state.BoardMinions.Add(new MinionData { CardId = identity, Attack = 1, Health = 1 });
+            var vector = new ActionFeatureExtractor().Extract(
+                state, Buy(state), new Simulator().Simulate(state, Buy(state).Action));
+
+            AssertUnavailable(vector, "pair_count_delta", "unresolved entity pair " + identity);
+            AssertUnavailable(vector, "triple_progress_delta", "unresolved entity triple " + identity);
+        }
+    }
+
+    private static void VerifiesOnlyShopPhaseCountsAsObserved()
+    {
+        foreach (var phase in new[] { "combat", " " })
+        {
+            var state = State(20);
+            state.Phase = phase;
+            var vector = new ActionFeatureExtractor().Extract(
+                state, Buy(state), new Simulator().Simulate(state, Buy(state).Action));
+
+            AssertEqual(8d / 9d, vector["state_observation_completeness"],
+                "non-shop phase completeness " + phase);
+        }
     }
 
     private static void AssertBoardDeltasUnavailable(ActionFeatureVector vector, string label)
