@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a local, deterministic state-action ranking pipeline that reduces severe recruit-phase decision errors while retaining the frozen v1.1.0 policy as the visible baseline and runtime fallback until every activation gate passes.
+**Goal:** Build a local, deterministic state-action ranking pipeline and the evidence interfaces needed to test future decision improvement. Because reliable complete next-season content is not currently available, this plan does not claim an effect improvement or authorize a production model; `legacy-v1.1.0` remains the visible recommendation and runtime fallback.
 
-**Architecture:** Add an orchestration boundary around the existing `DecisionEngine`, then introduce stable candidate descriptors, named state-action features, a checksum-validated linear pairwise model, conservative confidence/OOD gating, and selective deterministic beam planning. Training, labeling, and acceptance reporting run offline against an explicit external data root; plugin inference remains embedded, offline, and deterministic.
+**Architecture:** Add an orchestration boundary around the existing `DecisionEngine`, then introduce stable candidate descriptors, named state-action features, a checksum-validated model contract, conservative confidence/OOD gating, and selective deterministic beam-planning interfaces. Labeling, future training, and effect reporting run offline against an explicit external data root; plugin inference remains local, deterministic, and hard-coded to Shadow, with missing semantic/model identity failing closed.
 
 **Tech Stack:** .NET Framework 4.7.2, C# 7.3, old-style MSBuild project files, Newtonsoft.Json, SHA-256 from `System.Security.Cryptography`, Node.js standard library only, PowerShell test harnesses, x64 HDT plugin runtime.
 
 ## Global Constraints
 
-- Preserve v1.1.0 as policy ID `legacy-v1.1.0`, golden benchmark baseline, visible shadow-mode recommendation, and runtime fallback until all activation gates pass.
+- Preserve v1.1.0 as policy ID `legacy-v1.1.0`, golden benchmark baseline, visible recommendation, and runtime fallback throughout this plan. Visible takeover is a separate owner-approved release decision, not an automatic consequence of any future effect review.
 - Do not add cloud inference, network requirements, paid APIs, Python, native ML runtimes, or new npm/NuGet packages.
 - Keep plugin inference local, deterministic, offline-capable, and free.
 - Compile with .NET Framework 4.7.2 and C# 7.3; add every production `.cs` file explicitly to `src/BobCoach/BobCoach.csproj`.
@@ -21,9 +21,12 @@
 - Hard constraints may encode legality and tested invariants only; strategy heuristics remain soft evidence.
 - Unknown entities and unsupported mechanics lower confidence and may force fallback; they never receive full confidence through neutral defaults.
 - Do not deepen or reactivate the current randomized MCTS path; selective deterministic beam planning is the only new lookahead path.
-- Normal ranking P95 must be at most 10 ms; planned decisions P95 must be at most 25 ms.
-- Visible activation requires: at least 20% relative severe-error reduction, at least +10 percentage points Top-1 accuracy, at least +15 percentage points Top-3 coverage, no high-impact category regression worse than 5 percentage points, and 100% critical fallback tests.
-- Any failed gate leaves the unified policy in shadow mode; aggregate improvement cannot hide a new severe error.
+- Synthetic latency checks validate harness mechanics only; production latency thresholds must be frozen on a documented validation machine before real holdout evaluation.
+- Until at least 300 real, trustworthy, version-matched expert-labeled scenarios, representative Shadow comparisons, and human severe-error review exist, effect acceptance is `blocked-by-season-data` and no improvement percentage may be claimed.
+- Synthetic or prior-season evidence cannot train production weights, calibrate thresholds, authorize model embedding, or make unified recommendations player visible.
+- Any missing or failed future gate leaves the unified policy in Shadow; aggregate improvement can never hide a new severe error.
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
 
 ## File And Ownership Map
 
@@ -48,7 +51,7 @@
 | `src/BobCoach/Core/Decision/ExpectedShopEstimator.cs` | Deterministic expected-refresh feature estimates |
 | `src/BobCoach/Core/Decision/BeamPlanner.cs` | Selective Top-4, width-6, depth-4 deterministic planning |
 | `src/BobCoach/Core/Decision/ExplanationBuilder.cs` | Player-facing text derived only from score contributions/planner status |
-| `src/BobCoach/Resources/DecisionModels/linear-v1.envelope.json` | Approved embedded model envelope only |
+| `src/BobCoach/Resources/DecisionModels/linear-v1.envelope.json` | Future separately approved resource; not created by this plan while effect acceptance is blocked |
 | `tests/fixtures/algorithm/` | Synthetic schema, model, event, and scenario fixtures only |
 | `tests/Algorithm*.cs` and `tests/test_algorithm_*.ps1` | Focused C# behavior harnesses compiled by PowerShell |
 | `tools/model/contracts.js` | Shared Node validation and canonical fingerprint helpers |
@@ -56,7 +59,7 @@
 | `tools/model/run_policy_benchmark.ps1` | Compiles and runs the benchmark harness without recording gameplay data |
 | `tools/model/build_pairs.js` | Converts explicit graded labels into defensible pairwise rows |
 | `tools/model/train_pairwise.js` | Regularized pairwise logistic trainer and model-envelope writer |
-| `tools/model/evaluate_policy.js` | Scenario metrics, category regressions, latency, and activation decision |
+| `tools/model/evaluate_policy.js` | Evidence validation, scenario metrics when eligible, and fail-closed effect-acceptance status |
 | `tools/model/split_dataset.js` | Deduplication and whole-game/time-aware dataset split |
 
 ## Execution Schedule
@@ -65,10 +68,10 @@
 | --- | --- | ---: | --- |
 | P0: benchmark and contracts | 1-2 | 3 | Frozen legacy adapter, synthetic golden contract, external-data rules |
 | P1: pipeline isolation | 3-5 | 4-5 | Stable candidates, aligned events, shadow orchestration |
-| P2: unified ranking | 6-8 | 6-7 | Immutable simulation, 45 named features, validated model, linear ranker |
-| P3: planning and confidence | 9-11 | 4-5 | Conservative fallback, deterministic beam planner, shadow plugin integration |
-| P4: calibration and acceptance | 12 | 3-5 | At least 300 scenarios, category report, latency report, activation decision |
-| Contingency | applies after Tasks 6, 10, or 12 | 0-5 | New-season semantic gaps and simulator corrections resolved with tests |
+| P2: unified ranking infrastructure | 6-8 | 6-7 | Immutable simulation, 45 named features, validated model contract, deterministic ranker mechanics |
+| P3: planning and confidence infrastructure | 9-11 | 4-5 | Fail-closed fallback, deterministic planner mechanics, hard-coded Shadow plugin integration |
+| P4: engineering gates and effect interface | 12 | 3-5 | Reusable runner/evaluator tests plus explicit `blocked-by-season-data` status |
+| Future data-dependent work | after Task 12 | not estimated | 300+ real version-matched labels, Shadow comparison, frozen protocol, and human effect review |
 
 The total estimate remains 20-30 effective personal-development days. This sequence is intentionally not compressed into one calendar week because benchmark quality, event alignment, and current-season semantic coverage are prerequisites for a trustworthy improvement claim.
 
@@ -885,8 +888,15 @@ git commit -m "feat: add shadow decision orchestration"
 - Modify: `tests/run_behavior_tests.ps1`
 
 **Interfaces:**
-- Consumes: `GameState`, `ActionDescriptor`, simulated next state, existing `FeatureExtractor`, `SynergyEngine`, and season semantic sources.
+- Consumes: `GameState`, `ActionDescriptor`, simulated next state, existing `FeatureExtractor`, and optional build/season/card-pool/entity/mechanic facts whose identities are explicitly version matched.
 - Produces: `ActionFeatureSchema.Version = 1`, exactly 45 ordered names, `ActionFeatureVector`, and `ActionFeatureExtractor.Extract(GameState, ActionDescriptor, GameState)`.
+
+**Season-data boundary:**
+1. **Independent of next-season data:** the 45-name schema, vector/coverage interfaces, detached simulation, deterministic ordering, and preference isolation are season independent.
+2. **Unsupported assumptions:** next-season entity semantics, mechanic effects, card-pool membership, composition meaning, refresh/freeze value, safe leveling power, and economy meaning have no evidence and must not be inferred.
+3. **Missing-data degradation:** unknown build, season, card pool, entity, or mechanic identity is serialized as `unknown`; every feature that needs an unverified semantic value is `0` with coverage `0`, overall confidence is reduced, and the decision gate may return `legacy-v1.1.0`.
+4. **Engineering-only tests:** schema count/order, finite values, per-feature coverage, deterministic extraction, detached simulation, preference isolation, and explicit unknown propagation prove engineering correctness only. Synthetic and prior-season fixtures do not prove next-season strategy quality.
+5. **Calibration after data arrives:** bind each semantic feature to trustworthy version-matched facts, test the mapping, establish observed distributions from real labeled scenarios, then keep the resulting policy in Shadow through Task 12 effect acceptance.
 
 - [ ] **Step 1: Write failing schema, interaction, and preference-isolation tests**
 
@@ -899,6 +909,11 @@ var healthy = extractor.Extract(State(health: 30), buy, next);
 AssertTrue(lowHealth["low_health_x_immediate_power"] != healthy["low_health_x_immediate_power"], "interaction");
 AssertEqual(lowHealth.Values.Length, lowHealth.Coverage.Length, "coverage per feature");
 AssertTrue(!ActionFeatureSchema.Names.Any(x => x.Contains("preference")), "no player preference");
+var unknown = extractor.Extract(State(build: "unknown", season: "unknown"), buy, next);
+AssertEqual(0d, unknown["refresh_expected_value"], "unknown refresh value");
+AssertEqual(0d, unknown.Coverage[ActionFeatureSchema.IndexOf("refresh_expected_value")], "unknown refresh coverage");
+AssertEqual(0d, unknown["season_extension_value"], "unknown season extension");
+AssertEqual(0d, unknown.Coverage[ActionFeatureSchema.IndexOf("season_extension_value")], "unknown season coverage");
 
 var source = StateWithOneBoardMinion("CARD_A", attack: 3);
 var simulated = new Simulator().Simulate(source, Sell(index: 0));
@@ -957,7 +972,7 @@ public sealed class NullSeasonFeatureExtension : ISeasonFeatureExtension
 }
 ```
 
-Implement each named feature as a focused private method using the following fixed definitions. `BP(x)` is the existing `FeatureExtractor` board-power function, `KW(x)` counts the known combat keywords already represented by `MinionData`, `Owned(cardId)` counts normal copies across board and hand, and `Clamp01(x)` bounds to `[0,1]`.
+Implement each named feature as a focused private method. The table defines computation only when every required input is trustworthy and version matched. If a row needs unverified build/season/card-pool/entity/mechanic semantics, return value `0` and coverage `0`; do not substitute prior-season or synthetic semantics. `BP(x)` and `SynergyEngine` outputs are available only for entities whose semantic source identity matches the observed build and season. `KW(x)` counts only version-matched represented keywords, `Owned(cardId)` counts only resolved non-`unknown` identities, and `Clamp01(x)` bounds to `[0,1]`.
 
 | Features | Exact v1 definition |
 | --- | --- |
@@ -967,25 +982,25 @@ Implement each named feature as a focused private method using the following fix
 | `board_power_delta` | `BP(next.BoardMinions) - BP(state.BoardMinions)` |
 | `net_gold_cost`, `remaining_gold` | `state.Gold - next.Gold`, `next.Gold` |
 | `wasted_gold` | gold left after greedily applying legal follow-ups sorted by descending cost then action key; coverage `0` if any cost is unknown |
-| `refresh_expected_value`, `freeze_expected_value` | expected-shop value for Refresh; current-shop `BP` plus pair/semantic value for Freeze; otherwise `0` |
+| `refresh_expected_value`, `freeze_expected_value` | `0` with coverage `0` until a complete version-matched card pool and semantics are available; the interface remains reserved for later calibration |
 | `legal_follow_up_count`, `playable_follow_up_count` | hard-filtered next-state candidates; second count excludes choices whose target/cost semantics are unsupported |
 | `hand_congestion`, `board_congestion` | next hand count / 10 and next board count / 7 |
 | `pair_count_delta`, `triple_progress_delta` | delta of `sum(floor(Owned(id)/2))` and delta of `sum(min(Owned(id),3)/3.0)` over distinct non-golden minion IDs |
 | `scaling_engine_delta`, `protected_component_delta` | delta of semantic `ScalingEngine` and `ProtectedComponent` tag counts; missing semantics give value `0`, coverage `0` |
 | `expected_damage_exposure` | `Clamp01((OpponentPower(state) - BP(next.BoardMinions)) / max(1, OpponentPower(state)))`; opponent data absent gives coverage `0` |
 | `low_health_tempo_need` | `1 - Clamp01((Health + Armor) / MaxHealth)` |
-| `weak_board_level_risk` | for Upgrade, `Clamp01((SafeLevelPower[nextTier] - BP(state.BoardMinions)) / max(1, SafeLevelPower[nextTier]))`; otherwise `0` |
+| `weak_board_level_risk` | `0` with coverage `0` until version-matched labeled scenarios establish the leveling-risk reference; non-Upgrade actions remain `0` with coverage `1` because the feature is not applicable |
 | `current_synergy`, `target_compatibility` | normalized board semantic synergy; target card's `SynergyEngine.ScoreCard(...).TotalScore`; unsupported target gives coverage `0` |
 | `abandoned_piece_count`, `abandoned_piece_value`, `transition_cost` | pieces outside the dominant supported composition; their summed `BP`; `abandoned_piece_value + max(0, -board_power_delta) + 0.5 * max(0, -protected_component_delta)` |
 | `unknown_effect_count` | candidate target plus affected next-state entities missing from the semantic source |
-| `simulator_coverage`, `semantic_coverage` | supported simulated effects / declared effects; known semantic entities / relevant entities; denominator `0` maps to value `1`, coverage `1` |
-| `stochastic_range` | upper minus lower expected outcome reported by the season extension/expected-shop estimator; deterministic actions are `0` |
+| `simulator_coverage`, `semantic_coverage` | supported version-matched effects / declared effects; known version-matched semantic entities / relevant entities; an unknown denominator maps to value `0`, coverage `0`, while a verified empty set maps to value `1`, coverage `1` |
+| `stochastic_range` | upper minus lower outcome only from a version-matched calibrated estimator; otherwise `0` with coverage `0`; verified deterministic actions are `0` with coverage `1` |
 | `state_observation_completeness` | present critical fields among game-active, shop phase, gold, tavern tier, health, board, hand, shop, opponents divided by `9` |
 | six `*_x_*` interactions | product of the two already defined base features named on each side of `_x_` |
 | `target_tier_delta` | target entity tier minus current tavern tier; actions without a target are `0` with coverage `0` |
 | `season_extension_value` | extension result, or value `0` and coverage `0` when no extension recognizes the entity |
 
-Clamp ratios to `[-5, 5]`, map booleans to `0/1`, and use explicit unknown coverage `0`. Never call `ProfileEngine` or read user preference weights. `feature_distribution_distance` is deliberately not a trained feature: Task 9 computes OOD distance from the completed vector and Task 7 model bounds, avoiding a circular dependency. Action type is represented by Task 7's independent learned per-type biases, not by an ordinal number that would invent a false ordering between enum values.
+Clamp ratios to `[-5, 5]`, map booleans to `0/1`, and use explicit unknown coverage `0`. Never call `ProfileEngine` or read user preference weights. Do not create feature weights, composition strength, refresh value, economy curves, or uplift claims in this task. `feature_distribution_distance` is deliberately not a trained feature: Task 9 may compute it only from a later accepted model's version-matched bounds. Action type keeps a separate one-hot interface; its learned biases remain `blocked-by-season-data`.
 
 - [ ] **Step 5: Make simulator states structurally detached**
 
@@ -1024,11 +1039,19 @@ git commit -m "feat: add named state-action feature schema"
 - Consumes: Task 6 schema and Newtonsoft.Json.
 - Produces: `RankingModelEnvelope`, `RankingModelPayload`, `RankingModelLoader.Load(Stream)`, and `ModelValidationException`.
 
+**Season-data boundary:**
+1. **Independent of next-season data:** envelope DTOs, SHA-256 verification, size limits, schema/name/length validation, finite-number checks, and error typing are season independent.
+2. **Unsupported assumptions:** no model weights, normalization bounds, OOD threshold, training identity, season range, or benchmark metric is accepted as strategically meaningful without real version-matched data.
+3. **Missing-data degradation:** absent, corrupt, identity-`unknown`, season-mismatched, or unaccepted artifacts yield `ModelUnavailable`; runtime confidence falls to `0`, the new policy stays Shadow, and visible output remains `legacy-v1.1.0`.
+4. **Engineering-only tests:** the committed synthetic envelope tests loading and rejection only. It must never be scored, benchmarked for quality, embedded as a production model, or used to justify a threshold.
+5. **Calibration after data arrives:** Task 8 may generate an external candidate only from trustworthy version-matched labels; Task 9 calibrates its bounds/thresholds; Task 12 verifies identity and effect evidence before any embedding is even considered.
+
 - [ ] **Step 1: Write failing valid, checksum, schema, and numeric tests**
 
 ```csharp
 var valid = RankingModelLoader.Load(Open("linear-v1.valid.envelope.json"));
 AssertEqual(45, valid.Weights.Length, "weight count");
+AssertEqual("synthetic-loader-fixture", valid.TrainingSetIdentity, "fixture is engineering-only");
 AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(TamperPayload(validEnvelope)), "checksum");
 AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(EnvelopeWithFeatureVersion(99)), "feature schema");
 AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(EnvelopeWithWeight("NaN")), "finite number");
@@ -1093,6 +1116,8 @@ public static RankingModelPayload Load(Stream stream)
 
 Validation rejects zero/negative standard deviations, a non-positive OOD threshold, non-finite values, array length mismatch, an `ActionTypeBiases` length different from the defined `ActionType` count, duplicate/missing/reordered feature names, missing model identity, and payloads over 1 MiB.
 
+The fixture uses conspicuously non-production identity fields and arbitrary finite arrays solely to exercise validation. `RankingModelLoader` also requires non-empty build/season/card-pool identities and an explicit effect-acceptance status for a production candidate; `unknown`, mismatched, or non-accepted identities are loadable only through the test-only validation path and are unavailable to runtime composition. This task does not score actions or assert that any weight, bound, or threshold is correct.
+
 - [ ] **Step 5: Run model-contract tests**
 
 Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_model_contract.ps1`
@@ -1128,6 +1153,13 @@ git commit -m "feat: validate local ranking model artifacts"
 - Consumes: Tasks 3, 6, and 7 plus pair rows `{ gameId, capturedAtUtc, scenarioId, preferred, other, label }`.
 - Produces: `LinearPairwiseRanker.Score(ActionDescriptor, ActionFeatureVector)`, `Rank(...)`, `UnifiedRankingPolicy.Decide(GameState)`, `UnifiedRankingPolicy.CreateProduction(RankingModelPayload, ISeasonFeatureExtension)`, label-derived pair rows, deterministic training envelopes, and whole-game/time-aware splits.
 
+**Season-data boundary:**
+1. **Independent of next-season data:** ranker arithmetic, deterministic tie-breaking, pair/split schema validation, seeded trainer determinism, checksum output, and Shadow-only policy composition are season independent.
+2. **Unsupported assumptions:** preferred actions, feature weights, action-type biases, composition strength, refresh value, economy curves, and any quality uplift are unknown until trustworthy version-matched expert labels exist.
+3. **Missing-data degradation:** no external accepted candidate is produced; unified policy is unavailable or diagnostic-only in Shadow, confidence is `0`, and `legacy-v1.1.0` remains visible and handles fallback.
+4. **Engineering-only tests:** hand-authored ranker vectors verify dot-product plumbing and stable ordering; the synthetic pair fixture proves only identical trainer bytes for identical inputs/seed plus input isolation. It does not prove that the learned ordering is strategically correct.
+5. **Calibration after data arrives:** build pairs only from explicit expert grades on real version-matched scenarios, split by whole game/time, train candidates outside the repository, and submit them to Tasks 9 and 12 without changing visible mode.
+
 - [ ] **Step 1: Write failing ranker and trainer tests**
 
 ```csharp
@@ -1143,8 +1175,7 @@ AssertStable(ranker.Rank(inputs), 100, "tie breaking");
 const first = train(loadSyntheticPairs(), { epochs: 200, learningRate: 0.05, lambda: 0.01, seed: 7 });
 const second = train(loadSyntheticPairs(), { epochs: 200, learningRate: 0.05, lambda: 0.01, seed: 7 });
 assert.deepStrictEqual(first, second);
-assert(score(first, preferred) > score(first, other));
-assert.deepStrictEqual(buildPairs(labeledScenario), expectedDefensiblePairs);
+assert.strictEqual(sha256(first), sha256(second));
 assert(!JSON.stringify(buildPairs(labeledScenario)).includes('observedPlayerActionKey'));
 assert.throws(() => splitRows(rowsWithSameGameAcrossPartitions), /whole-game split/);
 ```
@@ -1176,7 +1207,7 @@ public ScoredFeatureVector Score(ActionDescriptor action, ActionFeatureVector ve
 }
 ```
 
-`Rank` sorts by descending finite score and then ordinal `ActionKey`. The action-type bias is trained and regularized beside the feature weights; the trainer encodes it as a one-hot delta rather than an enum ordinal. `UnifiedRankingPolicy` generates, filters, simulates on detached states, extracts, ranks, and returns all candidates. Its `CreateProduction` static method is the sole internal dependency graph builder; it normalizes a null season extension to `NullSeasonFeatureExtension.Instance` and constructs the production `CandidateGenerator`, `HardConstraintFilter`, detached `Simulator`, `ActionFeatureExtractor`, and `LinearPairwiseRanker`. Tasks 9-11 modify that same method to add confidence, expected-shop estimation, planning, and explanations without changing the score surface or creating a second graph.
+`Rank` sorts by descending finite score and then ordinal `ActionKey`. The action-type bias interface is a one-hot vector rather than an enum ordinal. Actual bias and feature weights remain `blocked-by-season-data`; the behavior test uses hand-authored arbitrary numbers only to verify arithmetic and ordering. `UnifiedRankingPolicy` generates, filters, simulates on detached states, extracts, ranks, and returns diagnostic candidates in Shadow only. Its composition path rejects unaccepted or identity-`unknown` artifacts and never becomes player visible. Tasks 9-11 add fail-closed confidence, unavailable expected-shop plumbing, deterministic planning, and explanations without creating a second graph.
 
 - [ ] **Step 4: Implement zero-dependency pairwise logistic training**
 
@@ -1191,13 +1222,13 @@ function pairLossGradient(preferred, other, label, weights, lambda) {
 }
 ```
 
-`build_pairs.js` parses `--data-root`, `--scenarios`, and `--output`, validates every action grade, and emits pairs only for a higher-grade accepted action against an explicitly lower-grade action in the same pre-action state. It excludes `not-evaluable` actions, never derives a preference from `observedPlayerActionKey` or final placement, and retains game/time/state/candidate identities. `train_pairwise.js` parses `--data-root`, `--pairs`, `--output`, `--epochs`, `--learning-rate`, `--lambda`, and `--seed`; sort input by `(gameId, scenarioId, actionKey)` before seeded shuffling. Write the payload bytes, compute SHA-256 over those exact bytes, then write the envelope. `split_dataset.js` deduplicates `stateFingerprint|candidateFingerprint`, groups by `gameId`, and reserves the newest whole games as the final holdout.
+`build_pairs.js` parses `--data-root`, `--scenarios`, and `--output`, validates every explicit expert action grade, and emits pairs only for a higher-grade accepted action against an explicitly lower-grade action in the same pre-action state. It excludes `not-evaluable` actions, never derives a preference from `observedPlayerActionKey`, combat outcome, final placement, synthetic fixtures, or prior-season behavior, and retains build/season/card-pool/game/time/state/candidate identities. `train_pairwise.js` supports a test-only in-memory synthetic path that returns bytes to the harness without writing a candidate; this proves determinism only. The external candidate-producing path rejects non-version-matched rows and remains `blocked-by-season-data` until real labels exist. `split_dataset.js` deduplicates `stateFingerprint|candidateFingerprint`, groups by `gameId`, and reserves the newest whole games as the final holdout.
 
 - [ ] **Step 5: Run focused and deterministic training tests**
 
 Run: `node tests/test_pairwise_training.js`
 
-Expected: `PASS pairwise training is deterministic and split-safe`.
+Expected: `PASS pairwise trainer is deterministic and split-safe; no strategy quality asserted`.
 
 Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_linear_ranker.ps1`
 
@@ -1226,12 +1257,21 @@ git commit -m "feat: add deterministic pairwise action ranking"
 - Consumes: ranked actions, Task 6 feature coverage, Task 7 training bounds, and critical state fields.
 - Produces: `ConfidenceAssessment Evaluate(GameState, IList<RankedAction>, ActionFeatureVector, RankingModelPayload)` and `DistributionDistance(ActionFeatureVector, RankingModelPayload)`.
 
+**Season-data boundary:**
+1. **Independent of next-season data:** confidence/coverage/OOD interfaces, reason precedence, explicit unknown handling, and fail-closed control flow are season independent.
+2. **Unsupported assumptions:** operational semantic-coverage floors, score-margin scales, OOD bounds, fallback thresholds, and planning thresholds cannot be chosen from synthetic or prior-season data.
+3. **Missing-data degradation:** missing or unaccepted calibration, any `unknown` critical identity, or zero coverage on a decision-critical feature forces confidence `0` and fallback to `legacy-v1.1.0`; no default threshold is treated as calibrated.
+4. **Engineering-only tests:** synthetic vectors prove finite calculations, reason precedence, boundary rejection, and fail-closed behavior only. They do not prove calibration or recommendation quality.
+5. **Calibration after data arrives:** estimate distributions and thresholds from the real version-matched training/validation split, freeze them in the candidate envelope, then verify them on the current-season holdout and Task 12 Shadow comparison.
+
 - [ ] **Step 1: Write failing confidence-floor tests**
 
 ```csharp
 AssertFallback(Evaluate(State(gameActive: false), completeVector), FallbackReason.CriticalStateMissing);
 AssertFallback(Evaluate(State(), Vector(semanticCoverage: 0.2)), FallbackReason.UnsupportedMechanic);
 AssertFallback(Evaluate(State(), Vector(boardPowerDelta: 40.0), Model(maximumBoardPowerDelta: 5.0)), FallbackReason.OutOfDistribution);
+AssertFallback(Evaluate(State(build: "unknown"), completeVector, Model(calibrationStatus: "unknown")), FallbackReason.ModelUnavailable);
+AssertEqual(0d, Evaluate(State(), completeVector, Model(calibrationStatus: "unknown")).Score, "uncalibrated confidence");
 var close = Evaluate(State(), completeVector, scores: new[] { 1.00, 0.99 });
 AssertTrue(close.ShouldPlan, "small margin requests planning");
 var clear = Evaluate(State(), completeVector, scores: new[] { 2.0, 0.2 });
@@ -1275,7 +1315,7 @@ var distribution = Math.Exp(-Math.Max(0d, distance));
 var score = Math.Min(Math.Min(marginScore, completeness), Math.Min(coverage, distribution));
 ```
 
-`DistributionDistance` iterates the completed 45-value vector in schema order. For each feature it computes the absolute z-score using `Means[i]` and `StandardDeviations[i]`, plus an extra normalized excess when the value falls below `Minimums[i]` or above `Maximums[i]`; the returned value is the root-mean-square of those finite per-feature distances. It never reads a synthetic distance feature. Critical `GameActive`, phase, gold, tavern tier, and candidate validity failures force `CriticalStateMissing`. Semantic coverage below `0.60` forces `UnsupportedMechanic`; distribution distance above `payload.OodDistanceThreshold` forces `OutOfDistribution`; confidence below `0.55` requests `LowConfidence` fallback. A top-two normalized margin below `0.15`, protected sell, upgrade, or survival-risk feature above `0.70` requests planning when supported. Reason precedence is `CriticalStateMissing`, `UnsupportedMechanic`, `OutOfDistribution`, then `LowConfidence`, so a lower-priority condition cannot overwrite the diagnostic cause.
+`DistributionDistance` iterates the completed 45-value vector in schema order only when the accepted payload contains version-matched finite distributions. It computes the absolute z-score and normalized bound excess, then returns their finite root-mean-square. It never reads a synthetic distance feature. Before using any model threshold, validate build, season, card-pool, training-set, holdout, and calibration identities; absent, `unknown`, mismatched, or non-accepted calibration fails closed with `ModelUnavailable` and confidence `0`. Critical state failures force `CriticalStateMissing`; decision-critical zero coverage forces `UnsupportedMechanic`; accepted OOD and confidence thresholds may then produce `OutOfDistribution` or `LowConfidence`. `ShouldPlan` remains false until its threshold is calibrated. Reason precedence is `ModelUnavailable`, `CriticalStateMissing`, `UnsupportedMechanic`, `OutOfDistribution`, then `LowConfidence`.
 
 - [ ] **Step 4: Integrate confidence without swallowing fallback reasons**
 
@@ -1313,8 +1353,15 @@ git commit -m "feat: gate ranked decisions by confidence and coverage"
 - Modify: `tests/run_behavior_tests.ps1`
 
 **Interfaces:**
-- Consumes: Task 8 ranker, simulator, card-pool facts, Task 9 `ShouldPlan`, and monotonic elapsed-time source.
+- Consumes: Task 8 ranker, simulator, an optional version-matched card-pool provider, Task 9 `ShouldPlan`, and monotonic elapsed-time source.
 - Produces: `ExpectedShopEstimator.Estimate(GameState)`, `BeamPlanner.Plan(GameState, IList<RankedAction>, TimeSpan)`, and `PlanningResult`.
+
+**Season-data boundary:**
+1. **Independent of next-season data:** expected-shop availability contracts, deterministic beam traversal, detached states, bounds, timeout handling, and stable tie-breaking are season independent.
+2. **Unsupported assumptions:** next-season pool membership/copy counts, card power, refresh value, economy curve, continuation score, and root-replacement margin are unknown and must not be synthesized.
+3. **Missing-data degradation:** `Estimate` returns `Unavailable` with value `0`, coverage `0`, and identity `unknown`; refresh expansion stops, planning cannot replace the ranked root, confidence drops, and visible output remains `legacy-v1.1.0`.
+4. **Engineering-only tests:** synthetic graph fixtures prove deterministic Top-4/width-6/depth-4 traversal, timeout retention, and latency harness mechanics only. They do not prove refresh value or strategic benefit.
+5. **Calibration after data arrives:** load a complete version-matched pool, derive estimator inputs and continuation/root margins from real labeled scenarios, validate them on holdout Shadow comparisons, and keep the plugin fixed in Shadow.
 
 - [ ] **Step 1: Write failing deterministic, bounded, and timeout tests**
 
@@ -1337,22 +1384,20 @@ AssertTrue(timedOut.BestCompletePath.Count > 0, "best completed path retained");
 
 Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_beam_planner.ps1`
 
-Expected: compiler errors for `BeamPlanner` and `ExpectedShopEstimator`.
+Expected: compiler errors for `BeamPlanner`, `ExpectedShopEstimator`, and the explicit unavailable estimate contract.
 
 - [ ] **Step 3: Implement deterministic expected-shop estimation**
 
 ```csharp
 public ExpectedShopEstimate Estimate(GameState state)
 {
-    var eligible = _pool.GetEligible(state.TavernTier, state.AvailableTribes)
-        .Where(x => x.RemainingCopies > 0).OrderBy(x => x.CardId, StringComparer.Ordinal).ToList();
-    var denominator = eligible.Sum(x => x.RemainingCopies);
-    var expectedPower = denominator == 0 ? 0d : eligible.Sum(x => x.RemainingCopies * x.RelevantPower) / denominator;
-    return new ExpectedShopEstimate(expectedPower, eligible.Count, denominator == 0 ? 0d : 1d);
+    if (!_pool.IsCompleteFor(state.BuildId, state.SeasonId, state.CardPoolId))
+        return ExpectedShopEstimate.Unavailable("unknown");
+    return EstimateFromVersionMatchedFacts(state, _pool);
 }
 ```
 
-The estimate aggregates tier, available pool, remaining copies, relevant tribes/mechanics, and unknown mass. It does not sample a random shop or claim a concrete refreshed board.
+`Unavailable` has `IsAvailable = false`, `ExpectedValue = 0d`, `Coverage = 0d`, and the unresolved identity `unknown`. `EstimateFromVersionMatchedFacts` is an interface boundary and remains `blocked-by-season-data`; this task must not populate it with synthetic or old-season power/copy-count assumptions. Refresh nodes do not receive a score or concrete refreshed board while unavailable.
 
 - [ ] **Step 4: Implement Top-4/width-6/depth-4 beam search with a hard budget**
 
@@ -1403,7 +1448,7 @@ for (var depth = 1; depth <= 4 && beam.Count > 0; depth++)
 return ToCompletedResult(bestComplete, statistics);
 ```
 
-`ToCompletedResult` and `ToTimedOutResult` copy the selected root `ActionKey`, the complete ordered action-key path, and observed root/depth/width statistics into the immutable result; a timeout before any complete path returns the original top-ranked root as a one-item safe path. Use detached simulation states. Refresh nodes consume `ExpectedShopEstimate` and stop concrete expansion. Unsupported stochastic actions end the path with their uncertainty penalty. The planner only replaces the root action when the best complete path exceeds the current path by an additive calibrated margin valid for negative scores. `UnifiedRankingPolicy` resolves `PlanningResult.ActionKey` against the existing ranked actions, uses that action as `DecisionResult.SelectedAction`, copies `PlanningResult.Status` to `DecisionResult.PlannerStatus`, and passes the same result to `ExplanationBuilder`; an unknown or empty key leaves the top-ranked action unchanged. Modify `UnifiedRankingPolicy.CreateProduction` in this task so it constructs one `ExpectedShopEstimator` and one monotonic-clock-backed `BeamPlanner`, passes the estimator into both feature extraction and planning, and keeps the injectable fake-clock constructor available only for behavior tests.
+`ToCompletedResult` and `ToTimedOutResult` copy the original root `ActionKey`, complete ordered action-key path, and observed root/depth/width statistics. Use detached simulation states. An unavailable refresh estimate or unsupported stochastic action terminates that path without adding invented value. Until real version-matched calibration supplies an accepted continuation model and root-replacement margin, production `PlanningResult` is diagnostic-only and cannot replace the ranked root. Synthetic graph tests may exercise replacement mechanics behind a test-only fixture, but assertions are limited to deterministic traversal and fail-closed behavior. The plugin remains Shadow and the orchestrator returns `legacy-v1.1.0` visibly.
 
 - [ ] **Step 5: Run planning, determinism, and latency harnesses**
 
@@ -1436,8 +1481,15 @@ git commit -m "feat: add selective deterministic beam planning"
 - Modify: `tests/test_offline_runtime_contract.js`
 
 **Interfaces:**
-- Consumes: top-ranked score contributions, planner result, an optional checksum-valid embedded model stream, and Task 5 orchestrator.
-- Produces: `ExplanationBuilder.Build(RankedAction, PlanningResult)`, `DecisionPolicyFactory.Create(DecisionEngine, Stream, ISeasonFeatureExtension)`, `DecisionPolicyBundle`, plugin-owned `DecisionOrchestrator`, a `DecisionLifecycleTracker` bound to `_currentGameRecord`, and shadow-only orchestration that fails closed when no approved model has been embedded yet.
+- Consumes: top-ranked score contributions, planner result, an optional checksum-valid model stream whose build/season/card-pool identities are verified, and Task 5 orchestrator.
+- Produces: `ExplanationBuilder.Build(RankedAction, PlanningResult)`, `DecisionPolicyFactory.Create(DecisionEngine, Stream, ISeasonFeatureExtension)`, `DecisionPolicyBundle`, plugin-owned `DecisionOrchestrator`, a `DecisionLifecycleTracker` bound to `_currentGameRecord`, and hard-coded Shadow orchestration that fails closed when no accepted version-matched model is available.
+
+**Season-data boundary:**
+1. **Independent of next-season data:** explanation formatting, factory error boundaries, lifecycle ordering, event deduplication, no-recording behavior, and fixed Shadow orchestration are season independent.
+2. **Unsupported assumptions:** a synthetic or prior-season model cannot establish next-season strategy, calibration, coverage, or eligibility for player-visible recommendations.
+3. **Missing-data degradation:** when real model/build/season/card-pool identity is absent, mismatched, or unaccepted, record the relevant identity as `unknown`, return `ModelUnavailable`, and keep the visible recommendation on `legacy-v1.1.0`.
+4. **Engineering-only tests:** synthetic model streams, malformed artifacts, fake contributions, and prior-season fixtures verify composition, validation, explanations, and lifecycle wiring only. Player actions are observational evidence and never become strategy labels here.
+5. **Calibration after data arrives:** Task 12 must evaluate a checksum-identical candidate on real version-matched labeled scenarios and Shadow comparisons. Even a future passed effect review does not authorize visible takeover; that requires a separate owner-approved release change.
 
 - [ ] **Step 1: Write failing explanation and plugin-wiring tests**
 
@@ -1455,7 +1507,7 @@ AssertTrue(text.Contains("uncertain effect"), "largest risk factor");
 AssertTrue(!text.Contains("1.2"), "no raw model number");
 ```
 
-Add static contract assertions to `test_offline_runtime_contract.js` that `BobCoachPlugin.cs` constructs `DecisionRuntimeMode.Shadow`, treats the embedded model resource as optional, obtains the visible action from `_decisionOrchestrator.Decide(state, context.DecisionId)` when local recording is active, and uses `_decisionOrchestrator.Decide(state)` only with `NoOpShadowComparisonSink.Instance` when recording is inactive, while retaining `_engine` for legacy shop-card and level APIs.
+Add static contract assertions to `test_offline_runtime_contract.js` that `BobCoachPlugin.cs` constructs `DecisionRuntimeMode.Shadow`, has no user-facing or configuration-driven mode switch, treats the model resource as optional, writes `unknown` for unavailable real model/build/season/card-pool identity, obtains the visible action from `_decisionOrchestrator.Decide(state, context.DecisionId)` when local recording is active, and uses `_decisionOrchestrator.Decide(state)` only with `NoOpShadowComparisonSink.Instance` when recording is inactive, while retaining `_engine` for legacy shop-card and level APIs.
 
 Add factory-boundary behavior tests: a missing stream, malformed JSON, schema/checksum incompatibility, and a deterministic read `IOException` all return `UnavailableDecisionPolicy` with `ModelUnavailable`. A null `DecisionEngine` and a deliberately invalid internal dependency fixture still throw their original programmer-error exceptions; these must not be disguised as model absence. Add lifecycle wiring assertions for both branches: active local recording must follow `AttachObservedActions -> BeginOrReuse/DecisionCreated -> Decide(state, decisionId) -> AttachRecommendation`, while recording-disabled execution must use `Decide(state)` with the no-op sink.
 
@@ -1504,8 +1556,8 @@ public sealed class DecisionPolicyBundle
         Legacy = legacy;
         Unified = unified;
         Candidates = candidates;
-        ModelId = modelId ?? "";
-        ModelPayloadSha256 = modelPayloadSha256 ?? "";
+        ModelId = string.IsNullOrWhiteSpace(modelId) ? "unknown" : modelId;
+        ModelPayloadSha256 = string.IsNullOrWhiteSpace(modelPayloadSha256) ? "unknown" : modelPayloadSha256;
     }
 }
 
@@ -1542,7 +1594,7 @@ public static class DecisionPolicyFactory
     {
         return new DecisionPolicyBundle(legacy,
             UnavailableDecisionPolicy.For(FallbackReason.ModelUnavailable),
-            candidates, "", "");
+            candidates, "unknown", "unknown");
     }
 }
 ```
@@ -1551,7 +1603,7 @@ public static class DecisionPolicyFactory
 
 `RankingModelLoader.Load` is the boundary that translates malformed JSON, missing required model fields, incompatible schema/model versions, checksum mismatch, non-finite values, and other artifact-content failures into `ModelValidationException`. The factory catches only that exception and expected stream `IOException`; it does not catch `ArgumentNullException`, `InvalidOperationException`, `ObjectDisposedException`, or a general `Exception`. Constructor/composition defects must fail their tests visibly instead of being reported as `ModelUnavailable`.
 
-Construct the orchestrator during plugin initialization and attempt to open `BobCoach.DecisionModels.linear-v1.envelope.json` by logical resource name. Pass that stream, or null when absent, through `DecisionPolicyFactory.Create`; do not create or embed a production model in this task. Replace only:
+Construct the orchestrator during plugin initialization and attempt to open `BobCoach.DecisionModels.linear-v1.envelope.json` by logical resource name. Pass that stream, or null when absent, through `DecisionPolicyFactory.Create`; do not create, train, copy, or embed a production model in this task. A present resource is usable only after its model, build, season, and card-pool identities match accepted evidence; otherwise the factory returns unavailable and reports those identities as `unknown`. Replace only:
 
 ```csharp
 var bestAction = SafeCall(() => _engine.GetBestAction(state), "GetBestAction");
@@ -1582,11 +1634,11 @@ else
 var bestAction = decisionResult.SelectedAction;
 ```
 
-`InferObservedActionKeys` reuses the current `_prevState` comparison logic and returns ordinal-distinct behavior evidence. It resolves to a Task 3 candidate action key only when the previous candidate set makes that mapping unambiguous; otherwise it emits an explicit unresolved evidence code, never fabricates a training label. Empty batches do nothing. In the recording branch, `BeginOrReuse` synchronously writes `DecisionCreated` before `Decide(state, decisionId)` lets the recorder write the Shadow comparison; `AttachRecommendation` always follows with the same ID. Re-evaluation of an unchanged frame reuses the ID and all three event types deduplicate. An observed action closes the previous decision before the next state is evaluated, even if the old state later reappears.
+`InferObservedActionKeys` reuses the current `_prevState` comparison logic and returns ordinal-distinct observational behavior evidence. It resolves to a Task 3 candidate action key only when the previous candidate set makes that mapping unambiguous; otherwise it emits an explicit unresolved evidence code, never fabricates a training label or treats player behavior as expert truth. Empty batches do nothing. In the recording branch, `BeginOrReuse` synchronously writes `DecisionCreated` before `Decide(state, decisionId)` lets the recorder write the Shadow comparison; `AttachRecommendation` always follows with the same ID. Re-evaluation of an unchanged frame reuses the ID and all three event types deduplicate. An observed action closes the previous decision before the next state is evaluated, even if the old state later reappears.
 
 At `OnGameStart`, immediately after `_currentGameRecord = new GameRecord()`, create the recorder and lifecycle only when the existing local replay-recording option is active. Build the game ID from `_currentGameRecord.Timestamp` plus one process-local GUID, create the decision JSONL path through `BobCoachDataPaths`, and inject that recorder as `IShadowComparisonSink`. At `OnGameEnd`, attach any available combat/game outcome to the last relevant decision, then clear the tracker and recorder references. Do not add a second permanent session object, profile field, setting, or always-on file path. When local recording is inactive, keep both references null and inject `NoOpShadowComparisonSink.Instance`.
 
-Keep mode fixed to `DecisionRuntimeMode.Shadow`; do not add a user-facing activation switch in this task. This adds no upload or network telemetry. The static runtime contract verifies both the recording and no-recording call paths so a future refactor cannot accidentally pass a blank ID to `DecisionEventRecorder`.
+Keep mode hard-coded to `DecisionRuntimeMode.Shadow`; do not add a user-facing activation switch, configuration escape hatch, or automatic promotion path. Until real next-season effect acceptance and a separate visible-activation approval both exist, unified output is observation-only and `legacy-v1.1.0` remains player visible. This adds no upload or network telemetry. The static runtime contract verifies both the recording and no-recording call paths so a future refactor cannot accidentally pass a blank ID to `DecisionEventRecorder`.
 
 - [ ] **Step 5: Run focused behavior, build, and offline runtime checks**
 
@@ -1611,7 +1663,7 @@ git commit -m "feat: integrate contribution-based ranking in shadow mode"
 
 ---
 
-### Task 12: Calibrate 300 Scenarios And Enforce Activation Gates
+### Task 12: Build Engineering Gates And The Effect-Acceptance Interface
 
 **Files:**
 - Create: `tools/model/PolicyBenchmarkRunner.cs`
@@ -1620,19 +1672,24 @@ git commit -m "feat: integrate contribution-based ranking in shadow mode"
 - Create: `tests/fixtures/algorithm/evaluation.synthetic.json`
 - Create: `tests/test_algorithm_benchmark_contract.ps1`
 - Create: `tests/test_algorithm_evaluation.js`
-- Create after all gates pass: `src/BobCoach/Resources/DecisionModels/linear-v1.envelope.json`
 - Modify: `tests/run_contract_tests.ps1`
 - Modify: `tests/test_offline_runtime_contract.js`
-- Modify after all gates pass: `src/BobCoach/BobCoach.csproj`
 - Modify: `docs/maintainer/ARCHITECTURE.md`
 - Modify: `docs/maintainer/BUILD.md`
 - Modify: `docs/README.md`
 
 **Interfaces:**
-- Consumes: Task 1 scenario and fingerprint contracts, Task 11 `DecisionPolicyFactory`, a checksum-valid external candidate envelope, frozen Legacy and Unified orchestrator modes, external labels, and explicit fallback probes.
-- Produces: `benchmark-evidence-v1` baseline/candidate prediction JSONL, latency JSON, safety-probe JSON, aggregate `acceptance-report.json`, `activationDecision`, every required metric, every new severe error, and documented season-update/rollback procedures.
+- Consumes: Task 1 scenario and fingerprint contracts, Task 11 `DecisionPolicyFactory`, an optional checksum-valid external candidate envelope, frozen Legacy and Unified orchestrator modes, external labels, Shadow comparisons, and explicit fallback probes.
+- Produces: `benchmark-evidence-v1` baseline/candidate prediction JSONL, latency JSON, safety-probe JSON, an aggregate `acceptance-report.json`, `effectAcceptanceStatus`, every computable metric, every new severe error, and documented season-update/rollback procedures.
 
-- [ ] **Step 1: Write failing benchmark-contract and metric-gate tests**
+**Season-data boundary:**
+1. **Independent of next-season data:** runner/evaluator schemas, deterministic pairing, fingerprint checks, identity validation, latency collection, safety-probe handling, report serialization, and fail-closed status calculation are season independent.
+2. **Unsupported assumptions:** synthetic fixtures, prior-season evidence, observed player actions, or an uncalibrated candidate cannot establish next-season quality, effect size, accepted thresholds, or readiness for embedding/activation.
+3. **Missing-data degradation:** until at least 300 real, trustworthy, version-matched, expert-labeled scenarios plus representative Shadow comparisons and human severe-error review exist, `effectAcceptanceStatus` is exactly `blocked-by-season-data`; model/build/season/card-pool identities not proved by that evidence are `unknown`.
+4. **Engineering-only tests:** `-SelfTest`, synthetic predictions, fake policies, and synthetic evaluator fixtures verify runner/evaluator behavior only. They must not emit improvement percentages, train weights, create candidate artifacts, embed resources, or return an activation decision.
+5. **Calibration after data arrives:** label and review the current-season corpus, freeze thresholds before holdout evaluation, benchmark checksum-identical bytes, inspect every severe regression, and retain Shadow. Any later player-visible takeover requires a separate owner-approved release change even if effect acceptance passes.
+
+- [ ] **Step 1: Write failing engineering-evidence contract tests**
 
 `tests/test_algorithm_benchmark_contract.ps1` invokes `run_policy_benchmark.ps1 -SelfTest` against synthetic states and a temporary directory, then asserts:
 
@@ -1657,20 +1714,15 @@ The self-test uses in-memory fake policies only to verify serialization, pairing
 
 ```javascript
 const report = evaluate(syntheticEvidence());
-assert.strictEqual(report.metrics.severeErrorRelativeReduction, 0.25);
-assert.strictEqual(report.metrics.top1ImprovementPercentagePoints, 12);
-assert.strictEqual(report.activationDecision, 'activate');
+assert.strictEqual(report.evidenceSchemaVersion, 1);
+assert.strictEqual(report.effectAcceptanceStatus, 'blocked-by-season-data');
+assert.strictEqual(report.evidenceKind, 'engineering-self-test');
+assert.strictEqual(report.metrics, null);
+assert(!Object.prototype.hasOwnProperty.call(report, 'activationDecision'));
 
-for (const mutation of [
-  evidence => evidence.candidate.severeErrors = evidence.baseline.severeErrors,
-  evidence => evidence.metrics.top1ImprovementPercentagePoints = 9.9,
-  evidence => evidence.metrics.top3ImprovementPercentagePoints = 14.9,
-  evidence => evidence.categoryMetrics.sell.regressionPercentagePoints = -5.1,
-  evidence => evidence.latency.rankingP95Milliseconds = 10.1,
-  evidence => evidence.latency.planningP95Milliseconds = 25.1,
-  evidence => evidence.fallbackPassRate = 0.999,
-  evidence => evidence.newSevereErrors.push({ scenarioId: 'new-severe' })
-]) assert.strictEqual(evaluate(mutationClone(mutation)).activationDecision, 'shadow');
+for (const mutation of structuralMutations()) {
+  assert.throws(() => evaluate(mutationClone(mutation)), /evidence|identity|fingerprint|scenario/i);
+}
 ```
 
 - [ ] **Step 2: Run and verify benchmark and evaluator tools are absent**
@@ -1696,8 +1748,8 @@ Define one prediction line per policy/scenario with this exact versioned shape:
   "stateFingerprint": "sha256-lower-hex",
   "candidateFingerprint": "sha256-lower-hex",
   "policyId": "legacy-v1.1.0",
-  "modelId": "",
-  "modelPayloadSha256": "",
+  "modelId": "unknown",
+  "modelPayloadSha256": "unknown",
   "selectedActionKey": "Upgrade|-1||",
   "topActionKeys": ["Upgrade|-1||"],
   "confidence": 1.0,
@@ -1713,11 +1765,11 @@ var baseline = new DecisionOrchestrator(bundle.Legacy, bundle.Unified,
     NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.LegacyOnly).Decide(Clone(state));
 var candidate = new DecisionOrchestrator(bundle.Legacy, bundle.Unified,
     NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Unified).Decide(Clone(state));
-WritePrediction(baselineWriter, scenario, baseline, "", "");
+WritePrediction(baselineWriter, scenario, baseline, "unknown", "unknown");
 WritePrediction(candidateWriter, scenario, candidate, bundle.ModelId, bundle.ModelPayloadSha256);
 ```
 
-The runner obtains both fingerprints through production `DecisionEventRecord.Create(scenarioId, gameId, state, candidates)` and compares its canonical values with the label row; it must not reproduce canonical JSON or SHA-256 logic inside the tool. The candidate line therefore reflects the real orchestration fallback result, not a raw score that the plugin could never display. `topActionKeys` contains at most three keys from the returned result in rank order. When unified inference falls back, candidate Top-1/Top-3 are intentionally computed from the returned legacy result because that is the action surface a visible unified mode would expose; raw unified ranks may appear only in a separate diagnostic field excluded from activation metrics. The runner sorts scenarios by ordinal `scenarioId`, rejects duplicate scenario or fingerprint pairs, rejects mixed schema/season/build identities, and writes UTF-8 without BOM and LF line endings. It never enables `DecisionEventRecorder`, never uploads data, and never writes inside the repository.
+The runner obtains both fingerprints through production `DecisionEventRecord.Create(scenarioId, gameId, state, candidates)` and compares its canonical values with the label row; it must not reproduce canonical JSON or SHA-256 logic inside the tool. The candidate line therefore reflects the real orchestration fallback result, not a raw score that the plugin could never display. `topActionKeys` contains at most three keys from the returned result in rank order. When unified inference falls back, candidate Top-1/Top-3 are intentionally computed from the returned legacy result because that is the action surface a visible unified mode would expose; raw unified ranks may appear only in a separate diagnostic field excluded from effect metrics. The runner sorts scenarios by ordinal `scenarioId`, rejects duplicate scenario or fingerprint pairs, rejects mixed schema/season/build identities, and writes UTF-8 without BOM and LF line endings. It never enables `DecisionEventRecorder`, never uploads data, and never writes inside the repository.
 
 After three unmeasured warmups per scenario, measure ten fresh-clone calls per policy with `Stopwatch.GetTimestamp`; store raw samples plus P50/P95/P99 in `latency.json`. Timing values are expected to vary, so determinism checks compare prediction and safety files byte-for-byte and compare only the latency schema, sample counts, scenario identities, and finite/non-negative constraints.
 
@@ -1747,27 +1799,13 @@ Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorit
 
 Expected: `PASS benchmark evidence is paired, deterministic, recorder-free, and versioned`.
 
-- [ ] **Step 5: Implement exact metrics and fail-closed activation from evidence**
-
-```javascript
-const gates = {
-  severeErrorRelativeReduction: metrics.severeErrorRelativeReduction >= 0.20,
-  top1: metrics.top1ImprovementPercentagePoints >= 10,
-  top3: metrics.top3ImprovementPercentagePoints >= 15,
-  categories: Object.values(categoryMetrics).every(x => x.regressionPercentagePoints >= -5),
-  rankingLatency: latency.rankingP95Milliseconds <= 10,
-  planningLatency: latency.planningP95Milliseconds <= 25,
-  fallback: fallbackPassRate === 1,
-  severeRegressions: newSevereErrors.length === 0
-};
-const activationDecision = Object.values(gates).every(Boolean) ? 'activate' : 'shadow';
-```
+- [ ] **Step 5: Implement exact metrics and fail-closed effect-readiness status from evidence**
 
 `evaluate_policy.js` accepts only `--data-root`, `--scenarios`, `--baseline-evidence`, `--candidate-evidence`, `--latency-evidence`, `--safety-evidence`, and `--output`. It does not import C# policy logic. It joins baseline, candidate, and labels by `scenarioId`, then requires exact state/candidate fingerprints, one baseline policy ID, one non-empty candidate model ID/checksum, and identical scenario sets before calculating severe-error rate, relative reduction, accepted Top-1, Top-3 coverage, severity-weighted regret, per-category regression, override precision, fallback pass rate, and P50/P95/P99 latency.
 
-It rejects duplicated fingerprints, mixed schema versions, missing identities, games split across partitions, missing required safety reasons, non-finite latency, and fewer than 300 evaluable high-impact scenarios. `activationDecision: "activate"` means only that the exact artifact bytes are eligible to become the embedded shadow candidate; it does not change `DecisionRuntimeMode.Shadow` or authorize visible unified recommendations.
+It rejects duplicated fingerprints, mixed schema versions, missing identities, games split across partitions, missing required safety reasons, and non-finite latency. Fewer than 300 real, trustworthy, version-matched expert-labeled scenarios, missing representative Shadow comparisons, unknown build/season/card-pool identity, or incomplete human severe-error review returns `effectAcceptanceStatus: "blocked-by-season-data"` and suppresses effect metrics rather than inventing a percentage from synthetic or prior-season evidence. Threshold values are frozen only after the owner approves the real evaluation protocol and before holdout results are opened. The evaluator never returns `activate` and never authorizes embedding or visible unified recommendations.
 
-- [ ] **Step 6: Build the external benchmark, candidate model, and comparable evidence**
+- [ ] **Step 6: Define the external evidence layout and record the current blocker**
 
 Create the external layout under an explicit non-repository path:
 
@@ -1803,16 +1841,6 @@ if ($dataRoot.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase) -o
 if ([System.IO.Path]::GetPathRoot($dataRoot).Equals(($env:SystemDrive + [System.IO.Path]::DirectorySeparatorChar), [System.StringComparison]::OrdinalIgnoreCase)) { throw 'BOBCOACH_DATA_ROOT must not be on the system drive' }
 New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
 
-node tools/model/build_pairs.js --data-root $dataRoot --scenarios "labels\scenarios-v1.jsonl" --output "datasets\pairs-v1.jsonl"
-node tools/model/split_dataset.js --data-root $dataRoot --input "datasets\pairs-v1.jsonl" --output "splits"
-node tools/model/train_pairwise.js --data-root $dataRoot --pairs "splits\train.jsonl" --output "models\candidates\linear-v1.envelope.json" --epochs 400 --learning-rate 0.03 --lambda 0.01 --seed 7
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/model/run_policy_benchmark.ps1 `
-  -DataRoot $dataRoot `
-  -Scenarios "labels\scenarios-v1.jsonl" `
-  -SafetyProbes "probes\fallback-scenarios-v1.jsonl" `
-  -CandidateModel "models\candidates\linear-v1.envelope.json" `
-  -OutputDirectory "evidence\linear-v1" `
-  -HdtDirectory $env:BOBCOACH_HDT_DIR
 node tools/model/evaluate_policy.js `
   --data-root $dataRoot `
   --scenarios "labels\scenarios-v1.jsonl" `
@@ -1823,31 +1851,11 @@ node tools/model/evaluate_policy.js `
   --output "reports\linear-v1-acceptance.json"
 ```
 
-Expected: every tool revalidates the explicit root; baseline and candidate evidence contain the exact same ordered scenario/state/candidate identities; the evaluator exits `0` for a structurally valid report even when `activationDecision` is `shadow`. Player-observed actions remain context only and are never converted into accepted-action labels. The split keeps whole games together, places newer whole games in holdout, and reports old-season and current-season results separately.
+The commands above document the future real-evidence path; do not run training or candidate benchmarking until trustworthy version-matched labels and identities exist. In the current task, run only `-SelfTest` and synthetic evaluator contract tests. Do not train weights, generate a candidate model, calculate improvement percentages, copy model bytes, add an embedded resource, or activate any mode. Player-observed actions remain context only and are never converted into accepted-action labels.
 
-- [ ] **Step 7: Conditionally embed only the exact accepted candidate**
+- [ ] **Step 7: Preserve the blocked state and prohibit promotion side effects**
 
-After, and only after, the report says `activate` and a human review confirms every newly introduced severe-error list is empty, copy the exact evaluated bytes into the repository and embed them:
-
-```powershell
-$report = Get-Content (Join-Path $dataRoot 'reports\linear-v1-acceptance.json') -Raw | ConvertFrom-Json
-if ($report.activationDecision -ne 'activate' -or $report.newSevereErrors.Count -ne 0) { throw 'candidate is not eligible for embedding' }
-$resourceDir = Join-Path $repoRoot 'src\BobCoach\Resources\DecisionModels'
-New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
-Copy-Item -LiteralPath (Join-Path $dataRoot 'models\candidates\linear-v1.envelope.json') -Destination (Join-Path $resourceDir 'linear-v1.envelope.json')
-```
-
-Add the old-style project resource entry explicitly:
-
-```xml
-<EmbeddedResource Include="Resources\DecisionModels\linear-v1.envelope.json">
-  <LogicalName>BobCoach.DecisionModels.linear-v1.envelope.json</LogicalName>
-</EmbeddedResource>
-```
-
-Reload the copied envelope with `RankingModelLoader`, recompute its identity, and fail unless checksum, model ID, feature schema, training-set identity, season range, and metrics equal the acceptance report. The plugin remains hard-coded to `DecisionRuntimeMode.Shadow`; visible activation requires a later, separately approved release change.
-
-If the report says `shadow`, do not create `Resources/DecisionModels`, do not modify `BobCoach.csproj`, and do not suppress the failed gate. The evaluator, runner, tests, and maintenance documentation are still a complete deliverable and are committed so the next candidate can reuse the same acceptance chain.
+Write the current external report with `effectAcceptanceStatus: "blocked-by-season-data"`, missing real identities as `unknown`, and an explicit list of absent prerequisites. Do not create `Resources/DecisionModels`, modify `BobCoach.csproj` for a model resource, train or copy model bytes, or add any activation switch. The reusable evaluator, runner, tests, and maintenance documentation are the complete deliverable for this task. A future plan must separately authorize candidate training/embedding after the real evidence review; visible takeover remains another owner-approved release change after that.
 
 - [ ] **Step 8: Document maintenance, new-season, and rollback flows**
 
@@ -1860,13 +1868,13 @@ The new-season checklist must say:
 2. Mark unknown mechanics unsupported until tests define coverage.
 3. Keep unified ranking in shadow mode.
 4. Label current-season disagreements in high-impact categories.
-5. Re-run all activation gates on the current-season holdout.
-6. Embed a candidate only when every gate passes; keep it in Shadow until a separate owner-approved visible-activation release.
-7. On a failed gate, retain the report externally, commit the reusable tools/docs, and leave the model resource absent.
+5. Freeze owner-approved effect thresholds before opening the current-season holdout, then run the effect-acceptance interface.
+6. Keep the candidate in Shadow regardless of effect status; embedding and visible takeover each require later, separately approved work.
+7. While data is incomplete or any review fails, retain `blocked-by-season-data`, keep the report external, commit only reusable tools/docs, and leave the model resource absent.
 8. Roll back by selecting LegacyOnly and retaining the last approved model.
 ```
 
-- [ ] **Step 9: Run all tests and repository validation in both artifact states**
+- [ ] **Step 9: Run all engineering-contract and repository validation checks**
 
 Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_benchmark_contract.ps1`
 
@@ -1874,7 +1882,7 @@ Expected: `PASS benchmark evidence is paired, deterministic, recorder-free, and 
 
 Run: `node tests/test_algorithm_evaluation.js`
 
-Expected: `PASS evaluation gates fail closed on quality and latency regressions`.
+Expected: `PASS evaluator validates structure, reports blocked evidence, and fails closed on invalid inputs`.
 
 Run: `npm test`
 
@@ -1884,13 +1892,9 @@ Run: `node tests/test_offline_runtime_contract.js`
 
 Expected without an accepted model: optional resource absence is valid, unified inference resolves to `ModelUnavailable`, the plugin remains fixed to Shadow, and visible output comes from `legacy-v1.1.0`.
 
-Expected after conditional embedding: the approved resource identity matches the acceptance report, the plugin remains fixed to Shadow, and visible output still comes from `legacy-v1.1.0`.
-
 Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build/build_release.ps1 -HdtDirectory $env:BOBCOACH_HDT_DIR -OutputDirectory "$env:TEMP\bobcoach-algorithm-approved-shadow-build" -Force`
 
-Expected without an accepted model: Release build succeeds for .NET Framework 4.7.2/x64 with safe `ModelUnavailable` shadow fallback.
-
-Expected after conditional embedding: Release build succeeds and contains only the checksum-validated approved shadow model.
+Expected: Release build succeeds for .NET Framework 4.7.2/x64 without a model resource, unified inference reports `ModelUnavailable`, the plugin remains hard-coded to Shadow, and visible output remains `legacy-v1.1.0`.
 
 Run: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build/validate_repository.ps1`
 
@@ -1904,25 +1908,22 @@ Expected: no output and exit code `0`.
 
 ```powershell
 git add tools/model/PolicyBenchmarkRunner.cs tools/model/run_policy_benchmark.ps1 tools/model/evaluate_policy.js tests/fixtures/algorithm/evaluation.synthetic.json tests/test_algorithm_benchmark_contract.ps1 tests/test_algorithm_evaluation.js tests/run_contract_tests.ps1 tests/test_offline_runtime_contract.js docs/maintainer/ARCHITECTURE.md docs/maintainer/BUILD.md docs/README.md
-if (Test-Path 'src\BobCoach\Resources\DecisionModels\linear-v1.envelope.json') {
-    git add src/BobCoach/Resources/DecisionModels/linear-v1.envelope.json src/BobCoach/BobCoach.csproj
-}
-git commit -m "test: enforce algorithm activation gates"
+git commit -m "test: enforce algorithm effect evidence gates"
 ```
 
-## Final Activation Review
+## Final Engineering And Future Effect Review
 
-- [ ] Confirm the benchmark contains at least 300 deduplicated, evaluable high-impact scenarios and no real gameplay data is staged.
-- [ ] Confirm `legacy-v1.1.0` and the candidate run against the exact same scenario and candidate fingerprints.
-- [ ] Confirm severe-error relative reduction is at least 20% and review every new severe error individually.
-- [ ] Confirm Top-1 improves by at least 10 percentage points and Top-3 by at least 15 percentage points.
-- [ ] Confirm no high-impact category regresses by more than 5 percentage points.
-- [ ] Confirm ranking P95 is at most 10 ms and planned-decision P95 is at most 25 ms.
+- [ ] Confirm synthetic self-tests assert only engineering behavior and the current report says `blocked-by-season-data`.
+- [ ] Confirm no model was trained, generated, copied, embedded, or activated by this task.
+- [ ] Before future effect review, confirm at least 300 deduplicated, real, trustworthy, version-matched expert-labeled high-impact scenarios and representative Shadow comparisons exist outside the repository.
+- [ ] Confirm future `legacy-v1.1.0` and candidate evidence use the exact same scenario and candidate fingerprints.
+- [ ] Freeze effect and latency thresholds before opening holdout results; do not derive pass criteria from synthetic fixtures or the observed result.
+- [ ] Human-review every future new severe error and category regression individually.
 - [ ] Confirm `ModelUnavailable` (including corrupt model), `CriticalStateMissing`, `UnsupportedMechanic`, `OutOfDistribution`, `LowConfidence`, and `NoSafeAction` fallback probes pass 100%.
 - [ ] Confirm planner timeout returns `PlannerStatus.TimedOut`, retains the best safe completed path, and does not invent a fallback reason.
-- [ ] Confirm the candidate model checksum, feature schema, training-set identity, season range, and aggregate metrics match the acceptance report.
-- [ ] Confirm the plugin still starts in shadow mode. Switching to visible unified mode is a separate owner-approved release decision.
+- [ ] Confirm every future candidate checksum, feature schema, training-set identity, build, season, card-pool identity, and aggregate metric matches the acceptance report.
+- [ ] Confirm the plugin remains hard-coded to Shadow. Embedding and visible unified mode are separate owner-approved release decisions.
 
 ## Expected Outcome
 
-The minimum activation outcome is at least 20% fewer severe errors, at least +10 percentage points Top-1 accuracy, and at least +15 percentage points Top-3 coverage versus v1.1.0. The stage-one planning target is 25%-35% fewer severe errors and +12 to +18 percentage points Top-1; average placement improvement of 0.15-0.35 and top-four improvement of 3-5 percentage points remain long-term hypotheses, not release claims. An optional LightGBM/LambdaMART shadow experiment is authorized only after this plan is complete, the event-aligned dataset and 300-scenario benchmark are stable, and a tree model adds at least 3 held-out Top-1 percentage points without quality, calibration, latency, offline, or packaging regression.
+The current deliverable is a deterministic, fail-closed engineering evidence pipeline and an explicit `blocked-by-season-data` report. No next-season strategy improvement, model quality, effect percentage, embedding eligibility, or activation readiness is claimed. Those questions remain blocked until the real version-matched corpus, Shadow comparisons, frozen evaluation protocol, and human severe-error review exist; this task does not authorize a LightGBM/LambdaMART experiment or any other candidate-training expansion.
