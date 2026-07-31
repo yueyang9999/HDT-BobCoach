@@ -2,12 +2,12 @@
 
 ## Status
 
-The implementation is final-task-review approved with
-`Critical=0, Important=0, Minor=0`. Fresh engineering verification is complete:
-all Task 11 tests, contracts, package checks, the Release build, and diff checks
-pass. Repository validation reports only the pre-existing Task 7 report
-personal-path finding documented below. The unified policy remains hard-coded
-to `Shadow`; `legacy-v1.1.0` remains the player-visible policy and fallback.
+The implementation and engineering verification are complete, and the task is
+awaiting review against a frozen Task 11 review bundle. All Task 11 tests,
+contracts, package checks, the Release build, and diff checks pass. Repository
+validation reports only the pre-existing Task 7 report personal-path finding
+documented below. The unified policy remains hard-coded to `Shadow`;
+`legacy-v1.1.0` remains the player-visible policy and fallback.
 
 Effect acceptance remains `blocked-by-season-data`. This task does not claim
 improved placement, win rate, accuracy, or decision quality.
@@ -100,15 +100,8 @@ Tests and release contracts:
 
 ## Review
 
-The final fresh task review approved the complete working-tree diff:
-
-- `Critical=0`
-- `Important=0`
-- `Minor=0`
-
-The review specifically rechecked explicit local-recording consent, paid and
-free refresh inference, automatic turn-boundary shop replacement, and strict
-factory approval behavior. No unresolved review findings remain.
+Pending fresh review against the frozen Task 11 review bundle. Reviewer results
+must be recorded only after that review completes.
 
 ## Verification
 
@@ -168,4 +161,4 @@ The final verification used the exact local HDT `1.54.0` baseline:
 
 ## Required Conclusion
 
-鏂扮畻娉曞熀纭€璁炬柦宸插畬鎴愭垨姝ｅ湪瀹屽杽锛屼絾鐢变簬鐩墠娌℃湁鍙潬閫斿緞鑾峰彇鏂拌禌瀛ｅ畬鏁村唴瀹癸紝瀛樺湪鍏抽敭鏁版嵁缂哄け锛屽疄闄呭喅绛栨彁鍗囧皻鏈緱鍒伴獙璇侊紝鏂扮瓥鐣ョ户缁繚鎸?Shadow锛屽苟鐢?legacy-v1.1.0 鎵挎媴鍙鎺ㄨ崘鍜屽洖閫€銆俙
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
