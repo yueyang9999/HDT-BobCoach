@@ -5,7 +5,11 @@ using BobCoach.Engine.Decision;
 
 namespace BobCoach.Engine
 {
-    public enum ActionType { Refresh }
+    public enum ActionType
+    {
+        BuyMinion, BuySpell, Refresh, Upgrade, SellMinion, FreezeShop,
+        UseHeroPower, PickTrinket, PickDiscover,
+    }
 
     public sealed class GameAction
     {
@@ -19,6 +23,33 @@ namespace BobCoach.Engine
     public sealed class GameState
     {
         public bool GameActive;
+        public int HeroPowerCost;
+        public string HeroCardId = "";
+        public EffectiveGameRules EffectiveRules;
+        public List<MinionData> BoardMinions = new List<MinionData>();
+        public List<MinionData> ShopMinions = new List<MinionData>();
+        public List<TrinketOption> TrinketOffer = new List<TrinketOption>();
+        public List<TrinketOption> DiscoverOptions = new List<TrinketOption>();
+        public List<HeroPowerState> HeroPowers = new List<HeroPowerState>();
+    }
+
+    public sealed class MinionData { public int EntityId; }
+    public sealed class TrinketOption { public int EntityId; }
+    public sealed class HeroPowerState { public string CardId; public int Cost; }
+
+    public sealed class EffectiveGameRules
+    {
+        public static readonly EffectiveGameRules Default = new EffectiveGameRules();
+    }
+
+    public static class GameRuleEvaluator
+    {
+        public static int GetPurchaseCost(GameState state, MinionData minion,
+            string heroCardId, EffectiveGameRules rules) { return 0; }
+        public static int GetRefreshCost(GameState state, string heroCardId,
+            EffectiveGameRules rules) { return 0; }
+        public static int? GetUpgradeCost(GameState state,
+            EffectiveGameRules rules) { return 0; }
     }
 
     public sealed class LevelUpSuggestion

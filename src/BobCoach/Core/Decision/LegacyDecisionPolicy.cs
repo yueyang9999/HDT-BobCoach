@@ -20,17 +20,11 @@ namespace BobCoach.Engine.Decision
             var action = _provider.GetBestAction(state);
             var ranked = new List<RankedAction>();
             if (action != null)
-                ranked.Add(new RankedAction(action, CreateLegacyActionKey(action), 0d, null));
+                ranked.Add(new RankedAction(action, ActionDescriptor.CreateKey(action), 0d, null));
 
             return new DecisionResult(PolicyId, action, ranked, 1d,
                 PlannerStatus.NotRequested, FallbackReason.None,
                 action == null ? "" : action.Description);
-        }
-
-        private static string CreateLegacyActionKey(GameAction action)
-        {
-            return string.Join("|", action.Type, action.TargetIndex,
-                action.CardId ?? "", action.PurchaseSource ?? "");
         }
     }
 

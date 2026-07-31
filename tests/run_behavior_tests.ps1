@@ -33,6 +33,7 @@ foreach ($file in @(
     "test_layout_resolution_matrix.ps1",
     "test_value_function_weight_contract.ps1",
     "test_algorithm_policy_contract.ps1",
+    "test_algorithm_candidates.ps1",
     "test_comp_strategy_exit_behavior.ps1",
     "test_card_effect_rule_evaluator.ps1",
     "test_card_effect_source.ps1",

@@ -14,6 +14,7 @@ if (!$csc) { throw "Roslyn csc.exe not found; install Visual Studio Build Tools 
 $output = Join-Path $env:TEMP ("bobcoach_algorithm_policy_contract_{0}.exe" -f [Guid]::NewGuid().ToString("N"))
 $sources = @(@(
     (Join-Path $root "src\BobCoach\Core\Decision\Contracts.cs"),
+    (Join-Path $root "src\BobCoach\Core\Decision\ActionDescriptor.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\LegacyDecisionPolicy.cs")
 ) | Where-Object { Test-Path -LiteralPath $_ })
 $sources += (Join-Path $PSScriptRoot "AlgorithmPolicyContractBehavior.cs")
