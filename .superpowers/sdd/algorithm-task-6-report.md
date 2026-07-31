@@ -248,4 +248,111 @@ warning. Neither is introduced or suppressed by this remediation.
    semantic mappings, then calibrate coverage/confidence/OOD gates using real
    labeled scenarios while retaining Shadow through effect acceptance.
 
+## Follow-up Review Remediation: Conservative Extraction And Fixed Mappings
+
+This follow-up closes four Important findings without changing the 45-name
+order, schema version, one-hot ordering, decision policy, or Shadow-only
+boundary.
+
+### TDD Evidence
+
+Each regression was added to `tests/AlgorithmFeatureBehavior.cs` before its
+production fix and run with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_features.ps1
+```
+
+Observed RED results:
+
+- `FAIL whitespace unknown season provenance value expected=0 actual=7`.
+  Matching raw `" unknown "` state and extension identities were incorrectly
+  accepted as provenance.
+- `FAIL non-finite season extension NaN coverage expected=0 actual=1`.
+  `TryEvaluate=true` with a non-finite value was sanitized to zero but still
+  presented as available.
+- `FAIL missing source board immediate_attack_delta value expected=0 actual=4`.
+  A null source board was treated as an empty board and produced a trusted
+  cross-state delta.
+- `FAIL feature schema must reject external mutation`.
+  The public fixed schema list could be rewritten by a caller. The paired
+  behavior test also covers the independently mutable action-type list.
+
+The same focused command was GREEN after the minimal implementation changes:
+
+```text
+PASS 45 named state-action features are deterministic and preference-free
+```
+
+### Delivered
+
+- Provenance sentinel recognition now compares `identity.Trim()` to
+  `unknown` with the existing ordinal-ignore-case sentinel convention, while
+  exact state-to-extension provenance comparisons still use the original
+  strings and `StringComparison.Ordinal`. Independent state-side and
+  extension-side whitespace `unknown` regressions prove both paths fail
+  closed.
+- A season extension has coverage `1` only when its provenance matches,
+  `TryEvaluate` returns true, and the returned value is finite. `NaN`,
+  positive infinity, and negative infinity are all exactly `0/0`.
+- Attack, health, and unit-count board deltas require both source and next
+  boards. A null board on either side is exactly `0/0`. No adjacent feature
+  was broadened: `board_power_delta` is already semantic `0/0`, pair/triple
+  already require every ownership collection, and slots/congestion each rely
+  only on the single collection they read.
+- `ActionFeatureSchema.Names` and `ActionTypeBiases.OrderedTypes` now expose
+  `Array.AsReadOnly` views through their existing indexable collection API.
+  External writes throw, while count, order, lookup, and one-hot behavior are
+  unchanged.
+
+### Files
+
+- `src/BobCoach/Core/Decision/ActionFeatureSchema.cs`
+- `src/BobCoach/Core/Decision/ActionFeatureExtractor.cs`
+- `tests/AlgorithmFeatureBehavior.cs`
+- `.superpowers/sdd/algorithm-task-6-report.md`
+
+### Verification
+
+- `tests/test_algorithm_features.ps1`: PASS.
+- `tests/test_value_function_weight_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1` with `BOBCOACH_HDT_DIR` set to local HDT
+  `1.54.0`: PASS. It retained the existing `CardSemanticFactSource.CardId`
+  compiler warning only.
+- `tests/run_contract_tests.ps1` with the same HDT baseline: PASS.
+- `node tests/test_release_build_contract.js`: PASS, compile set `187`,
+  SHA-256 `35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e`.
+- `tools/build/validate_repository.ps1`: PASS, 402 files scanned.
+- `git diff --check 0070303..HEAD`: PASS after remediation commit.
+
+### Self-Review
+
+- State-side and extension-side whitespace-unknown regressions are separate,
+  so each sentinel gate is proven independently of a provenance mismatch.
+- The non-finite test loops over all three IEEE non-finite values; coverage
+  is asserted alongside value.
+- The null-board test covers both source and next-state absence for all three
+  direct board-delta features. No unrelated feature receives a new missing
+  data rule.
+- Mutation tests assert both rejection and preservation of schema/action
+  mapping behavior. `OneHot` still derives its index from the fixed ordered
+  action collection.
+- The change remains season-independent, uses no user preferences or learned
+  weights, adds no dependencies, and makes no claim about strategy quality.
+
+### Next-Season Data Boundary
+
+1. **Independent of next-season data:** Yes. This is input validation and
+   interface immutability only.
+2. **Unsupported assumptions:** No new card, mechanic, entity, cost, pool,
+   calibration, or policy facts are introduced.
+3. **Missing-data degradation:** Whitespace/unknown provenance, non-finite
+   extension outputs, and missing boards fail closed to `0/0`.
+4. **Engineering-only tests:** Regressions prove conservative coverage,
+   deterministic mapping, and mutation resistance only; they do not establish
+   decision quality, win rate, placement, or uplift.
+5. **Calibration after data:** A future trustworthy version-matched fact
+   provider must still populate/calibrate semantic features while policy stays
+   in Shadow through effect acceptance.
+
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。

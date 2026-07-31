@@ -8,7 +8,7 @@ namespace BobCoach.Engine.Decision
     {
         public const int Version = 1;
 
-        public static readonly IList<string> Names = new[]
+        public static readonly IList<string> Names = Array.AsReadOnly(new[]
         {
             "turn", "tavern_tier", "health_armor", "gold_before", "hand_slots_free", "board_slots_free",
             "immediate_attack_delta", "immediate_health_delta", "immediate_keyword_delta", "unit_count_delta", "board_power_delta",
@@ -20,7 +20,7 @@ namespace BobCoach.Engine.Decision
             "unknown_effect_count", "simulator_coverage", "semantic_coverage", "stochastic_range", "state_observation_completeness",
             "low_health_x_immediate_power", "board_full_x_buy", "level_x_damage_exposure", "pair_x_matching_shop",
             "remaining_gold_x_follow_ups", "transition_x_protected_value", "target_tier_delta", "season_extension_value"
-        };
+        });
 
         public static int IndexOf(string name)
         {
@@ -77,12 +77,13 @@ namespace BobCoach.Engine.Decision
     // Action type is categorical and deliberately kept outside the ordered 45-value schema.
     public static class ActionTypeBiases
     {
-        public static readonly ActionType[] OrderedTypes = (ActionType[])Enum.GetValues(typeof(ActionType));
+        public static readonly IList<ActionType> OrderedTypes =
+            Array.AsReadOnly((ActionType[])Enum.GetValues(typeof(ActionType)));
 
         public static double[] OneHot(ActionType type)
         {
-            var result = new double[OrderedTypes.Length];
-            for (var i = 0; i < OrderedTypes.Length; i++)
+            var result = new double[OrderedTypes.Count];
+            for (var i = 0; i < OrderedTypes.Count; i++)
                 if (OrderedTypes[i] == type) result[i] = 1d;
             return result;
         }

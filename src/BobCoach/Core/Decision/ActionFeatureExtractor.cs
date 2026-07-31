@@ -21,11 +21,12 @@ namespace BobCoach.Engine.Decision
             if (state == null || action == null || action.Action == null || nextState == null)
                 return new ActionFeatureVector(values, coverage);
 
+            var boardsAvailable = state.BoardMinions != null && nextState.BoardMinions != null;
             var currentBoard = state.BoardMinions ?? new List<MinionData>();
             var nextBoard = nextState.BoardMinions ?? new List<MinionData>();
-            var attackDelta = Total(nextBoard, x => x.Attack) - Total(currentBoard, x => x.Attack);
-            var healthDelta = Total(nextBoard, x => x.Health) - Total(currentBoard, x => x.Health);
-            var unitDelta = nextBoard.Count - currentBoard.Count;
+            var attackDelta = boardsAvailable ? Total(nextBoard, x => x.Attack) - Total(currentBoard, x => x.Attack) : 0d;
+            var healthDelta = boardsAvailable ? Total(nextBoard, x => x.Health) - Total(currentBoard, x => x.Health) : 0d;
+            var unitDelta = boardsAvailable ? nextBoard.Count - currentBoard.Count : 0d;
             var healthRatio = Ratio(state.Health + state.Armor, state.MaxHealth);
             var lowHealthNeed = 1d - Clamp01(healthRatio);
             var pairCoverage = HasResolvedCardIdentities(
@@ -35,6 +36,7 @@ namespace BobCoach.Engine.Decision
             var seasonValue = 0d;
             var seasonKnown = HasExactSeasonProvenance(state, _seasonExtension)
                 && _seasonExtension.TryEvaluate(state, action, nextState, out seasonValue);
+            if (!IsFinite(seasonValue)) seasonKnown = false;
 
             Set(values, coverage, "turn", state.Turn, 1d);
             Set(values, coverage, "tavern_tier", state.TavernTier, 1d);
@@ -42,11 +44,11 @@ namespace BobCoach.Engine.Decision
             Set(values, coverage, "gold_before", state.Gold, 1d);
             Set(values, coverage, "hand_slots_free", 10d - Count(state.HandMinions), state.HandMinions != null ? 1d : 0d);
             Set(values, coverage, "board_slots_free", 7d - Count(state.BoardMinions), state.BoardMinions != null ? 1d : 0d);
-            Set(values, coverage, "immediate_attack_delta", attackDelta, 1d);
-            Set(values, coverage, "immediate_health_delta", healthDelta, 1d);
+            Set(values, coverage, "immediate_attack_delta", attackDelta, boardsAvailable ? 1d : 0d);
+            Set(values, coverage, "immediate_health_delta", healthDelta, boardsAvailable ? 1d : 0d);
             // These rule, effect, entity, and mechanic features require version-matched facts.
             Set(values, coverage, "immediate_keyword_delta", 0d, 0d);
-            Set(values, coverage, "unit_count_delta", unitDelta, 1d);
+            Set(values, coverage, "unit_count_delta", unitDelta, boardsAvailable ? 1d : 0d);
             Set(values, coverage, "board_power_delta", 0d, 0d);
             Set(values, coverage, "net_gold_cost", state.Gold - nextState.Gold, 1d);
             Set(values, coverage, "remaining_gold", nextState.Gold, 1d);
@@ -128,7 +130,7 @@ namespace BobCoach.Engine.Decision
         private static bool IsKnownIdentity(string identity)
         {
             return !string.IsNullOrWhiteSpace(identity)
-                && !string.Equals(identity, "unknown", StringComparison.OrdinalIgnoreCase);
+                && !string.Equals(identity.Trim(), "unknown", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasResolvedCardIdentities(params IEnumerable<MinionData>[] groups)

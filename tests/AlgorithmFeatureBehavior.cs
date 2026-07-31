@@ -13,6 +13,10 @@ internal static class AlgorithmFeatureBehavior
             VerifiesSchemaAndUnknownBoundary();
             VerifiesUnverifiedFactsFailClosed();
             VerifiesSeasonExtensionRequiresExactProvenance();
+            VerifiesFixedMappingsCannotBeMutated();
+            VerifiesMissingBoardsFailClosed();
+            VerifiesNonFiniteSeasonExtensionValuesFailClosed();
+            VerifiesWhitespaceUnknownSeasonProvenanceFailsClosed();
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
@@ -171,6 +175,73 @@ internal static class AlgorithmFeatureBehavior
             "season extension unknown extension card pool provenance");
     }
 
+    private static void VerifiesWhitespaceUnknownSeasonProvenanceFailsClosed()
+    {
+        var state = State(20);
+        state.GameBuild = " unknown ";
+        var extension = new TestSeasonFeatureExtension("build-verified", "season-verified", "pool-verified", 7d);
+
+        AssertUnavailable(new ActionFeatureExtractor(extension).Extract(
+            state, Buy(state), new Simulator().Simulate(state, Buy(state).Action)),
+            "season_extension_value", "whitespace unknown state provenance");
+
+        AssertSeasonExtensionUnavailable(
+            new TestSeasonFeatureExtension(" unknown ", "season-verified", "pool-verified", 7d),
+            "whitespace unknown extension provenance");
+    }
+
+    private static void VerifiesNonFiniteSeasonExtensionValuesFailClosed()
+    {
+        foreach (var value in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+        {
+            var extension = new TestSeasonFeatureExtension(
+                "build-verified", "season-verified", "pool-verified", value);
+            var state = State(20);
+            AssertUnavailable(new ActionFeatureExtractor(extension).Extract(
+                state, Buy(state), new Simulator().Simulate(state, Buy(state).Action)),
+                "season_extension_value", "non-finite season extension " + value);
+        }
+    }
+
+    private static void VerifiesMissingBoardsFailClosed()
+    {
+        var missingSourceBoard = State(20);
+        missingSourceBoard.BoardMinions = null;
+        var nextWithBoard = State(20);
+        nextWithBoard.BoardMinions.Add(new MinionData { CardId = "CARD_A", Attack = 4, Health = 5 });
+        AssertBoardDeltasUnavailable(new ActionFeatureExtractor().Extract(
+            missingSourceBoard, Buy(missingSourceBoard), nextWithBoard), "missing source board");
+
+        var sourceWithBoard = State(20);
+        sourceWithBoard.BoardMinions.Add(new MinionData { CardId = "CARD_A", Attack = 4, Health = 5 });
+        var missingNextBoard = State(20);
+        missingNextBoard.BoardMinions = null;
+        AssertBoardDeltasUnavailable(new ActionFeatureExtractor().Extract(
+            sourceWithBoard, Buy(sourceWithBoard), missingNextBoard), "missing next board");
+    }
+
+    private static void AssertBoardDeltasUnavailable(ActionFeatureVector vector, string label)
+    {
+        foreach (var feature in new[] { "immediate_attack_delta", "immediate_health_delta", "unit_count_delta" })
+            AssertUnavailable(vector, feature, label + " " + feature);
+    }
+
+    private static void VerifiesFixedMappingsCannotBeMutated()
+    {
+        var schema = string.Join("|", ActionFeatureSchema.Names);
+        var firstType = ActionTypeBiases.OrderedTypes[0];
+
+        AssertThrows(() => ActionFeatureSchema.Names[0] = "rewritten",
+            "feature schema must reject external mutation");
+        AssertEqual(schema, string.Join("|", ActionFeatureSchema.Names),
+            "feature schema mapping remains fixed");
+
+        AssertThrows(() => ActionTypeBiases.OrderedTypes[0] = ActionType.Refresh,
+            "action type mapping must reject external mutation");
+        AssertEqual(firstType, ActionTypeBiases.OrderedTypes[0], "action type mapping remains fixed");
+        AssertEqual(1d, ActionTypeBiases.OneHot(firstType)[0], "action one-hot mapping remains fixed");
+    }
+
     private static void VerifiesDeterministicPreferenceFreeExtraction()
     {
         var state = State(12);
@@ -324,5 +395,18 @@ internal static class AlgorithmFeatureBehavior
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
             throw new InvalidOperationException(label + " expected=" + expected + " actual=" + actual);
+    }
+
+    private static void AssertThrows(Action action, string label)
+    {
+        try
+        {
+            action();
+        }
+        catch (NotSupportedException)
+        {
+            return;
+        }
+        throw new InvalidOperationException(label);
     }
 }
