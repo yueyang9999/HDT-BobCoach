@@ -87,12 +87,6 @@ namespace BobCoach.Engine.Decision
             if (ranked.Count == 0)
                 return UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
 
-            foreach (var rankedAction in ranked)
-            {
-                var evaluation = evaluations.FirstOrDefault(item => string.Equals(
-                    item.Descriptor.ActionKey, rankedAction.ActionKey, StringComparison.Ordinal));
-                if (evaluation != null) evaluation.Ranked = rankedAction;
-            }
             var top = evaluations.First(item => string.Equals(item.Descriptor.ActionKey,
                 ranked[0].ActionKey, StringComparison.Ordinal));
             var assessment = _confidenceEvaluator.Evaluate(state, ranked, top.Features, _model);
@@ -123,7 +117,6 @@ namespace BobCoach.Engine.Decision
         {
             public ActionDescriptor Descriptor { get; private set; }
             public ActionFeatureVector Features { get; private set; }
-            public RankedAction Ranked { get; set; }
 
             public CandidateEvaluation(ActionDescriptor descriptor, ActionFeatureVector features)
             {

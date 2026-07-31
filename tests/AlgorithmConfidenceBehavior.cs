@@ -138,6 +138,7 @@ internal static class AlgorithmConfidenceBehavior
         try
         {
             UnacceptedCalibrationFailsClosed();
+            RejectsMismatchedModelCalibrationAndMalformedVectors();
             AppliesFallbackReasonPrecedence();
             RejectsCriticalStateAndUnsupportedCoverage();
             DetectsDistributionShiftAndReportsFiniteDistance();
@@ -190,6 +191,44 @@ internal static class AlgorithmConfidenceBehavior
             State(build: "unknown"), Ranked(2d, 0.2d), CompleteVector(), unknown);
         AssertFallback(unknownAssessment, FallbackReason.ModelUnavailable,
             "unknown model and state identity");
+    }
+
+    private static void RejectsMismatchedModelCalibrationAndMalformedVectors()
+    {
+        var calibrationMismatch = new DecisionConfidenceEvaluator(
+            Calibration(modelId: "other-model"), Approval()).Evaluate(
+                State(), Ranked(2d, 0.2d), CompleteVector(), Model());
+        AssertFallback(calibrationMismatch, FallbackReason.ModelUnavailable,
+            "calibration model identity mismatch");
+
+        var approvalMismatch = new DecisionConfidenceEvaluator(Calibration(),
+            Approval(modelId: "other-model")).Evaluate(
+                State(), Ranked(2d, 0.2d), CompleteVector(), Model());
+        AssertFallback(approvalMismatch, FallbackReason.ModelUnavailable,
+            "approval model identity mismatch");
+
+        var invalid = CompleteVector();
+        invalid.Values[0] = double.NaN;
+        var invalidAssessment = new DecisionConfidenceEvaluator(
+            Calibration(confidenceThreshold: 0d, planningThreshold: 1d), Approval())
+            .Evaluate(State(), Ranked(2d, 0.2d), invalid,
+                Model(oodDistanceThreshold: double.MaxValue));
+        AssertFallback(invalidAssessment, FallbackReason.UnsupportedMechanic,
+            "non-finite feature value");
+        AssertEqual(0d, invalidAssessment.Score, "malformed vector confidence");
+        AssertTrue(!invalidAssessment.ShouldPlan, "malformed vector disables planning");
+
+        var wrongLength = CompleteVector();
+        typeof(ActionFeatureVector).GetField("<Values>k__BackingField",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .SetValue(wrongLength, new double[1]);
+        var wrongLengthAssessment = Evaluator().Evaluate(
+            State(), Ranked(2d, 0.2d), wrongLength, Model());
+        AssertFallback(wrongLengthAssessment, FallbackReason.UnsupportedMechanic,
+            "wrong-length feature vector");
+        AssertEqual(0d, wrongLengthAssessment.Score, "wrong-length vector confidence");
+        AssertTrue(!wrongLengthAssessment.ShouldPlan,
+            "wrong-length vector disables planning");
     }
 
     private static void AppliesFallbackReasonPrecedence()
@@ -315,20 +354,22 @@ internal static class AlgorithmConfidenceBehavior
 
     private static ConfidenceCalibrationApprovalContext Approval(
         string holdoutIdentity = "known-holdout",
-        string calibrationIdentity = "known-calibration")
+        string calibrationIdentity = "known-calibration", string modelId = "known-model")
     {
-        return new ConfidenceCalibrationApprovalContext(holdoutIdentity, calibrationIdentity);
+        return new ConfidenceCalibrationApprovalContext(holdoutIdentity, calibrationIdentity,
+            modelId);
     }
 
     private static ConfidenceCalibration Calibration(string gameBuild = "known-build",
-        double? planningThreshold = 0.1d)
+        double? planningThreshold = 0.1d, string modelId = "known-model",
+        double confidenceThreshold = 0.5d)
     {
         return new ConfidenceCalibration("accepted", gameBuild, "known-season", "known-pool",
-            "known-training-set", "known-holdout", "known-calibration", 1d, 0.5d, 0.5d,
-            planningThreshold);
+            "known-training-set", "known-holdout", "known-calibration", modelId, 1d, 0.5d,
+            confidenceThreshold, planningThreshold);
     }
 
-    private static RankingModelPayload Model()
+    private static RankingModelPayload Model(double oodDistanceThreshold = 1d)
     {
         var count = ActionFeatureSchema.Names.Count;
         var model = new RankingModelPayload
@@ -339,7 +380,7 @@ internal static class AlgorithmConfidenceBehavior
             Minimums = Enumerable.Repeat(-5d, count).ToArray(),
             Maximums = Enumerable.Repeat(5d, count).ToArray(), Weights = new double[count],
             ActionTypeBiases = new double[ActionTypeBiases.OrderedTypes.Count], Intercept = 0d,
-            OodDistanceThreshold = 1d, TrainingSetIdentity = "known-training-set",
+            OodDistanceThreshold = oodDistanceThreshold, TrainingSetIdentity = "known-training-set",
             SeasonRange = "known-season", BenchmarkMetrics = new Dictionary<string, double>(),
             CreatedAtUtc = "2026-01-01T00:00:00Z", GameBuild = "known-build",
             SeasonId = "known-season", CardPoolIdentity = "known-pool",

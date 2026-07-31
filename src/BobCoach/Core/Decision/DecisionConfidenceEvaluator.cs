@@ -35,6 +35,7 @@ namespace BobCoach.Engine.Decision
         public string TrainingSetIdentity { get; private set; }
         public string HoldoutIdentity { get; private set; }
         public string CalibrationIdentity { get; private set; }
+        public string ModelId { get; private set; }
         public double MarginScale { get; private set; }
         public double SemanticCoverageFloor { get; private set; }
         public double ConfidenceThreshold { get; private set; }
@@ -42,8 +43,8 @@ namespace BobCoach.Engine.Decision
 
         public ConfidenceCalibration(string status, string gameBuild, string seasonId,
             string cardPoolIdentity, string trainingSetIdentity, string holdoutIdentity,
-            string calibrationIdentity, double marginScale, double semanticCoverageFloor,
-            double confidenceThreshold, double? planningThreshold)
+            string calibrationIdentity, string modelId, double marginScale,
+            double semanticCoverageFloor, double confidenceThreshold, double? planningThreshold)
         {
             Status = status;
             GameBuild = gameBuild;
@@ -52,6 +53,7 @@ namespace BobCoach.Engine.Decision
             TrainingSetIdentity = trainingSetIdentity;
             HoldoutIdentity = holdoutIdentity;
             CalibrationIdentity = calibrationIdentity;
+            ModelId = modelId;
             MarginScale = marginScale;
             SemanticCoverageFloor = semanticCoverageFloor;
             ConfidenceThreshold = confidenceThreshold;
@@ -63,12 +65,14 @@ namespace BobCoach.Engine.Decision
     {
         public string HoldoutIdentity { get; private set; }
         public string CalibrationIdentity { get; private set; }
+        public string ModelId { get; private set; }
 
         public ConfidenceCalibrationApprovalContext(string holdoutIdentity,
-            string calibrationIdentity)
+            string calibrationIdentity, string modelId)
         {
             HoldoutIdentity = holdoutIdentity;
             CalibrationIdentity = calibrationIdentity;
+            ModelId = modelId;
         }
     }
 
@@ -90,7 +94,9 @@ namespace BobCoach.Engine.Decision
         {
             var calibrated = HasAcceptedVersionMatchedCalibration(state, payload);
             var criticalStateComplete = CriticalStateCompleteness(state) == 1d;
-            var decisionCriticalCoverage = HasDecisionCriticalCoverage(vector, payload);
+            var featureVectorValid = HasValidFeatureVector(vector);
+            var decisionCriticalCoverage = featureVectorValid
+                && HasDecisionCriticalCoverage(vector, payload);
             var supportedCoverage = decisionCriticalCoverage && calibrated
                 && vector["semantic_coverage"] >= _calibration.SemanticCoverageFloor
                 && vector["simulator_coverage"] > 0d;
@@ -163,9 +169,11 @@ namespace BobCoach.Engine.Decision
                 || !IsResolved(_calibration.CalibrationIdentity)
                 || !IsResolved(_approvalContext.HoldoutIdentity)
                 || !IsResolved(_approvalContext.CalibrationIdentity)
+                || !IsResolved(_approvalContext.ModelId)
                 || !IsResolved(_calibration.GameBuild) || !IsResolved(_calibration.SeasonId)
                 || !IsResolved(_calibration.CardPoolIdentity)
                 || !IsResolved(_calibration.TrainingSetIdentity)
+                || !IsResolved(_calibration.ModelId)
                 || !IsResolved(payload.ModelId) || !IsResolved(payload.TrainingSetIdentity)
                 || !IsResolved(payload.SeasonRange) || !IsResolved(payload.GameBuild)
                 || !IsResolved(payload.SeasonId) || !IsResolved(payload.CardPoolIdentity)
@@ -175,6 +183,9 @@ namespace BobCoach.Engine.Decision
                     StringComparison.Ordinal)
                 || !string.Equals(_calibration.CalibrationIdentity,
                     _approvalContext.CalibrationIdentity, StringComparison.Ordinal)
+                || !string.Equals(_calibration.ModelId, _approvalContext.ModelId,
+                    StringComparison.Ordinal)
+                || !string.Equals(_calibration.ModelId, payload.ModelId, StringComparison.Ordinal)
                 || !string.Equals(_calibration.GameBuild, payload.GameBuild, StringComparison.Ordinal)
                 || !string.Equals(_calibration.SeasonId, payload.SeasonId, StringComparison.Ordinal)
                 || !string.Equals(_calibration.CardPoolIdentity, payload.CardPoolIdentity,
@@ -205,6 +216,19 @@ namespace BobCoach.Engine.Decision
                 if (!IsFinite(vector.Coverage[index]) || vector.Coverage[index] < 0d
                     || vector.Coverage[index] > 1d) return false;
                 if (payload.Weights[index] != 0d && vector.Coverage[index] == 0d) return false;
+            }
+            return true;
+        }
+
+        private static bool HasValidFeatureVector(ActionFeatureVector vector)
+        {
+            var count = ActionFeatureSchema.Names.Count;
+            if (vector == null || vector.Values == null || vector.Values.Length != count
+                || vector.Coverage == null || vector.Coverage.Length != count) return false;
+            for (var index = 0; index < count; index++)
+            {
+                if (!IsFinite(vector.Values[index]) || !IsFinite(vector.Coverage[index])
+                    || vector.Coverage[index] < 0d || vector.Coverage[index] > 1d) return false;
             }
             return true;
         }

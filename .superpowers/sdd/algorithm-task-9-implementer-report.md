@@ -121,8 +121,16 @@ Minor: 0
 APPROVED YES
 ```
 
-This is implementer self-review evidence only. The fixed review package still
-requires the root task's fresh independent reviewer.
+The first fresh fixed-package review reported `Critical: 0`, `Important: 2`,
+and `Minor: 1`. The review found that calibration was not bound to the exact
+model ID and that malformed feature vectors could reach threshold evaluation
+instead of failing closed. The repair binds calibration and its independent
+approval context to `ModelId`, rejects non-finite or structurally invalid
+vectors as `UnsupportedMechanic` with confidence `0` and planning disabled,
+and removes the unused O(n^2) ranked-action mapping. Regression tests cover
+calibration/approval model mismatch, non-finite values under extreme legal
+thresholds, and a wrong-length vector. A replacement fixed package requires
+re-review by the same independent reviewer.
 
 ## Next-Season Data Boundary
 
