@@ -122,6 +122,10 @@ internal static class AlgorithmModelContractBehavior
         AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
             PayloadWithUnexpectedProperty(root)), "unknown payload property", "payload json");
         AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
+            EnvelopeWithDuplicateProperty(root, "PayloadSha256")), "duplicate envelope property", "artifact json");
+        AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
+            PayloadWithDuplicateProperty(root, "ModelId")), "duplicate payload property", "payload json");
+        AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
             PayloadWithoutProperty(root, "ModelId")), "missing payload identity", "payload json");
 
         AssertPayloadRejects(root, model => model.FeatureNames = model.FeatureNames.Take(44).ToArray(),
@@ -194,6 +198,18 @@ internal static class AlgorithmModelContractBehavior
         AssertRuntimeApprovalRejects(root, model => { },
             approval => ApprovedRuntimeContext(approval, seasonRange: "test-season-range-v2"),
             "approved season range");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, payloadSha256: approval.PayloadSha256.ToUpperInvariant()),
+            "case-variant approved payload checksum", "approved payload checksum");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, modelId: approval.ModelId.ToUpperInvariant()),
+            "case-variant approved model identity", "approved model identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, trainingSetIdentity: approval.TrainingSetIdentity.ToUpperInvariant()),
+            "case-variant approved training set identity", "approved training set identity");
+        AssertRuntimeApprovalRejects(root, model => { },
+            approval => ApprovedRuntimeContext(approval, seasonRange: approval.SeasonRange.ToUpperInvariant()),
+            "case-variant approved season range", "approved season range");
         AssertRuntimeApprovalRejects(root, model => { },
             approval => ApprovedRuntimeContext(approval, payloadSha256: "unknown"),
             "unknown approved payload checksum", "approved payload checksum");
@@ -368,6 +384,30 @@ internal static class AlgorithmModelContractBehavior
         var payload = JObject.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(envelope.PayloadBase64)));
         payload.Add("Unexpected", true);
         return EnvelopeWithPayload(envelope, payload.ToString(Formatting.None));
+    }
+
+    private static MemoryStream EnvelopeWithDuplicateProperty(string root, string propertyName)
+    {
+        var json = File.ReadAllText(Path.Combine(root, "tests", "fixtures", "algorithm",
+            "linear-v1.valid.envelope.json"), Encoding.UTF8);
+        var closingBrace = json.LastIndexOf("}", StringComparison.Ordinal);
+        if (closingBrace < 0) throw new InvalidOperationException("envelope closing brace not found");
+        var value = JObject.Parse(json)[propertyName];
+        if (value == null) throw new InvalidOperationException("envelope property not found");
+        return new MemoryStream(Encoding.UTF8.GetBytes(json.Insert(closingBrace,
+            ",\"" + propertyName + "\":" + JsonConvert.SerializeObject(value))));
+    }
+
+    private static MemoryStream PayloadWithDuplicateProperty(string root, string propertyName)
+    {
+        var envelope = ReadEnvelope(root);
+        var payload = Encoding.UTF8.GetString(Convert.FromBase64String(envelope.PayloadBase64));
+        var closingBrace = payload.LastIndexOf("}", StringComparison.Ordinal);
+        if (closingBrace < 0) throw new InvalidOperationException("payload closing brace not found");
+        var value = JObject.Parse(payload)[propertyName];
+        if (value == null) throw new InvalidOperationException("payload property not found");
+        return EnvelopeWithPayload(envelope, payload.Insert(closingBrace,
+            ",\"" + propertyName + "\":" + JsonConvert.SerializeObject(value)));
     }
 
     private static MemoryStream EnvelopeWithInvalidUtf8(string root)

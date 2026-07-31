@@ -5,6 +5,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace BobCoach.Engine.Decision
 {
@@ -103,6 +104,10 @@ namespace BobCoach.Engine.Decision
         {
             MissingMemberHandling = MissingMemberHandling.Error,
         };
+        private static readonly JsonLoadSettings StrictJsonLoad = new JsonLoadSettings
+        {
+            DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error,
+        };
 
         // This path validates an artifact only. Runtime composition must use LoadForRuntime.
         public static RankingModelPayload Load(Stream stream)
@@ -179,8 +184,8 @@ namespace BobCoach.Engine.Decision
                         if (total > maximumBytes) throw Invalid("artifact size");
                         copy.Write(buffer, 0, read);
                     }
-                    var envelope = JsonConvert.DeserializeObject<RankingModelEnvelope>(
-                        DecodeStrictUtf8(copy.ToArray(), "artifact utf-8"), StrictJson);
+                    var envelope = DeserializeStrictObject<RankingModelEnvelope>(
+                        DecodeStrictUtf8(copy.ToArray(), "artifact utf-8"));
                     if (envelope == null) throw Invalid("artifact json");
                     return envelope;
                 }
@@ -193,13 +198,20 @@ namespace BobCoach.Engine.Decision
         {
             try
             {
-                var model = JsonConvert.DeserializeObject<RankingModelPayload>(
-                DecodeStrictUtf8(payload, "payload utf-8"), StrictJson);
+                var model = DeserializeStrictObject<RankingModelPayload>(
+                    DecodeStrictUtf8(payload, "payload utf-8"));
                 if (model == null) throw Invalid("payload json");
                 return model;
             }
             catch (ModelValidationException) { throw; }
             catch (Exception ex) { throw Invalid("payload json", ex); }
+        }
+
+        private static T DeserializeStrictObject<T>(string json)
+        {
+            var token = JObject.Parse(json, StrictJsonLoad);
+            using (var reader = token.CreateReader())
+                return JsonSerializer.Create(StrictJson).Deserialize<T>(reader);
         }
 
         private static void ValidateSchemaNamesLengthsAndFiniteNumbers(RankingModelPayload model,

@@ -222,3 +222,58 @@ verification was rerun against the final working tree with exit code 0:
 ## Required Conclusion
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+
+## Duplicate-Property Review Remediation TDD Evidence
+
+RED command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
+```
+
+Exact RED output after adding same-value duplicate envelope and payload JSON
+properties, before the production fix:
+
+```text
+FAIL duplicate envelope property did not throw ModelValidationException
+```
+
+GREEN command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
+```
+
+Exact GREEN output after strict duplicate-property rejection and the four
+case-variant approval-binding regressions:
+
+```text
+PASS model loader rejects corruption, schema drift, and invalid numbers
+```
+
+The envelope and payload now reject duplicate JSON property names before DTO
+deserialization. The approved payload SHA-256, model ID, training-set
+identity, and season range each reject a value that differs only by case,
+using `StringComparison.Ordinal`.
+
+## Duplicate-Property Review Remediation Final Verification
+
+Fresh final verification completed with exit code 0:
+
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1`
+  output: `PASS model loader rejects corruption, schema drift, and invalid numbers`.
+- With `BOBCOACH_HDT_DIR=E:\HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker`,
+  `tests\run_behavior_tests.ps1` output: `PASS behavior suite`. The existing
+  `CardSemanticFactSource.CardId` CS0649 warning appeared twice and was not
+  suppressed.
+- With the same `BOBCOACH_HDT_DIR`, `tests\run_contract_tests.ps1` output:
+  `PASS contract suite` (13 contracts).
+- `node tests\test_release_build_contract.js` output:
+  `PASS release build contract compile=188 sha256=0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849`.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\build\validate_repository.ps1`
+  output: `PASS repository validation: 408 Git tracked or untracked non-ignored file(s) scanned; large-file limit is 5242880 bytes (5 MiB).`
+- `git diff --check`: PASS (exit code 0).
+
+## Required Conclusion (Preserved)
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
