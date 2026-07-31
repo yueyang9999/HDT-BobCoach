@@ -26,8 +26,14 @@ namespace BobCoach.Engine
         public string GameBuild = "";
         public string SeasonId = "";
         public string CardPoolIdentity = "";
+        public string Phase = "shop";
+        public int Gold = 5;
+        public int TavernTier = 3;
+        public int MaxHealth = 30;
         public List<MinionData> ShopMinions = new List<MinionData>();
         public List<MinionData> BoardMinions = new List<MinionData>();
+        public List<MinionData> HandMinions = new List<MinionData>();
+        public List<object> Opponents = new List<object>();
         public List<TrinketOption> TrinketOffer = new List<TrinketOption>();
         public List<TrinketOption> DiscoverOptions = new List<TrinketOption>();
         public EffectiveGameRules EffectiveRules = EffectiveGameRules.Default;
@@ -225,7 +231,8 @@ internal static class AlgorithmLinearRankerBehavior
         {
             GameBuild = "known-build", SeasonId = "known-season", CardPoolIdentity = "known-pool",
         });
-        AssertEqual(FallbackReason.None, diagnostic.FallbackReason, "diagnostic fallback");
+        AssertEqual(FallbackReason.ModelUnavailable, diagnostic.FallbackReason,
+            "missing confidence calibration fallback");
         AssertEqual(0d, diagnostic.Confidence, "diagnostic confidence");
         AssertTrue(diagnostic.Explanation.IndexOf("shadow-only", StringComparison.Ordinal) >= 0,
             "diagnostic explanation");
