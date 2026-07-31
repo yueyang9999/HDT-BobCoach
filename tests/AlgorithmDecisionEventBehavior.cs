@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using BobCoach.Engine;
 using BobCoach.Engine.Decision;
 
@@ -202,6 +204,66 @@ internal static class AlgorithmDecisionEventBehavior
             "missing season ID is explicit unknown");
         AssertEqual(GameStateSnapshot.UnknownIdentity, unknownRecord.State.CardPoolIdentity,
             "missing card-pool identity is explicit unknown");
+
+        AssertIdentityTransitionChangesFingerprint(
+            "gameBuild", "game build", state => state.GameBuild,
+            snapshot => snapshot.GameBuild, (state, value) => state.GameBuild = value, "12345");
+        AssertIdentityTransitionChangesFingerprint(
+            "seasonId", "season ID", state => state.SeasonId,
+            snapshot => snapshot.SeasonId, (state, value) => state.SeasonId = value, "season-9");
+        AssertIdentityTransitionChangesFingerprint(
+            "cardPoolIdentity", "card-pool identity", state => state.CardPoolIdentity,
+            snapshot => snapshot.CardPoolIdentity, (state, value) => state.CardPoolIdentity = value, "pool-9");
+    }
+
+    private static void AssertIdentityTransitionChangesFingerprint(
+        string canonicalProperty,
+        string label,
+        Func<GameState, string> stateIdentity,
+        Func<GameStateSnapshot, string> snapshotIdentity,
+        Action<GameState, string> setIdentity,
+        string realIdentity)
+    {
+        var unknownState = State(5, 4);
+        setIdentity(unknownState, null);
+        var unknownRecord = DecisionEventRecord.Create(
+            "identity-transition-unknown-" + canonicalProperty, "game-1", unknownState, Candidates());
+
+        var realState = Clone(unknownState);
+        setIdentity(realState, realIdentity);
+        var realRecord = DecisionEventRecord.Create(
+            "identity-transition-real-" + canonicalProperty, "game-1", realState, Candidates());
+
+        AssertEqual(null, stateIdentity(unknownState), label + " source starts unknown");
+        AssertEqual(realIdentity, stateIdentity(realState), label + " source receives real value");
+        AssertEqual(GameStateSnapshot.UnknownIdentity, snapshotIdentity(unknownRecord.State),
+            label + " unknown value is captured by the snapshot");
+        AssertEqual(realIdentity, snapshotIdentity(realRecord.State),
+            label + " real value is captured by the snapshot");
+
+        var unknownCanonical = CanonicalJson.Serialize(unknownRecord.State);
+        var realCanonical = CanonicalJson.Serialize(realRecord.State);
+        var unknownField = "\"" + canonicalProperty + "\":\"" + GameStateSnapshot.UnknownIdentity + "\"";
+        var realField = "\"" + canonicalProperty + "\":\"" + realIdentity + "\"";
+        AssertTrue(unknownCanonical.Contains(unknownField),
+            label + " unknown value is inside the canonical hash domain");
+        AssertTrue(realCanonical.Contains(realField),
+            label + " real value is inside the canonical hash domain");
+
+        Func<string, string> fingerprint = canonicalJson =>
+        {
+            using (var sha = SHA256.Create())
+            {
+                return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(canonicalJson)))
+                    .Replace("-", "").ToLowerInvariant();
+            }
+        };
+        AssertEqual(fingerprint(unknownCanonical), unknownRecord.StateFingerprint,
+            label + " unknown fingerprint hashes the canonical snapshot");
+        AssertEqual(fingerprint(realCanonical), realRecord.StateFingerprint,
+            label + " real fingerprint hashes the canonical snapshot");
+        AssertTrue(unknownRecord.StateFingerprint != realRecord.StateFingerprint,
+            label + " unknown-to-real transition changes the state fingerprint");
     }
 
     private static void ReusesOnlyOpenUnchangedDecisionGenerations()
