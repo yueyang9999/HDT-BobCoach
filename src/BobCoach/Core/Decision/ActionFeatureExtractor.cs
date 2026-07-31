@@ -8,10 +8,13 @@ namespace BobCoach.Engine.Decision
     public sealed class ActionFeatureExtractor
     {
         private readonly ISeasonFeatureExtension _seasonExtension;
+        private readonly ExpectedShopEstimator _shopEstimator;
 
-        public ActionFeatureExtractor(ISeasonFeatureExtension seasonExtension = null)
+        public ActionFeatureExtractor(ISeasonFeatureExtension seasonExtension = null,
+            ExpectedShopEstimator shopEstimator = null)
         {
             _seasonExtension = seasonExtension ?? NullSeasonFeatureExtension.Instance;
+            _shopEstimator = shopEstimator ?? new ExpectedShopEstimator();
         }
 
         public ActionFeatureVector Extract(GameState state, ActionDescriptor action, GameState nextState)
@@ -41,6 +44,9 @@ namespace BobCoach.Engine.Decision
             var seasonKnown = HasExactSeasonProvenance(state, _seasonExtension)
                 && _seasonExtension.TryEvaluate(state, action, nextState, out seasonValue);
             if (!IsFinite(seasonValue)) seasonKnown = false;
+            var refreshEstimate = action.Action.Type == ActionType.Refresh
+                ? _shopEstimator.Estimate(state)
+                : ExpectedShopEstimate.Unavailable("unknown");
 
             Set(values, coverage, "turn", state.Turn, 1d);
             Set(values, coverage, "tavern_tier", state.TavernTier, 1d);
@@ -59,7 +65,7 @@ namespace BobCoach.Engine.Decision
             Set(values, coverage, "net_gold_cost", state.Gold - nextState.Gold, 1d);
             Set(values, coverage, "remaining_gold", nextState.Gold, 1d);
             Set(values, coverage, "wasted_gold", 0d, 0d);
-            Set(values, coverage, "refresh_expected_value", 0d, 0d);
+            SetEstimate(values, coverage, "refresh_expected_value", refreshEstimate);
             Set(values, coverage, "freeze_expected_value", 0d, 0d);
             Set(values, coverage, "legal_follow_up_count", 0d, 0d);
             Set(values, coverage, "playable_follow_up_count", 0d, 0d);
@@ -104,6 +110,22 @@ namespace BobCoach.Engine.Decision
             var index = ActionFeatureSchema.IndexOf(name);
             values[index] = IsFinite(value) ? value : 0d;
             coverage[index] = present == 1d ? 1d : 0d;
+        }
+
+        private static void SetEstimate(double[] values, double[] coverage, string name,
+            ExpectedShopEstimate estimate)
+        {
+            var index = ActionFeatureSchema.IndexOf(name);
+            if (estimate == null || !estimate.IsAvailable || !IsFinite(estimate.ExpectedValue)
+                || !IsFinite(estimate.Coverage) || estimate.Coverage <= 0d
+                || estimate.Coverage > 1d)
+            {
+                values[index] = 0d;
+                coverage[index] = 0d;
+                return;
+            }
+            values[index] = estimate.ExpectedValue;
+            coverage[index] = estimate.Coverage;
         }
 
         private static double Total(IEnumerable<MinionData> minions, Func<MinionData, int> selector)

@@ -50,7 +50,8 @@ $sources = @(
     "Core\LocalCardPoolMembershipSnapshot.cs", "Core\CardPoolSampler.cs", "Core\BuddyCardPoolEvaluator.cs",
     "Core\TimewarpCardPoolEvaluator.cs", "Core\Simulator.cs", "Core\Decision\HardConstraintFilter.cs", "Core\CombatEventQueue.cs",
     "Core\CombatContext.cs", "Core\CombatEffects.cs", "Core\CombatSimulator.cs", "Core\Decision\ActionDescriptor.cs",
-    "Core\Decision\ActionFeatureSchema.cs", "Core\Decision\ActionFeatureExtractor.cs"
+    "Core\Decision\ActionFeatureSchema.cs", "Core\Decision\ExpectedShopEstimator.cs",
+    "Core\Decision\ActionFeatureExtractor.cs"
 ) | ForEach-Object { Join-Path $root (Join-Path "src\BobCoach" $_) } | Where-Object { Test-Path -LiteralPath $_ }
 $sources += Join-Path $PSScriptRoot "AlgorithmFeatureBehavior.cs"
 

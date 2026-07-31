@@ -90,7 +90,8 @@ namespace BobCoach.Engine.Decision
 
     public sealed class ActionFeatureExtractor
     {
-        public ActionFeatureExtractor(ISeasonFeatureExtension extension) { }
+        public ActionFeatureExtractor(ISeasonFeatureExtension extension,
+            ExpectedShopEstimator shopEstimator = null) { }
         public ActionFeatureVector Extract(GameState state, ActionDescriptor action, GameState nextState)
         {
             var count = ActionFeatureSchema.Names.Count;

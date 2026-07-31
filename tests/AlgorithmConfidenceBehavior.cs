@@ -105,7 +105,8 @@ namespace BobCoach.Engine.Decision
 
     public sealed class ActionFeatureExtractor
     {
-        public ActionFeatureExtractor(ISeasonFeatureExtension extension) { }
+        public ActionFeatureExtractor(ISeasonFeatureExtension extension,
+            ExpectedShopEstimator shopEstimator = null) { }
 
         public ActionFeatureVector Extract(GameState state, ActionDescriptor action, GameState nextState)
         {
@@ -145,6 +146,7 @@ internal static class AlgorithmConfidenceBehavior
             UsesAcceptedMarginCalibrationWithoutInventingPlanningThresholds();
             ProductionPolicyPreservesRankingDuringConservativeFallback();
             ProductionPolicyUsesAuthorityBoundCalibrationAndRejectsPartialSimulation();
+            ProductionPolicyRequestsPlanningOnlyAtCalibratedThreshold();
             Console.WriteLine("PASS confidence floors force explicit safe fallback");
             return 0;
         }
@@ -329,6 +331,8 @@ internal static class AlgorithmConfidenceBehavior
         AssertEqual(3, result.RankedActions.Count, "fallback retains ranked list");
         AssertEqual("Refresh|-1|supported|test", result.RankedActions[0].ActionKey,
             "unsupported simulation cannot be promoted");
+        AssertEqual(PlannerStatus.NotRequested, result.PlannerStatus,
+            "uncalibrated confidence does not request planning");
     }
 
     private static void ProductionPolicyUsesAuthorityBoundCalibrationAndRejectsPartialSimulation()
@@ -345,6 +349,22 @@ internal static class AlgorithmConfidenceBehavior
         var partial = result.RankedActions.First(action => action.Action.Type == ActionType.FreezeShop);
         AssertTrue(partial.Score < result.RankedActions[0].Score,
             "partial simulation carries unknown-effect penalty");
+        AssertEqual(PlannerStatus.NotRequested, result.PlannerStatus,
+            "clear calibrated margin does not request planning");
+    }
+
+    private static void ProductionPolicyRequestsPlanningOnlyAtCalibratedThreshold()
+    {
+        var policy = UnifiedRankingPolicy.CreateProduction(Model(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            Calibration(planningThreshold: 1d), Approval());
+        var result = policy.Decide(State());
+
+        AssertEqual(PlannerStatus.Completed, result.PlannerStatus,
+            "calibrated low-margin decision requests planning");
+        AssertEqual(result.RankedActions[0].ActionKey,
+            ActionDescriptor.CreateKey(result.SelectedAction),
+            "diagnostic planning preserves ranked root");
     }
 
     private static DecisionConfidenceEvaluator Evaluator()

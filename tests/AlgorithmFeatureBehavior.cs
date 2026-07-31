@@ -21,6 +21,7 @@ internal static class AlgorithmFeatureBehavior
             VerifiesWhitespaceUnknownSeasonProvenanceFailsClosed();
             VerifiesUnresolvedCardIdentitiesFailClosed();
             VerifiesOnlyShopPhaseCountsAsObserved();
+            VerifiesRefreshExpectedValueUsesOnlyVersionMatchedFacts();
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
@@ -304,6 +305,34 @@ internal static class AlgorithmFeatureBehavior
         }
     }
 
+    private static void VerifiesRefreshExpectedValueUsesOnlyVersionMatchedFacts()
+    {
+        var state = State(20);
+        var refresh = ActionDescriptor.From(state, new GameAction { Type = ActionType.Refresh });
+        var next = new Simulator().Simulate(state, refresh.Action);
+
+        var unavailable = new ActionFeatureExtractor().Extract(state, refresh, next);
+        AssertUnavailable(unavailable, "refresh_expected_value",
+            "missing expected-shop pool");
+
+        var provider = new TestExpectedShopPoolProvider(3.25d, 0.75d);
+        var extractor = new ActionFeatureExtractor(null,
+            new ExpectedShopEstimator(provider));
+        var available = extractor.Extract(state, refresh, next);
+        AssertEqual(3.25d, available["refresh_expected_value"],
+            "version-matched refresh value");
+        AssertEqual(0.75d,
+            available.Coverage[ActionFeatureSchema.IndexOf("refresh_expected_value")],
+            "version-matched refresh coverage");
+
+        var buy = Buy(state);
+        var buyVector = extractor.Extract(state, buy,
+            new Simulator().Simulate(state, buy.Action));
+        AssertUnavailable(buyVector, "refresh_expected_value",
+            "non-refresh action does not use refresh estimate");
+        AssertEqual(1, provider.EstimateCalls, "estimator called only for refresh");
+    }
+
     private static void AssertBoardDeltasUnavailable(ActionFeatureVector vector, string label)
     {
         foreach (var feature in new[] { "immediate_attack_delta", "immediate_health_delta", "unit_count_delta" })
@@ -482,6 +511,33 @@ internal static class AlgorithmFeatureBehavior
         {
             value = _value;
             return true;
+        }
+    }
+
+    private sealed class TestExpectedShopPoolProvider : IExpectedShopPoolProvider
+    {
+        private readonly double _value;
+        private readonly double _coverage;
+
+        public int EstimateCalls { get; private set; }
+
+        public TestExpectedShopPoolProvider(double value, double coverage)
+        {
+            _value = value;
+            _coverage = coverage;
+        }
+
+        public bool IsCompleteFor(string gameBuild, string seasonId,
+            string cardPoolIdentity)
+        {
+            return gameBuild == "build-verified" && seasonId == "season-verified"
+                && cardPoolIdentity == "pool-verified";
+        }
+
+        public ExpectedShopEstimate EstimateFromVersionMatchedFacts(GameState state)
+        {
+            EstimateCalls++;
+            return ExpectedShopEstimate.Available(_value, _coverage, "pool-verified");
         }
     }
 

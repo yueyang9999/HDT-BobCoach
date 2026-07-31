@@ -16,20 +16,26 @@ namespace BobCoach.Engine.Decision
         private readonly LinearPairwiseRanker _ranker;
         private readonly RankingModelPayload _model;
         private readonly DecisionConfidenceEvaluator _confidenceEvaluator;
+        private readonly ExpectedShopEstimator _shopEstimator;
+        private readonly BeamPlanner _planner;
 
         public string PolicyId { get { return "unified-linear-v1"; } }
 
         private UnifiedRankingPolicy(RankingModelPayload model, ISeasonFeatureExtension seasonExtension,
-            DecisionConfidenceEvaluator confidenceEvaluator)
+            DecisionConfidenceEvaluator confidenceEvaluator,
+            IExpectedShopPoolProvider shopPoolProvider)
         {
             _seasonExtension = seasonExtension;
             _candidateGenerator = new CandidateGenerator(new ActionEnumerator());
             _constraintFilter = new HardConstraintFilter();
             _simulator = new Simulator();
-            _featureExtractor = new ActionFeatureExtractor(seasonExtension);
+            _shopEstimator = new ExpectedShopEstimator(shopPoolProvider);
+            _featureExtractor = new ActionFeatureExtractor(seasonExtension, _shopEstimator);
             _ranker = new LinearPairwiseRanker(model);
             _model = model;
             _confidenceEvaluator = confidenceEvaluator;
+            _planner = new BeamPlanner(new ProductionPlanningTransitionSource(this, _simulator),
+                _shopEstimator);
         }
 
         public static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
@@ -41,6 +47,14 @@ namespace BobCoach.Engine.Decision
         public static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
             ISeasonFeatureExtension seasonExtension, ConfidenceCalibration calibration,
             ConfidenceCalibrationApprovalContext approvalContext)
+        {
+            return CreateProduction(model, seasonExtension, calibration, approvalContext, null);
+        }
+
+        public static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
+            ISeasonFeatureExtension seasonExtension, ConfidenceCalibration calibration,
+            ConfidenceCalibrationApprovalContext approvalContext,
+            IExpectedShopPoolProvider shopPoolProvider)
         {
             if (model == null) throw new ArgumentNullException("model");
             if (seasonExtension == null) throw new ArgumentNullException("seasonExtension");
@@ -64,7 +78,7 @@ namespace BobCoach.Engine.Decision
                 || !string.Equals(model.CardPoolIdentity, seasonExtension.CardPoolIdentity, StringComparison.Ordinal))
                 throw new ModelValidationException("Invalid ranking model artifact: identity mismatch");
             return new UnifiedRankingPolicy(model, seasonExtension,
-                new DecisionConfidenceEvaluator(calibration, approvalContext));
+                new DecisionConfidenceEvaluator(calibration, approvalContext), shopPoolProvider);
         }
 
         public DecisionResult Decide(GameState state)
@@ -72,28 +86,52 @@ namespace BobCoach.Engine.Decision
             if (!HasMatchingStateIdentity(state))
                 return UnavailableDecisionPolicy.For(FallbackReason.ModelUnavailable).Decide(state);
 
-            var candidates = _constraintFilter.Apply(state, _candidateGenerator.Generate(state));
-            var evaluations = new List<CandidateEvaluation>();
-            foreach (var candidate in candidates)
-            {
-                var nextState = _simulator.Simulate(state, candidate.Action);
-                if (nextState == null) continue;
-                var features = _featureExtractor.Extract(state, candidate, nextState);
-                ApplySimulatorUncertainty(candidate, features);
-                evaluations.Add(new CandidateEvaluation(candidate, features));
-            }
-            var ranked = _ranker.Rank(evaluations.Select(item =>
-                new LinearRankedCandidate(item.Descriptor, item.Features)));
+            var evaluations = EvaluateCandidates(state, false);
+            var ranked = Rank(evaluations);
             if (ranked.Count == 0)
                 return UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
 
             var top = evaluations.First(item => string.Equals(item.Descriptor.ActionKey,
                 ranked[0].ActionKey, StringComparison.Ordinal));
             var assessment = _confidenceEvaluator.Evaluate(state, ranked, top.Features, _model);
+            var planning = assessment.ShouldPlan
+                ? _planner.Plan(state, ranked, TimeSpan.FromMilliseconds(25d))
+                : PlanningResult.NotRequested();
             return new DecisionResult(PolicyId, ranked[0].Action, ranked, assessment.Score,
-                PlannerStatus.NotRequested, assessment.FallbackReason,
+                planning.Status, assessment.FallbackReason,
                 assessment.ShouldFallback ? "shadow-only conservative fallback"
                     : "shadow-only diagnostic ranking");
+        }
+
+        private IList<CandidateEvaluation> EvaluateCandidates(GameState state,
+            bool deterministicOnly)
+        {
+            var candidates = _constraintFilter.Apply(state,
+                _candidateGenerator.Generate(state));
+            var evaluations = new List<CandidateEvaluation>();
+            foreach (var candidate in candidates)
+            {
+                if (deterministicOnly
+                    && candidate.SimulatorSupport != SimulatorSupport.Deterministic)
+                    continue;
+                var nextState = _simulator.Simulate(state, candidate.Action);
+                if (nextState == null) continue;
+                var features = _featureExtractor.Extract(state, candidate, nextState);
+                ApplySimulatorUncertainty(candidate, features);
+                evaluations.Add(new CandidateEvaluation(candidate, features));
+            }
+            return evaluations;
+        }
+
+        private IList<RankedAction> Rank(IList<CandidateEvaluation> evaluations)
+        {
+            return _ranker.Rank((evaluations ?? new List<CandidateEvaluation>()).Select(item =>
+                new LinearRankedCandidate(item.Descriptor, item.Features)));
+        }
+
+        private IList<RankedAction> RankDeterministic(GameState state)
+        {
+            return Rank(EvaluateCandidates(state, true));
         }
 
         private static void ApplySimulatorUncertainty(ActionDescriptor descriptor,
@@ -102,8 +140,13 @@ namespace BobCoach.Engine.Decision
             if (descriptor == null || features == null) return;
             var simulatorCoverage = ActionFeatureSchema.IndexOf("simulator_coverage");
             var unknownEffects = ActionFeatureSchema.IndexOf("unknown_effect_count");
+            var refreshValue = ActionFeatureSchema.IndexOf("refresh_expected_value");
+            var expectedValueComplete = descriptor.Action != null
+                && descriptor.Action.Type == ActionType.Refresh
+                && descriptor.SimulatorSupport == SimulatorSupport.ExpectedValue
+                && features.Coverage[refreshValue] > 0d;
             var complete = descriptor.SimulatorSupport == SimulatorSupport.Deterministic
-                || descriptor.SimulatorSupport == SimulatorSupport.ExpectedValue;
+                || expectedValueComplete;
             features.Values[simulatorCoverage] = complete ? 1d : 0d;
             features.Coverage[simulatorCoverage] = 1d;
             if (!complete)
@@ -122,6 +165,36 @@ namespace BobCoach.Engine.Decision
             {
                 Descriptor = descriptor;
                 Features = features;
+            }
+        }
+
+        private sealed class ProductionPlanningTransitionSource : IPlanningTransitionSource
+        {
+            private readonly UnifiedRankingPolicy _policy;
+            private readonly Simulator _simulator;
+
+            public ProductionPlanningTransitionSource(UnifiedRankingPolicy policy,
+                Simulator simulator)
+            {
+                _policy = policy;
+                _simulator = simulator;
+            }
+
+            public PlanningTransition Apply(GameState state, RankedAction action)
+            {
+                if (state == null || action == null || action.Action == null
+                    || (action.Action.Type != ActionType.BuyMinion
+                        && action.Action.Type != ActionType.SellMinion
+                        && action.Action.Type != ActionType.Upgrade))
+                    return PlanningTransition.Terminal();
+                var next = _simulator.Simulate(state, action.Action);
+                return next == null ? PlanningTransition.Terminal()
+                    : new PlanningTransition(next, true);
+            }
+
+            public IList<RankedAction> Rank(GameState state)
+            {
+                return _policy.RankDeterministic(state);
             }
         }
 

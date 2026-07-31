@@ -22,6 +22,7 @@ $sources = @(
     "Core\Decision\Contracts.cs", "Core\Decision\ActionDescriptor.cs",
     "Core\Decision\ActionFeatureSchema.cs", "Core\Decision\RankingModel.cs",
     "Core\Decision\LinearPairwiseRanker.cs", "Core\Decision\DecisionConfidenceEvaluator.cs",
+    "Core\Decision\ExpectedShopEstimator.cs", "Core\Decision\BeamPlanner.cs",
     "Core\Decision\UnifiedRankingPolicy.cs"
 ) | ForEach-Object { Join-Path $root (Join-Path "src\BobCoach" $_) } | Where-Object { Test-Path -LiteralPath $_ }
 $sources += Join-Path $PSScriptRoot "AlgorithmConfidenceBehavior.cs"

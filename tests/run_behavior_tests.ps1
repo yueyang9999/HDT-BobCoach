@@ -40,6 +40,7 @@ foreach ($file in @(
     "test_algorithm_orchestrator.ps1",
     "test_algorithm_linear_ranker.ps1",
     "test_algorithm_confidence.ps1",
+    "test_algorithm_beam_planner.ps1",
     "test_comp_strategy_exit_behavior.ps1",
     "test_card_effect_rule_evaluator.ps1",
     "test_card_effect_source.ps1",
