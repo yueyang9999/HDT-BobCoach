@@ -134,6 +134,41 @@ the GREEN output shown above.
 - No dependency, CI/CD, environment file, secret, installer behavior, HDT
   process, deployment, or release configuration was changed.
 
+## Fresh Review Fix Wave
+
+The fixed `4922095..84425df` review package produced `Critical: 0`,
+`Important: 3`, `Minor: 0`, and `APPROVED: NO`. The three Important findings
+were addressed with regression-first changes:
+
+- RED: `node tests/test_pairwise_training.js` failed because malformed
+  `actionKey` value `forged` was accepted. GREEN: the builder now parses the
+  frozen four-part identity, requires a known action type, requires a
+  canonical safe-integer target index, and cross-checks the key action type
+  against `candidate.actionType`.
+- RED: deterministic duplicate-selection assertions failed because
+  cross-game deduplication retained the first input row. GREEN: duplicate
+  selection now keeps the newest row and uses a stable full-row tie-break;
+  retained game rows also receive a stable order before whole-game splitting.
+- RED: with `BOBCOACH_HDT_DIR` set to the installed HDT `1.54.0` baseline,
+  `tests/test_algorithm_linear_ranker.ps1` failed at `unknown training set
+  identity`. GREEN: `CreateProduction` now applies resolved-identity validation
+  to both `TrainingSetIdentity` and `SeasonRange`.
+
+Focused GREEN evidence:
+
+- `node tests/test_pairwise_training.js`: PASS, deterministic and split-safe;
+  no strategy quality asserted.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests/test_algorithm_linear_ranker.ps1`: PASS, deterministic score surface.
+- Fresh full `npm test`: PASS; contract, behavior, and package suites all
+  completed with exit code `0` against HDT `1.54.0.7376`.
+- Fresh exact-baseline Release build: PASS; `BobCoach.dll` is 742,400 bytes
+  with SHA-256
+  `FAC9CEC4E147A82E884B0E31C2F7D45CE6730E14A04322B50F3B01F54C6B83EB`.
+- Fresh `git diff --check`: PASS. Repository validation scanned 418 Git
+  tracked or untracked non-ignored files and reported only the pre-existing
+  personal-path finding in committed Task 7 evidence.
+
 ## Next-Season Data Boundary
 
 1. **Independent of next-season data:** Yes. Ranker arithmetic, stable

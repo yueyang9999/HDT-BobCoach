@@ -176,6 +176,16 @@ internal static class AlgorithmLinearRankerBehavior
         AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(synthetic, extension),
             "synthetic model");
 
+        var unknownTrainingSet = ProductionModel();
+        unknownTrainingSet.TrainingSetIdentity = "unknown";
+        AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(unknownTrainingSet, extension),
+            "unknown training set identity");
+
+        var missingSeasonRange = ProductionModel();
+        missingSeasonRange.SeasonRange = " ";
+        AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(missingSeasonRange, extension),
+            "missing season range identity");
+
         AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(ProductionModel(),
             new ExactSeasonExtension("other-build", "known-season", "known-pool")),
             "season extension mismatch");

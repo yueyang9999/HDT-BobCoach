@@ -90,9 +90,21 @@ function validateCandidate(candidate) {
   if (!candidate || typeof candidate !== 'object') throw new Error('candidate is required');
   requireText(candidate.actionKey, 'candidate actionKey');
   if (!knownActionTypes.has(candidate.actionType)) throw new Error('candidate actionType');
+  const actionKey = parseActionKey(candidate.actionKey);
+  if (actionKey.actionType !== candidate.actionType)
+    throw new Error('candidate actionKey type must match candidate actionType');
   if (!Array.isArray(candidate.features) || candidate.features.length === 0
     || candidate.features.some(value => !Number.isFinite(value))) throw new Error('candidate features');
   requireResolved(candidate.candidateFingerprint, 'candidateFingerprint');
+}
+
+function parseActionKey(value) {
+  const parts = value.split('|');
+  if (parts.length !== 4 || !knownActionTypes.has(parts[0]))
+    throw new Error('candidate actionKey must use the frozen four-part identity');
+  if (!/^(?:0|-?[1-9]\d*)$/.test(parts[1]) || !Number.isSafeInteger(Number(parts[1])))
+    throw new Error('candidate actionKey TargetIndex must be a canonical integer');
+  return { actionType: parts[0] };
 }
 
 function sanitizeCandidate(candidate) {

@@ -11,13 +11,15 @@ function splitRows(rows, holdoutGameCount) {
     if (priorPartition && priorPartition !== partition) throw new Error('whole-game split violation');
     partitions.set(row.gameId, partition);
     const key = row.stateFingerprint + '|' + row.preferred.candidateFingerprint;
-    if (!deduplicated.has(key)) deduplicated.set(key, row);
+    const prior = deduplicated.get(key);
+    if (!prior || compareRows(prior, row) < 0) deduplicated.set(key, row);
   });
   const groups = new Map();
   Array.from(deduplicated.values()).forEach(row => {
     if (!groups.has(row.gameId)) groups.set(row.gameId, []);
     groups.get(row.gameId).push(row);
   });
+  groups.forEach(gameRows => gameRows.sort(compareStableRowKey));
   const games = Array.from(groups.entries()).sort((left, right) => {
     const leftTime = newestTimestamp(left[1]);
     const rightTime = newestTimestamp(right[1]);
@@ -42,5 +44,22 @@ function validateRow(row) {
 }
 
 function newestTimestamp(rows) { return Math.max.apply(null, rows.map(row => Date.parse(row.capturedAtUtc))); }
+function compareRows(left, right) {
+  const timeDifference = Date.parse(left.capturedAtUtc) - Date.parse(right.capturedAtUtc);
+  return timeDifference || compareStableRowKey(left, right);
+}
+function compareStableRowKey(left, right) {
+  const leftKey = stableJson(left);
+  const rightKey = stableJson(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+function stableJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort()
+      .map(key => JSON.stringify(key) + ':' + stableJson(value[key])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
 function text(value) { return typeof value === 'string' && value.trim(); }
 module.exports = { splitRows };
