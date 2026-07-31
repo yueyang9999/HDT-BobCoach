@@ -186,6 +186,24 @@ internal static class AlgorithmLinearRankerBehavior
         AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(missingSeasonRange, extension),
             "missing season range identity");
 
+        var wrongFeatureSchema = ProductionModel();
+        wrongFeatureSchema.FeatureSchemaVersion = ActionFeatureSchema.Version + 1;
+        AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(wrongFeatureSchema, extension),
+            "wrong feature schema version");
+
+        var reorderedFeatureNames = ProductionModel();
+        var firstFeatureName = reorderedFeatureNames.FeatureNames[0];
+        reorderedFeatureNames.FeatureNames[0] = reorderedFeatureNames.FeatureNames[1];
+        reorderedFeatureNames.FeatureNames[1] = firstFeatureName;
+        AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(reorderedFeatureNames, extension),
+            "reordered feature names");
+
+        var missingFeatureName = ProductionModel();
+        missingFeatureName.FeatureNames = missingFeatureName.FeatureNames.Take(
+            missingFeatureName.FeatureNames.Length - 1).ToArray();
+        AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(missingFeatureName, extension),
+            "missing feature name");
+
         AssertModelValidation(() => UnifiedRankingPolicy.CreateProduction(ProductionModel(),
             new ExactSeasonExtension("other-build", "known-season", "known-pool")),
             "season extension mismatch");
@@ -234,10 +252,14 @@ internal static class AlgorithmLinearRankerBehavior
         var count = ActionFeatureSchema.Names.Count;
         var model = new RankingModelPayload
         {
+            FeatureSchemaVersion = ActionFeatureSchema.Version,
             FeatureNames = ActionFeatureSchema.Names.ToArray(),
             Means = new double[count], StandardDeviations = Enumerable.Repeat(1d, count).ToArray(),
             Minimums = new double[count], Maximums = new double[count], Weights = new double[count],
             ActionTypeBiases = new double[ActionTypeBiases.OrderedTypes.Count], Intercept = intercept,
+            OodDistanceThreshold = 1d,
+            BenchmarkMetrics = new Dictionary<string, double>(),
+            CreatedAtUtc = "2026-01-01T00:00:00Z",
         };
         model.Weights[ActionFeatureSchema.IndexOf(featureName)] = weight;
         return model;

@@ -169,6 +169,38 @@ Focused GREEN evidence:
   tracked or untracked non-ignored files and reported only the pre-existing
   personal-path finding in committed Task 7 evidence.
 
+## Fresh Rereview Fix Wave
+
+The fixed `4922095..92d2939` review package was 67,374 bytes with SHA-256
+`FA2A4146B88E79A2423EC898CB1F8882DD14C556E0748CAD886E018219555F8A`.
+Fresh rereview confirmed all three prior findings fixed, then reported
+`Critical: 0`, `Important: 2`, `Minor: 0`, and `APPROVED: NO`.
+
+- RED: with the exact installed HDT `1.54.0` baseline,
+  `tests/test_algorithm_linear_ranker.ps1` failed at `wrong feature schema
+  version`; the production factory accepted a raw payload whose schema version
+  or same-length feature-name binding could disagree with the runtime schema.
+  GREEN: production composition now reuses the loader's complete payload schema
+  validation. Regression coverage rejects an incorrect schema version,
+  reordered feature names, and a missing feature name.
+- RED: `node tests/test_pairwise_training.js` held out `game-Z` instead of the
+  code-unit ordinal result `game-a` for two independent games with identical
+  timestamps. GREEN: game identifiers and stable row keys now use an explicit
+  ordinal comparator rather than environment-dependent `localeCompare`.
+
+Verification for this fix wave:
+
+- `tests/test_algorithm_linear_ranker.ps1`: PASS against the exact installed
+  HDT `1.54.0` baseline.
+- `node tests/test_pairwise_training.js`: PASS; deterministic and split-safe,
+  with no strategy quality asserted.
+- Fresh full `npm test`: PASS in 221.5 seconds with exit code `0`; contract,
+  behavior, and package suites completed.
+- Fresh `git diff --check`: PASS, with only Git LF-to-CRLF notices.
+- Repository validation scanned 418 Git tracked or untracked non-ignored files
+  and reported only the pre-existing personal-path finding in committed Task 7
+  evidence; this fix wave introduced no repository-validation finding.
+
 ## Next-Season Data Boundary
 
 1. **Independent of next-season data:** Yes. Ranker arithmetic, stable

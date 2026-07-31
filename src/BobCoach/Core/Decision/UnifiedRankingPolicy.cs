@@ -32,6 +32,7 @@ namespace BobCoach.Engine.Decision
         {
             if (model == null) throw new ArgumentNullException("model");
             if (seasonExtension == null) throw new ArgumentNullException("seasonExtension");
+            RankingModelLoader.ValidatePayloadSchema(model);
             RequireAcceptedResolvedIdentity(model.ModelId, "model identity");
             RequireAcceptedResolvedIdentity(model.TrainingSetIdentity, "training set identity");
             RequireAcceptedResolvedIdentity(model.SeasonRange, "season range identity");

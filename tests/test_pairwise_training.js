@@ -117,4 +117,22 @@ const tiedReversed = splitRows([tieSecond, middleUnique, tieFirst], 1);
 assert.deepStrictEqual(tiedChronological, tiedReversed,
   'equal-timestamp duplicate selection uses a stable tie-break');
 assert.deepStrictEqual(tiedChronological.holdout.map(row => row.gameId), ['tie-zulu']);
+
+const ordinalUppercaseGame = Object.assign({}, duplicateBase, {
+  gameId: 'game-Z', capturedAtUtc: '2026-01-04T00:00:00Z',
+  stateFingerprint: 'ordinal-state-uppercase',
+  preferred: Object.assign({}, duplicateBase.preferred, {
+    candidateFingerprint: 'ordinal-candidate-uppercase'
+  })
+});
+const ordinalLowercaseGame = Object.assign({}, duplicateBase, {
+  gameId: 'game-a', capturedAtUtc: '2026-01-04T00:00:00Z',
+  stateFingerprint: 'ordinal-state-lowercase',
+  preferred: Object.assign({}, duplicateBase.preferred, {
+    candidateFingerprint: 'ordinal-candidate-lowercase'
+  })
+});
+const ordinalSplit = splitRows([ordinalLowercaseGame, middleUnique, ordinalUppercaseGame], 1);
+assert.deepStrictEqual(ordinalSplit.holdout.map(row => row.gameId), ['game-a'],
+  'equal-timestamp independent games use ordinal gameId ordering');
 console.log('PASS pairwise trainer is deterministic and split-safe; no strategy quality asserted');

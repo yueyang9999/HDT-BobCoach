@@ -23,7 +23,7 @@ function splitRows(rows, holdoutGameCount) {
   const games = Array.from(groups.entries()).sort((left, right) => {
     const leftTime = newestTimestamp(left[1]);
     const rightTime = newestTimestamp(right[1]);
-    return leftTime === rightTime ? left[0].localeCompare(right[0]) : leftTime - rightTime;
+    return leftTime === rightTime ? compareOrdinalText(left[0], right[0]) : leftTime - rightTime;
   });
   const holdoutCount = holdoutGameCount === undefined ? Math.max(1, Math.floor(games.length / 5)) : holdoutGameCount;
   if (!Number.isInteger(holdoutCount) || holdoutCount < 1 || holdoutCount >= games.length)
@@ -51,8 +51,9 @@ function compareRows(left, right) {
 function compareStableRowKey(left, right) {
   const leftKey = stableJson(left);
   const rightKey = stableJson(right);
-  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  return compareOrdinalText(leftKey, rightKey);
 }
+function compareOrdinalText(left, right) { return left < right ? -1 : left > right ? 1 : 0; }
 function stableJson(value) {
   if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
   if (value && typeof value === 'object') {

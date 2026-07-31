@@ -127,7 +127,7 @@ namespace BobCoach.Engine.Decision
             if (!FixedTimeEquals(checksum, envelope.PayloadSha256)) throw Invalid("checksum");
 
             var model = DeserializePayload(payload);
-            ValidateSchemaNamesLengthsAndFiniteNumbers(model, ActionFeatureSchema.Names);
+            ValidatePayloadSchema(model);
             model.PayloadSha256 = checksum;
             return model;
         }
@@ -230,9 +230,10 @@ namespace BobCoach.Engine.Decision
                     throw new JsonSerializationException("Non-canonical property: " + property.Name);
         }
 
-        private static void ValidateSchemaNamesLengthsAndFiniteNumbers(RankingModelPayload model,
-            IList<string> expectedFeatureNames)
+        internal static void ValidatePayloadSchema(RankingModelPayload model)
         {
+            if (model == null) throw Invalid("payload");
+            var expectedFeatureNames = ActionFeatureSchema.Names;
             RequireText(model.ModelId, "model identity");
             RequireText(model.TrainingSetIdentity, "training set identity");
             RequireText(model.SeasonRange, "season range");
