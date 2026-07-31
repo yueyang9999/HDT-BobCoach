@@ -343,10 +343,7 @@ PASS 45 named state-action features are deterministic and preference-free
   `TryEvaluate` returns true, and the returned value is finite. `NaN`,
   positive infinity, and negative infinity are all exactly `0/0`.
 - Attack, health, and unit-count board deltas require both source and next
-  boards. A null board on either side is exactly `0/0`. No adjacent feature
-  was broadened: `board_power_delta` is already semantic `0/0`, pair/triple
-  already require every ownership collection, and slots/congestion each rely
-  only on the single collection they read.
+  boards. A null board on either side is exactly `0/0`.
 - `ActionFeatureSchema.Names` and `ActionTypeBiases.OrderedTypes` now expose
   `Array.AsReadOnly` views through their existing indexable collection API.
   External writes throw, while count, order, lookup, and one-hot behavior are
@@ -387,6 +384,30 @@ PASS 45 named state-action features are deterministic and preference-free
 - The change remains season-independent, uses no user preferences or learned
   weights, adds no dependencies, and makes no claim about strategy quality.
 
+### Simulator Observation Hardening
+
+The regression was written before the production change and first failed with:
+
+```text
+FAIL simulator preserves missing hand
+```
+
+`tests/AlgorithmFeatureBehavior.cs` now drives `Simulator.Simulate` through a
+`FreezeShop` action for states with missing source hand, board, or shop
+collections. The detached state retains the missing collection rather than
+normalizing it to a trusted empty list. It also covers a null minion in each
+collection: simulation does not throw, dependent slots, congestion, board
+deltas, and board-full coverage are `0/0`, and observation completeness
+reports the missing observations while retaining coverage for that diagnostic.
+
+The focused GREEN command was:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_features.ps1
+```
+
+Result: `PASS 45 named state-action features are deterministic and preference-free`.
+
 ### Next-Season Data Boundary
 
 1. **Independent of next-season data:** Yes. This is input validation and
@@ -394,12 +415,27 @@ PASS 45 named state-action features are deterministic and preference-free
 2. **Unsupported assumptions:** No new card, mechanic, entity, cost, pool,
    calibration, or policy facts are introduced.
 3. **Missing-data degradation:** Whitespace/unknown provenance, non-finite
-   extension outputs, and missing boards fail closed to `0/0`.
+   extension outputs, missing minion collections, and null minion entries fail
+   closed to `0/0` for dependent policy features.
 4. **Engineering-only tests:** Regressions prove conservative coverage,
    deterministic mapping, and mutation resistance only; they do not establish
    decision quality, win rate, placement, or uplift.
 5. **Calibration after data:** A future trustworthy version-matched fact
    provider must still populate/calibrate semantic features while policy stays
    in Shadow through effect acceptance.
+
+### Simulator Observation Hardening Verification
+
+- `tests/test_algorithm_features.ps1`: PASS.
+- `tests/test_value_function_weight_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1` with process-local `BOBCOACH_HDT_DIR` set
+  to the installed HDT `1.54.0` baseline: PASS. The existing
+  `CardSemanticFactSource.CardId` compiler warning remains.
+- `tests/run_contract_tests.ps1` with the same baseline: PASS.
+- `node tests/test_release_build_contract.js`: PASS, compile set `187`,
+  SHA-256 `35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e`.
+- `tools/build/validate_repository.ps1`: PASS, 402 files scanned.
+- `git diff --check`: PASS before the final report update; rerun after this
+  update and staging is required before commit.
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。

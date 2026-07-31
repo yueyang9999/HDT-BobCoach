@@ -15,6 +15,8 @@ internal static class AlgorithmFeatureBehavior
             VerifiesSeasonExtensionRequiresExactProvenance();
             VerifiesFixedMappingsCannotBeMutated();
             VerifiesMissingBoardsFailClosed();
+            VerifiesSimulatorPreservesMissingMinionCollections();
+            VerifiesNullMinionsFailClosed();
             VerifiesNonFiniteSeasonExtensionValuesFailClosed();
             VerifiesWhitespaceUnknownSeasonProvenanceFailsClosed();
             VerifiesUnresolvedCardIdentitiesFailClosed();
@@ -222,6 +224,58 @@ internal static class AlgorithmFeatureBehavior
             sourceWithBoard, Buy(sourceWithBoard), missingNextBoard), "missing next board");
     }
 
+    private static void VerifiesSimulatorPreservesMissingMinionCollections()
+    {
+        var missingHand = State(20);
+        missingHand.HandMinions = null;
+        var handNext = new Simulator().Simulate(missingHand, Freeze());
+        AssertTrue(handNext.HandMinions == null, "simulator preserves missing hand");
+        var handVector = new ActionFeatureExtractor().Extract(missingHand, Freeze(missingHand), handNext);
+        AssertUnavailable(handVector, "hand_slots_free", "missing source hand slots");
+        AssertUnavailable(handVector, "hand_congestion", "missing source hand congestion");
+
+        var missingBoard = State(20);
+        missingBoard.BoardMinions = null;
+        var boardNext = new Simulator().Simulate(missingBoard, Freeze());
+        AssertTrue(boardNext.BoardMinions == null, "simulator preserves missing board");
+        var boardVector = new ActionFeatureExtractor().Extract(missingBoard, Freeze(missingBoard), boardNext);
+        AssertUnavailable(boardVector, "board_slots_free", "missing source board slots");
+        AssertUnavailable(boardVector, "board_congestion", "missing source board congestion");
+        AssertUnavailable(boardVector, "board_full_x_buy", "missing source board full buy");
+        AssertBoardDeltasUnavailable(boardVector, "simulated missing source board");
+
+        var missingShop = State(20);
+        missingShop.ShopMinions = null;
+        var shopNext = new Simulator().Simulate(missingShop, Freeze());
+        AssertTrue(shopNext.ShopMinions == null, "simulator preserves missing shop");
+        var shopVector = new ActionFeatureExtractor().Extract(missingShop, Freeze(missingShop), shopNext);
+        AssertEqual(8d / 9d, shopVector["state_observation_completeness"],
+            "simulated missing source shop completeness");
+    }
+
+    private static void VerifiesNullMinionsFailClosed()
+    {
+        var state = State(20);
+        state.BoardMinions.Add(null);
+        state.HandMinions.Add(null);
+        state.ShopMinions.Add(null);
+
+        var next = new Simulator().Simulate(state, Freeze());
+        AssertTrue(next.BoardMinions[0] == null, "simulator preserves null board minion");
+        AssertTrue(next.HandMinions[0] == null, "simulator preserves null hand minion");
+        AssertTrue(next.ShopMinions[1] == null, "simulator preserves null shop minion");
+
+        var vector = new ActionFeatureExtractor().Extract(state, Freeze(state), next);
+        AssertUnavailable(vector, "hand_slots_free", "null hand minion slots");
+        AssertUnavailable(vector, "hand_congestion", "null hand minion congestion");
+        AssertUnavailable(vector, "board_slots_free", "null board minion slots");
+        AssertUnavailable(vector, "board_congestion", "null board minion congestion");
+        AssertUnavailable(vector, "board_full_x_buy", "null board minion full buy");
+        AssertBoardDeltasUnavailable(vector, "null board minion");
+        AssertEqual(6d / 9d, vector["state_observation_completeness"],
+            "null minion completeness");
+    }
+
     private static void VerifiesUnresolvedCardIdentitiesFailClosed()
     {
         foreach (var identity in new[] { " ", " unknown " })
@@ -342,6 +396,16 @@ internal static class AlgorithmFeatureBehavior
             Type = ActionType.BuyMinion, TargetIndex = 0, CardId = state.ShopMinions[0].CardId,
             PurchaseSource = "tavern_shop",
         });
+    }
+
+    private static GameAction Freeze()
+    {
+        return new GameAction { Type = ActionType.FreezeShop };
+    }
+
+    private static ActionDescriptor Freeze(GameState state)
+    {
+        return ActionDescriptor.From(state, Freeze());
     }
 
     private static GameState State(int health)

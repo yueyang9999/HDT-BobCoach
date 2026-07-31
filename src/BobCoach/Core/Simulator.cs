@@ -62,10 +62,12 @@ namespace BobCoach.Engine
 
         private void SimulateBuy(GameState state, GameAction action)
         {
-            if (action.TargetIndex < 0 || action.TargetIndex >= state.ShopMinions.Count)
+            if (state.ShopMinions == null || state.HandMinions == null || state.BoardMinions == null
+                || action.TargetIndex < 0 || action.TargetIndex >= state.ShopMinions.Count)
                 return;
 
             var bought = state.ShopMinions[action.TargetIndex];
+            if (bought == null) return;
             bool isSpell = bought.IsSpell;
             if ((action.Type == ActionType.BuySpell) != isSpell) return;
             if (isSpell && state.HandMinions.Count >= 10) return;
@@ -166,6 +168,7 @@ namespace BobCoach.Engine
 
         private static MinionData CloneMinion(MinionData source)
         {
+            if (source == null) return null;
             return new MinionData
             {
                 CardId = source.CardId,
@@ -263,10 +266,12 @@ namespace BobCoach.Engine
 
         private void SimulateSell(GameState state, GameAction action)
         {
-            if (action.TargetIndex < 0 || action.TargetIndex >= state.BoardMinions.Count)
+            if (state.BoardMinions == null || action.TargetIndex < 0
+                || action.TargetIndex >= state.BoardMinions.Count)
                 return;
 
             var sold = state.BoardMinions[action.TargetIndex];
+            if (sold == null) return;
             state.BoardMinions.RemoveAt(action.TargetIndex);
             state.Gold += 1; // 出售获得 1 金币
 
@@ -313,8 +318,9 @@ namespace BobCoach.Engine
             {
                 // 检查场面是否有战吼随从(Integer power proxy: +5 attack体现战吼二次触发)
                 bool hasBattlecry = false;
-                foreach (var bm in state.BoardMinions)
+                foreach (var bm in state.BoardMinions ?? Enumerable.Empty<MinionData>())
                 {
+                    if (bm == null) continue;
                     var name = bm.CardName ?? "";
                     if (name.Contains("侦查员") || name.Contains("发现") || name.Contains("战吼")
                         || name.Contains("铜须") || bm.CardId == "BG28_300")
@@ -323,8 +329,8 @@ namespace BobCoach.Engine
                 if (hasBattlecry)
                 {
                     // 模拟战吼再触发: 给战吼随从+temp buff(简化为板面power增加)
-                    foreach (var bm in state.BoardMinions)
-                        if (!bm.Golden) { bm.Attack += 3; bm.Health += 2; break; }
+                    foreach (var bm in state.BoardMinions ?? Enumerable.Empty<MinionData>())
+                        if (bm != null && !bm.Golden) { bm.Attack += 3; bm.Health += 2; break; }
                 }
             }
         }
@@ -354,9 +360,10 @@ namespace BobCoach.Engine
 
         private void SimulatePickDiscover(GameState state, GameAction action)
         {
-            if (state.DiscoverOptions == null || action.TargetIndex < 0
+            if (state.HandMinions == null || state.DiscoverOptions == null || action.TargetIndex < 0
                 || action.TargetIndex >= state.DiscoverOptions.Count) return;
             var picked = state.DiscoverOptions[action.TargetIndex];
+            if (picked == null) return;
             // 发现卡星级: 查HearthDb实体卡库, 降级到DiscoverOption自带Tier, 最终默认1
             int tier = picked.Tier > 0 ? picked.Tier : 1;
             if (tier <= 1)
@@ -417,11 +424,11 @@ namespace BobCoach.Engine
                 SeasonId = src.SeasonId,
                 CardPoolIdentity = src.CardPoolIdentity,
                 BoardMinions = src.BoardMinions != null
-                    ? src.BoardMinions.Select(CloneMinion).ToList() : new List<MinionData>(),
+                    ? src.BoardMinions.Select(CloneMinion).ToList() : null,
                 HandMinions = src.HandMinions != null
-                    ? src.HandMinions.Select(CloneMinion).ToList() : new List<MinionData>(),
+                    ? src.HandMinions.Select(CloneMinion).ToList() : null,
                 ShopMinions = src.ShopMinions != null
-                    ? src.ShopMinions.Select(CloneMinion).ToList() : new List<MinionData>(),
+                    ? src.ShopMinions.Select(CloneMinion).ToList() : null,
                 HeroOptions = src.HeroOptions != null
                     ? new List<HeroOption>(src.HeroOptions) : new List<HeroOption>(),
                 TrinketOffer = src.TrinketOffer != null

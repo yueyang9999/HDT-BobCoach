@@ -21,9 +21,13 @@ namespace BobCoach.Engine.Decision
             if (state == null || action == null || action.Action == null || nextState == null)
                 return new ActionFeatureVector(values, coverage);
 
-            var boardsAvailable = state.BoardMinions != null && nextState.BoardMinions != null;
-            var currentBoard = state.BoardMinions ?? new List<MinionData>();
-            var nextBoard = nextState.BoardMinions ?? new List<MinionData>();
+            var sourceHandAvailable = HasCompleteMinionCollection(state.HandMinions);
+            var sourceBoardAvailable = HasCompleteMinionCollection(state.BoardMinions);
+            var nextHandAvailable = HasCompleteMinionCollection(nextState.HandMinions);
+            var nextBoardAvailable = HasCompleteMinionCollection(nextState.BoardMinions);
+            var boardsAvailable = sourceBoardAvailable && nextBoardAvailable;
+            var currentBoard = state.BoardMinions;
+            var nextBoard = nextState.BoardMinions;
             var attackDelta = boardsAvailable ? Total(nextBoard, x => x.Attack) - Total(currentBoard, x => x.Attack) : 0d;
             var healthDelta = boardsAvailable ? Total(nextBoard, x => x.Health) - Total(currentBoard, x => x.Health) : 0d;
             var unitDelta = boardsAvailable ? nextBoard.Count - currentBoard.Count : 0d;
@@ -42,8 +46,10 @@ namespace BobCoach.Engine.Decision
             Set(values, coverage, "tavern_tier", state.TavernTier, 1d);
             Set(values, coverage, "health_armor", healthRatio, state.MaxHealth > 0 ? 1d : 0d);
             Set(values, coverage, "gold_before", state.Gold, 1d);
-            Set(values, coverage, "hand_slots_free", 10d - Count(state.HandMinions), state.HandMinions != null ? 1d : 0d);
-            Set(values, coverage, "board_slots_free", 7d - Count(state.BoardMinions), state.BoardMinions != null ? 1d : 0d);
+            Set(values, coverage, "hand_slots_free", sourceHandAvailable ? 10d - Count(state.HandMinions) : 0d,
+                sourceHandAvailable ? 1d : 0d);
+            Set(values, coverage, "board_slots_free", sourceBoardAvailable ? 7d - Count(state.BoardMinions) : 0d,
+                sourceBoardAvailable ? 1d : 0d);
             Set(values, coverage, "immediate_attack_delta", attackDelta, boardsAvailable ? 1d : 0d);
             Set(values, coverage, "immediate_health_delta", healthDelta, boardsAvailable ? 1d : 0d);
             // These rule, effect, entity, and mechanic features require version-matched facts.
@@ -57,8 +63,10 @@ namespace BobCoach.Engine.Decision
             Set(values, coverage, "freeze_expected_value", 0d, 0d);
             Set(values, coverage, "legal_follow_up_count", 0d, 0d);
             Set(values, coverage, "playable_follow_up_count", 0d, 0d);
-            Set(values, coverage, "hand_congestion", Ratio(Count(nextState.HandMinions), 10), nextState.HandMinions != null ? 1d : 0d);
-            Set(values, coverage, "board_congestion", Ratio(Count(nextState.BoardMinions), 7), nextState.BoardMinions != null ? 1d : 0d);
+            Set(values, coverage, "hand_congestion", nextHandAvailable ? Ratio(Count(nextState.HandMinions), 10) : 0d,
+                nextHandAvailable ? 1d : 0d);
+            Set(values, coverage, "board_congestion", nextBoardAvailable ? Ratio(Count(nextState.BoardMinions), 7) : 0d,
+                nextBoardAvailable ? 1d : 0d);
             Set(values, coverage, "pair_count_delta", pairDelta, pairCoverage ? 1d : 0d);
             Set(values, coverage, "triple_progress_delta", tripleDelta, pairCoverage ? 1d : 0d);
             Set(values, coverage, "scaling_engine_delta", 0d, 0d);
@@ -77,8 +85,9 @@ namespace BobCoach.Engine.Decision
             Set(values, coverage, "stochastic_range", 0d, 0d);
             Set(values, coverage, "state_observation_completeness", ObservationCompleteness(state), 1d);
             Set(values, coverage, "low_health_x_immediate_power", 0d, 0d);
-            Set(values, coverage, "board_full_x_buy", Ratio(Count(nextState.BoardMinions), 7)
-                * IsBuy(action.Action.Type), nextState.BoardMinions != null ? 1d : 0d);
+            Set(values, coverage, "board_full_x_buy", nextBoardAvailable
+                ? Ratio(Count(nextState.BoardMinions), 7) * IsBuy(action.Action.Type) : 0d,
+                nextBoardAvailable ? 1d : 0d);
             Set(values, coverage, "level_x_damage_exposure", 0d, 0d);
             Set(values, coverage, "pair_x_matching_shop", 0d, 0d);
             Set(values, coverage, "remaining_gold_x_follow_ups", 0d, 0d);
@@ -139,6 +148,11 @@ namespace BobCoach.Engine.Decision
                 && IsKnownIdentity(card.CardId)));
         }
 
+        private static bool HasCompleteMinionCollection(IEnumerable<MinionData> minions)
+        {
+            return minions != null && minions.All(card => card != null);
+        }
+
         private static Dictionary<string, int> OwnedCounts(GameState state)
         {
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -161,9 +175,9 @@ namespace BobCoach.Engine.Decision
             if (state.Gold >= 0) present++;
             if (state.TavernTier > 0) present++;
             if (state.MaxHealth > 0) present++;
-            if (state.BoardMinions != null) present++;
-            if (state.HandMinions != null) present++;
-            if (state.ShopMinions != null) present++;
+            if (HasCompleteMinionCollection(state.BoardMinions)) present++;
+            if (HasCompleteMinionCollection(state.HandMinions)) present++;
+            if (HasCompleteMinionCollection(state.ShopMinions)) present++;
             if (state.Opponents != null) present++;
             return Ratio(present, 9d);
         }
