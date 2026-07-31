@@ -87,6 +87,13 @@ namespace BobCoach.Engine.Decision
                     : state.HeroPowers.FirstOrDefault(x => x.CardId == action.CardId);
                 return power == null ? state.HeroPowerCost : power.Cost;
             }
+            if (action.Type == ActionType.SendGoldToTeammate)
+            {
+                var transferRule = rules.TeammateGoldTransfer;
+                return transferRule != null && action.CardId == transferRule.ActionCardId
+                    ? transferRule.GoldPerUse
+                    : int.MaxValue;
+            }
             return 0;
         }
 
@@ -97,6 +104,7 @@ namespace BobCoach.Engine.Decision
                 || type == ActionType.Upgrade) return SimulatorSupport.Deterministic;
             if (type == ActionType.BuySpell || type == ActionType.FreezeShop
                 || type == ActionType.UseHeroPower) return SimulatorSupport.Partial;
+            if (type == ActionType.SendGoldToTeammate) return SimulatorSupport.Partial;
             return SimulatorSupport.None;
         }
     }

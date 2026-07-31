@@ -36,6 +36,9 @@ namespace BobCoach.Engine.Decision
             if (HasInvalidSourceIndex(state, candidate.Action))
                 return Reject(candidate, "invalid-source-index");
 
+            if (HasKnownInvalidIrreversibleAction(state, candidate.Action))
+                return Reject(candidate, "known-invalid-irreversible");
+
             if (candidate.GoldCost > state.Gold)
                 return Reject(candidate, "insufficient-gold");
 
@@ -61,6 +64,26 @@ namespace BobCoach.Engine.Decision
             if (action.Type == ActionType.PickDiscover)
                 return action.TargetIndex < 0 || action.TargetIndex >= state.DiscoverOptions.Count;
             return false;
+        }
+
+        private static bool HasKnownInvalidIrreversibleAction(GameState state, GameAction action)
+        {
+            if (action.Type != ActionType.SendGoldToTeammate) return false;
+
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            var transferRule = rules.TeammateGoldTransfer;
+            if (!state.IsDuos || transferRule == null
+                || action.CardId != transferRule.ActionCardId
+                || TeammateGoldTransferEvaluator.GetUsedCount(state, state.Turn)
+                    >= transferRule.MaxPerTurn)
+                return true;
+
+            var actionPower = state.HeroPowers == null
+                ? null
+                : state.HeroPowers.FirstOrDefault(power => power != null
+                    && power.CardId == transferRule.ActionCardId
+                    && power.IsActive && power.IsUnlocked && !power.Exhausted);
+            return actionPower == null;
         }
 
         private static bool HasInvalidTarget(GameState state, GameAction action)

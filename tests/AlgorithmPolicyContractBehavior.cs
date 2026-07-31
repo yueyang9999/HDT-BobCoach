@@ -8,7 +8,7 @@ namespace BobCoach.Engine
     public enum ActionType
     {
         BuyMinion, BuySpell, Refresh, Upgrade, SellMinion, FreezeShop,
-        UseHeroPower, PickTrinket, PickDiscover,
+        UseHeroPower, PickTrinket, PickDiscover, SendGoldToTeammate,
     }
 
     public sealed class GameAction
@@ -40,6 +40,13 @@ namespace BobCoach.Engine
     public sealed class EffectiveGameRules
     {
         public static readonly EffectiveGameRules Default = new EffectiveGameRules();
+        public TeammateGoldTransferRule TeammateGoldTransfer;
+    }
+
+    public sealed class TeammateGoldTransferRule
+    {
+        public string ActionCardId;
+        public int GoldPerUse;
     }
 
     public static class GameRuleEvaluator
