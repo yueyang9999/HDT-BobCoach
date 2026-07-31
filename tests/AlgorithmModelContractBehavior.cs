@@ -183,6 +183,12 @@ internal static class AlgorithmModelContractBehavior
             AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
                 "synthetic artifact", model => model.SeasonRange = "synthetic-season-range");
             AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.GameBuild = "synthetic-build-v1");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.SeasonId = "synthetic-season-v1");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.CardPoolIdentity = "synthetic-card-pool-v1");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
                 "synthetic artifact", model => model.ModelId = " synthetic-model ");
             AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
                 "synthetic artifact", model => model.TrainingSetIdentity = "\tsynthetic-training\r\n");

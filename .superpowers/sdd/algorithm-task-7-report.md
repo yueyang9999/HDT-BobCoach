@@ -219,6 +219,35 @@ verification was rerun against the final working tree with exit code 0:
   validation directory contains `BobCoach.dll`, 736,256 bytes, SHA-256
   `B656A895E1FB78D13A63BC0F78483C00B469ECB7F968C86C1C688F096EB28E44`.
 
+## Final Reviewer Synthetic Identity Coverage
+
+The final reviewer requested coverage only. Production behavior already
+rejects a synthetic prefix before runtime identity comparisons, so no
+production change or fabricated RED/GREEN cycle was needed. The focused
+regressions independently set each accepted artifact identity to a synthetic
+prefix and require the `synthetic artifact` rejection:
+
+- `GameBuild`: `synthetic-build-v1`
+- `SeasonId`: `synthetic-season-v1`
+- `CardPoolIdentity`: `synthetic-card-pool-v1`
+
+The following commands were run with process-level
+`BOBCOACH_HDT_DIR=C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1`:
+
+```powershell
+$env:BOBCOACH_HDT_DIR='C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run_behavior_tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run_contract_tests.ps1
+git diff --check
+```
+
+All commands completed with exit code 0. The focused model contract test
+passed, the full behavior suite passed with only the existing
+`CardSemanticFactSource.CardId` CS0649 warning, and all 13 contract checks
+passed. The synthetic fixture remains test-only; Shadow-only behavior and the
+required visible `legacy-v1.1.0` fallback are unchanged.
+
 ## Required Conclusion
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
