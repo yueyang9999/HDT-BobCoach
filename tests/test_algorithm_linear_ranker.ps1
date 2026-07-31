@@ -19,17 +19,23 @@ if (!(Test-Path -LiteralPath $newtonsoft)) { throw "Newtonsoft.Json.dll not foun
 $outputDirectory = Join-Path $env:TEMP ("bobcoach_algorithm_linear_ranker_{0}" -f [Guid]::NewGuid().ToString("N"))
 $output = Join-Path $outputDirectory "AlgorithmLinearRankerBehavior.exe"
 $sources = @(
+    "Core\ActionEnumerator.cs", "Core\Simulator.cs",
     "Core\Decision\Contracts.cs", "Core\Decision\ActionDescriptor.cs",
     "Core\Decision\ActionFeatureSchema.cs", "Core\Decision\RankingModel.cs",
     "Core\Decision\LinearPairwiseRanker.cs", "Core\Decision\DecisionConfidenceEvaluator.cs",
     "Core\Decision\ExpectedShopEstimator.cs", "Core\Decision\BeamPlanner.cs",
+    "Core\Decision\ExplanationBuilder.cs", "Core\Decision\CandidateGenerator.cs",
+    "Core\Decision\HardConstraintFilter.cs", "Core\Decision\ActionFeatureExtractor.cs",
+    "Core\Decision\LegacyDecisionPolicy.cs", "Core\Decision\DecisionPolicyFactory.cs",
     "Core\Decision\UnifiedRankingPolicy.cs"
 ) | ForEach-Object { Join-Path $root (Join-Path "src\BobCoach" $_) } | Where-Object { Test-Path -LiteralPath $_ }
 $sources += Join-Path $PSScriptRoot "AlgorithmLinearRankerBehavior.cs"
+$fixture = Join-Path $PSScriptRoot "fixtures\algorithm\linear-v1.valid.envelope.json"
 
 try {
     New-Item -ItemType Directory -Path $outputDirectory | Out-Null
     Copy-Item -LiteralPath $newtonsoft -Destination $outputDirectory
+    Copy-Item -LiteralPath $fixture -Destination $outputDirectory
     & $csc /nologo /langversion:7.3 /target:exe "/out:$output" "/r:$newtonsoft" @sources
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $output

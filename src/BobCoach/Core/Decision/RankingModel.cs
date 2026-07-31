@@ -192,6 +192,8 @@ namespace BobCoach.Engine.Decision
                 }
             }
             catch (ModelValidationException) { throw; }
+            catch (IOException) { throw; }
+            catch (InvalidOperationException) { throw; }
             catch (Exception ex) { throw Invalid("artifact json", ex); }
         }
 

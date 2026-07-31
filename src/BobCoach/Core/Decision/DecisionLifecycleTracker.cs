@@ -51,6 +51,12 @@ namespace BobCoach.Engine.Decision
             _currentClosed = true;
         }
 
+        public void AttachCombatOutcome(CombatOutcome outcome, string observedAtUtc)
+        {
+            if (_current == null) return;
+            _recorder.AttachCombatOutcome(_current.DecisionId, outcome, observedAtUtc);
+        }
+
         public void Reset()
         {
             _nextOrdinal = 1;

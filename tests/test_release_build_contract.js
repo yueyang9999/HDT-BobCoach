@@ -58,9 +58,15 @@ assert.ok(compileItems.includes("Core\\Decision\\BeamPlanner.cs"),
     "beam planner must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\Decision\\UnifiedRankingPolicy.cs"),
     "unified ranking policy must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 193, "unexpected compile item count");
+assert.ok(compileItems.includes("Core\\Decision\\ExplanationBuilder.cs"),
+    "contribution explanation builder must be compiled into BobCoach.dll");
+assert.ok(compileItems.includes("Core\\Decision\\DecisionPolicyFactory.cs"),
+    "decision policy factory must be compiled into BobCoach.dll");
+assert.ok(compileItems.includes("Core\\Decision\\ObservedActionInference.cs"),
+    "observed player actions must use the evidence-based inference helper");
+assert.strictEqual(compileItems.length, 196, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "4fc9305dc8783701d2334d0a6838762c7612e8b721cce5aa2dc901b9111bf807",
+    "1daabc5d5cb8db52bff033b0ee72a0535f0deef3a80cb4f08ccfb98dfb833e29",
     "compile set changed");
 
 for (const token of [

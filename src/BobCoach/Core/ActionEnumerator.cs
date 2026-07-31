@@ -78,6 +78,7 @@ namespace BobCoach.Engine
                 actions.Add(new GameAction
                 {
                     Type = ActionType.Refresh,
+                    TargetIndex = -1,
                     Description = desc
                 });
             }

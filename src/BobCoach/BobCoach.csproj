@@ -143,6 +143,7 @@
     <Compile Include="Core\Decision\LinearPairwiseRanker.cs" />
     <Compile Include="Core\Decision\DecisionConfidenceEvaluator.cs" />
     <Compile Include="Core\Decision\BeamPlanner.cs" />
+    <Compile Include="Core\Decision\ExplanationBuilder.cs" />
     <Compile Include="Core\Decision\UnifiedRankingPolicy.cs" />
     <Compile Include="Core\Decision\CandidateGenerator.cs" />
     <Compile Include="Core\Decision\HardConstraintFilter.cs" />
@@ -151,6 +152,8 @@
     <Compile Include="Core\Decision\DecisionEventRecorder.cs" />
     <Compile Include="Core\Decision\DecisionOrchestrator.cs" />
     <Compile Include="Core\Decision\DecisionLifecycleTracker.cs" />
+    <Compile Include="Core\Decision\ObservedActionInference.cs" />
+    <Compile Include="Core\Decision\DecisionPolicyFactory.cs" />
     <Compile Include="Core\HeroPowerDisplayTextResolver.cs" />
     <Compile Include="Core\CardNameService.cs" />
     <Compile Include="Core\HearthDbCardIdentitySource.cs" />

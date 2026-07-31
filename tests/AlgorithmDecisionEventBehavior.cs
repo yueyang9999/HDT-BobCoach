@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BobCoach.Engine;
 using BobCoach.Engine.Decision;
+using Newtonsoft.Json.Linq;
 
 namespace BobCoach.Engine
 {
@@ -104,7 +105,10 @@ internal static class AlgorithmDecisionEventBehavior
             PreservesDetachedPreActionStateAndFingerprints();
             CapturesRuleIdentitiesAndDistinguishesUnknownValues();
             AppendsIdempotentObservationEventsWithoutQualityLabels();
+            WritesModelIdentityIntoEveryEnvelope();
+            NormalizesMissingModelIdentityToUnknown();
             ReusesOnlyOpenUnchangedDecisionGenerations();
+            AttachesGameOutcomeToLastRelevantDecision();
             RejectsMalformedPriorEventLogs();
             RejectsTrailingContentInPriorEventLogs();
             Console.WriteLine("PASS decision events preserve pre-action state and temporal alignment");
@@ -227,6 +231,47 @@ internal static class AlgorithmDecisionEventBehavior
             snapshot => snapshot.CardPoolIdentity, (state, value) => state.CardPoolIdentity = value, "pool-9");
     }
 
+    private static void WritesModelIdentityIntoEveryEnvelope()
+    {
+        var path = NewPath();
+        var recorder = new DecisionEventRecorder(path, "linear-task11", "approved-sha256");
+        var record = DecisionEventRecord.Create("identity-decision", "game-1", State(5, 4), Candidates());
+        recorder.RecordCreated(record);
+        recorder.RecordComparison(new ShadowComparison
+        {
+            DecisionId = "identity-decision",
+            ComparisonId = "identity-comparison",
+        });
+        recorder.AttachRecommendation("identity-decision", new DecisionResult("legacy-v1.1.0"),
+            "2026-07-31T00:00:01Z");
+        recorder.AttachObservedAction("identity-decision", "Refresh|-1||",
+            "2026-07-31T00:00:02Z");
+        recorder.AttachCombatOutcome("identity-decision", new CombatOutcome("placement:2"),
+            "2026-07-31T00:00:03Z");
+
+        var envelopes = File.ReadAllLines(path).Select(JObject.Parse).ToList();
+        AssertEqual(5, envelopes.Count, "all decision event types recorded");
+        foreach (var envelope in envelopes)
+        {
+            AssertEqual("linear-task11", (string)envelope["modelId"], "event model identity");
+            AssertEqual("approved-sha256", (string)envelope["modelPayloadSha256"],
+                "event model checksum identity");
+        }
+    }
+
+    private static void NormalizesMissingModelIdentityToUnknown()
+    {
+        var path = NewPath();
+        var recorder = new DecisionEventRecorder(path, null, " ");
+        recorder.RecordCreated(DecisionEventRecord.Create(
+            "unknown-identity", "game-1", State(5, 4), Candidates()));
+
+        var envelope = JObject.Parse(File.ReadAllLines(path).Single());
+        AssertEqual("unknown", (string)envelope["modelId"], "missing model identity");
+        AssertEqual("unknown", (string)envelope["modelPayloadSha256"],
+            "blank model checksum identity");
+    }
+
     private static void AssertIdentityTransitionChangesFingerprint(
         string canonicalProperty,
         string label,
@@ -292,6 +337,35 @@ internal static class AlgorithmDecisionEventBehavior
         var afterAction = lifecycle.BeginOrReuse(before, candidates);
         AssertTrue(first.DecisionId != afterAction.DecisionId,
             "a player action starts a new decision even when the state fingerprint later repeats");
+    }
+
+    private static void AttachesGameOutcomeToLastRelevantDecision()
+    {
+        var path = NewPath();
+        var recorder = new DecisionEventRecorder(path);
+        var lifecycle = new DecisionLifecycleTracker("game-1", recorder);
+        var decision = lifecycle.BeginOrReuse(State(5, 4), Candidates());
+        lifecycle.AttachObservedActions(new[] { "BuyMinion|0|CARD_A|shop" },
+            "2026-07-31T00:00:02Z");
+
+        lifecycle.AttachCombatOutcome(new CombatOutcome("placement:3"),
+            "2026-07-31T00:00:03Z");
+        lifecycle.AttachCombatOutcome(new CombatOutcome("placement:3"),
+            "2026-07-31T00:00:04Z");
+
+        var lines = File.ReadAllLines(path);
+        AssertEqual(1, lines.Count(x => x.Contains("CombatOutcomeObserved")),
+            "game outcome attaches once to the last decision");
+        AssertTrue(lines.Last().Contains(decision.DecisionId),
+            "game outcome keeps the last decision ID");
+        AssertTrue(lines.Last().Contains("placement:3"),
+            "game outcome records the observed placement");
+
+        lifecycle.Reset();
+        lifecycle.AttachCombatOutcome(new CombatOutcome("placement:2"),
+            "2026-07-31T00:00:05Z");
+        AssertEqual(lines.Length, File.ReadAllLines(path).Length,
+            "reset lifecycle does not fabricate an outcome target");
     }
 
     private static void RejectsMalformedPriorEventLogs()

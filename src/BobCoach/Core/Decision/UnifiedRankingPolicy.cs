@@ -18,15 +18,18 @@ namespace BobCoach.Engine.Decision
         private readonly DecisionConfidenceEvaluator _confidenceEvaluator;
         private readonly ExpectedShopEstimator _shopEstimator;
         private readonly BeamPlanner _planner;
+        private readonly ExplanationBuilder _explanationBuilder;
 
         public string PolicyId { get { return "unified-linear-v1"; } }
+        public CandidateGenerator Candidates { get { return _candidateGenerator; } }
 
-        private UnifiedRankingPolicy(RankingModelPayload model, ISeasonFeatureExtension seasonExtension,
+        private UnifiedRankingPolicy(RankingModelPayload model, CandidateGenerator candidateGenerator,
+            ISeasonFeatureExtension seasonExtension,
             DecisionConfidenceEvaluator confidenceEvaluator,
             IExpectedShopPoolProvider shopPoolProvider)
         {
             _seasonExtension = seasonExtension;
-            _candidateGenerator = new CandidateGenerator(new ActionEnumerator());
+            _candidateGenerator = candidateGenerator;
             _constraintFilter = new HardConstraintFilter();
             _simulator = new Simulator();
             _shopEstimator = new ExpectedShopEstimator(shopPoolProvider);
@@ -36,27 +39,47 @@ namespace BobCoach.Engine.Decision
             _confidenceEvaluator = confidenceEvaluator;
             _planner = new BeamPlanner(new ProductionPlanningTransitionSource(this, _simulator),
                 _shopEstimator);
+            _explanationBuilder = new ExplanationBuilder();
         }
 
-        public static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
+        internal static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
             ISeasonFeatureExtension seasonExtension)
         {
-            return CreateProduction(model, seasonExtension, null, null);
+            return CreateProduction(model, new CandidateGenerator(new ActionEnumerator()),
+                seasonExtension, null, null, null);
         }
 
-        public static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
+        internal static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
+            CandidateGenerator candidates, ISeasonFeatureExtension seasonExtension)
+        {
+            return CreateProduction(model, candidates, seasonExtension, null, null, null);
+        }
+
+        internal static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
             ISeasonFeatureExtension seasonExtension, ConfidenceCalibration calibration,
             ConfidenceCalibrationApprovalContext approvalContext)
         {
-            return CreateProduction(model, seasonExtension, calibration, approvalContext, null);
+            return CreateProduction(model, new CandidateGenerator(new ActionEnumerator()),
+                seasonExtension, calibration, approvalContext, null);
         }
 
-        public static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
+        internal static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
             ISeasonFeatureExtension seasonExtension, ConfidenceCalibration calibration,
             ConfidenceCalibrationApprovalContext approvalContext,
             IExpectedShopPoolProvider shopPoolProvider)
         {
+            return CreateProduction(model, new CandidateGenerator(new ActionEnumerator()),
+                seasonExtension, calibration, approvalContext, shopPoolProvider);
+        }
+
+        private static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
+            CandidateGenerator candidates, ISeasonFeatureExtension seasonExtension,
+            ConfidenceCalibration calibration,
+            ConfidenceCalibrationApprovalContext approvalContext,
+            IExpectedShopPoolProvider shopPoolProvider)
+        {
             if (model == null) throw new ArgumentNullException("model");
+            if (candidates == null) throw new ArgumentNullException("candidates");
             if (seasonExtension == null) throw new ArgumentNullException("seasonExtension");
             RankingModelLoader.ValidatePayloadSchema(model);
             RequireAcceptedResolvedIdentity(model.ModelId, "model identity");
@@ -77,7 +100,7 @@ namespace BobCoach.Engine.Decision
                 || !string.Equals(model.SeasonId, seasonExtension.SeasonId, StringComparison.Ordinal)
                 || !string.Equals(model.CardPoolIdentity, seasonExtension.CardPoolIdentity, StringComparison.Ordinal))
                 throw new ModelValidationException("Invalid ranking model artifact: identity mismatch");
-            return new UnifiedRankingPolicy(model, seasonExtension,
+            return new UnifiedRankingPolicy(model, candidates, seasonExtension,
                 new DecisionConfidenceEvaluator(calibration, approvalContext), shopPoolProvider);
         }
 
@@ -99,8 +122,7 @@ namespace BobCoach.Engine.Decision
                 : PlanningResult.NotRequested();
             return new DecisionResult(PolicyId, ranked[0].Action, ranked, assessment.Score,
                 planning.Status, assessment.FallbackReason,
-                assessment.ShouldFallback ? "shadow-only conservative fallback"
-                    : "shadow-only diagnostic ranking");
+                _explanationBuilder.Build(ranked[0], planning));
         }
 
         private IList<CandidateEvaluation> EvaluateCandidates(GameState state,

@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using Hearthstone_Deck_Tracker.Enums;
 using HearthDb.Enums;
 using BobCoach.Engine;
+using BobCoach.Engine.Decision;
 
 namespace BobCoach
 {
@@ -25,6 +26,11 @@ namespace BobCoach
 
         private GameStateExtractor _extractor;
         private DecisionEngine _engine;
+        private DecisionPolicyBundle _decisionPolicies;
+        private DecisionOrchestrator _decisionOrchestrator;
+        private DecisionEventRecorder _decisionEventRecorder;
+        private DecisionLifecycleTracker _decisionLifecycle;
+        private bool _decisionEventRecordingOptedIn;
         private FeatureExtractor _fe;
         private OverlayRenderer _renderer;
         private StatusStripSettingsWindow _statusStripSettingsWindow;
@@ -192,6 +198,18 @@ namespace BobCoach
             {
                 _extractor = new GameStateExtractor();
                 _engine = new DecisionEngine();
+                using (var modelArtifact = assembly.GetManifestResourceStream(
+                    "BobCoach.DecisionModels.linear-v1.envelope.json"))
+                {
+                    _decisionPolicies = DecisionPolicyFactory.Create(_engine, modelArtifact,
+                        NullSeasonFeatureExtension.Instance,
+                        new RankingModelRuntimeContext(
+                            "unknown", "unknown", "unknown", false,
+                            "unknown", "unknown", "unknown", "unknown"));
+                }
+                _decisionOrchestrator = new DecisionOrchestrator(
+                    _decisionPolicies.Legacy, _decisionPolicies.Unified,
+                    NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
                 _fe = new FeatureExtractor();
                 _renderer = new OverlayRenderer();
                 _poolTracker = new CardPoolTracker();
@@ -243,6 +261,8 @@ namespace BobCoach
         public void OnUnload()
         {
             _inBattlegrounds = false;
+            _decisionEventRecordingOptedIn = false;
+            ResetDecisionRecording();
             CloseStatusStripSettings();
             ClearSuggestions();
             try { UnsubscribePowerLogWatcherEvents(); } catch { }
@@ -297,47 +317,65 @@ namespace BobCoach
             {
                 Log("Power.log configuration assistant requested");
                 var plan = Engine.LogConfigEnsurer.Inspect();
-                if (plan.Status == Engine.LogConfigStatus.OK)
-                {
-                    MessageBox.Show("Power.log 所需的 log.config 已完整，无需修改。\n\n" + plan.ConfigPath,
-                        "Bob教练 Power.log 配置", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
                 if (plan.Status == Engine.LogConfigStatus.Error)
                 {
+                    _decisionEventRecordingOptedIn = false;
+                    ResetDecisionRecording();
                     MessageBox.Show("无法定位或读取 Hearthstone log.config。\n\n" +
                         string.Join("\n", plan.Changes ?? new List<string>()),
                         "Bob教练 Power.log 配置", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
-                var message = "Bob教练需要以下 Power.log 配置。只有点击“是”才会写入。\n\n" +
-                    "文件：" + plan.ConfigPath + "\n\n" +
-                    "变更：\n- " + string.Join("\n- ", plan.Changes) + "\n\n" +
-                    "拟议完整内容：\n" + plan.ProposedContent + "\n\n是否应用？";
-                var result = MessageBox.Show(message, "Bob教练 Power.log 配置",
+                var configReady = plan.Status == Engine.LogConfigStatus.OK;
+                var message = configReady
+                    ? "Power.log 所需的 log.config 已完整。\n\n文件：" + plan.ConfigPath +
+                        "\n\n是否允许 Bob教练在本次插件运行期间，将决策快照和观察到的玩家操作记录到本机 decision-events.jsonl？"
+                    : "Bob教练需要以下 Power.log 配置。只有点击“是”才会写入。\n\n" +
+                        "文件：" + plan.ConfigPath + "\n\n" +
+                        "变更：\n- " + string.Join("\n- ", plan.Changes) + "\n\n" +
+                        "拟议完整内容：\n" + plan.ProposedContent +
+                        "\n\n点击“是”还会允许 Bob教练在本次插件运行期间，将决策快照和观察到的玩家操作记录到本机 decision-events.jsonl。是否应用并启用？";
+                var result = MessageBox.Show(message, "Bob教练本地决策录制",
                     MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (result != MessageBoxResult.Yes)
                 {
-                    Log("Power.log configuration declined; no file changed");
+                    _decisionEventRecordingOptedIn = false;
+                    ResetDecisionRecording();
+                    Log("Power.log configuration and local decision recording declined");
+                    return;
+                }
+
+                if (configReady)
+                {
+                    _decisionEventRecordingOptedIn = true;
+                    MessageBox.Show("本地决策事件录制已启用，将从下一局开始生效。",
+                        "Bob教练本地决策录制", MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    Log("Local decision recording opted in for this plugin session");
                     return;
                 }
 
                 var status = Engine.LogConfigEnsurer.Apply(plan);
                 if (status == Engine.LogConfigStatus.Created || status == Engine.LogConfigStatus.Patched)
                 {
+                    _decisionEventRecordingOptedIn = true;
                     MessageBox.Show("log.config 已按确认内容写入。请完全关闭并重新启动炉石后生效。",
                         "Bob教练 Power.log 配置", MessageBoxButton.OK, MessageBoxImage.Information);
                     Log("Power.log configuration applied: " + status);
                 }
                 else if (status == Engine.LogConfigStatus.Conflict)
                 {
+                    _decisionEventRecordingOptedIn = false;
+                    ResetDecisionRecording();
                     MessageBox.Show("确认期间 log.config 已被其他程序修改，本次未覆盖。请重新点击 Bob教练检查。",
                         "Bob教练 Power.log 配置", MessageBoxButton.OK, MessageBoxImage.Warning);
                     Log("Power.log configuration conflict; no file changed");
                 }
                 else
                 {
+                    _decisionEventRecordingOptedIn = false;
+                    ResetDecisionRecording();
                     MessageBox.Show("写入 log.config 失败，本次未完成配置。",
                         "Bob教练 Power.log 配置", MessageBoxButton.OK, MessageBoxImage.Error);
                     Log("Power.log configuration apply failed; Power.log feature remains disabled");
@@ -787,12 +825,39 @@ namespace BobCoach
                 }
                 catch (Exception ex) { Log("CoordSys refresh error: " + ex.Message); }
 
-                _currentGameRecord = new GameRecord();
-                _prevState = null;  // 清空上一帧状态
                 // 启动Power.log监控；这里只读检查log.config，不自动修改。
                 if (_powerLogWatcher == null) _powerLogWatcher = new Engine.PowerLogWatcher();
                 SubscribePowerLogWatcherEvents();
                 _powerLogWatcher.StartWatching();
+
+                _currentGameRecord = new GameRecord();
+                if (_decisionEventRecordingOptedIn
+                    && _powerLogWatcher.ConfigStatus == LogConfigStatus.OK
+                    && (_powerLogWatcher.IsWatching || _powerLogWatcher.IsStarting))
+                {
+                    try
+                    {
+                        _decisionEventRecorder = DecisionEventRecorder.CreateForLocalReplay(
+                            _decisionPolicies.ModelId, _decisionPolicies.ModelPayloadSha256);
+                        var gameId = _currentGameRecord.Timestamp.ToUniversalTime().ToString("o")
+                            + ":" + Guid.NewGuid().ToString("N");
+                        _decisionLifecycle = new DecisionLifecycleTracker(gameId,
+                            _decisionEventRecorder);
+                        _decisionOrchestrator = new DecisionOrchestrator(
+                            _decisionPolicies.Legacy, _decisionPolicies.Unified,
+                            _decisionEventRecorder, DecisionRuntimeMode.Shadow);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("Decision recording unavailable: " + ex.Message);
+                        ResetDecisionRecording();
+                    }
+                }
+                else
+                {
+                    ResetDecisionRecording();
+                }
+                _prevState = null;  // 清空上一帧状态
 
                 // Power.log 不可用时显示警告
                 if (!_powerLogWatcher.IsWatching
@@ -910,11 +975,27 @@ namespace BobCoach
             ClearSuggestions();
 
             // 提取最终排名 (从Power.log事件或HDT API)
+            int placement = 0;
             if (_currentGameRecord != null)
             {
-                int placement = ExtractFinalPlacement();
+                placement = ExtractFinalPlacement();
                 if (placement > 0 && placement <= 8)
                     _currentGameRecord.FinalRank = placement;
+            }
+
+            try
+            {
+                if (placement > 0 && placement <= 8 && _decisionLifecycle != null)
+                    _decisionLifecycle.AttachCombatOutcome(
+                        new CombatOutcome("placement:" + placement), DateTime.UtcNow.ToString("o"));
+            }
+            catch (Exception ex)
+            {
+                Log("Decision outcome recording error: " + ex.Message);
+            }
+            finally
+            {
+                ResetDecisionRecording();
             }
 
             // 记录本局数据
@@ -1027,6 +1108,25 @@ namespace BobCoach
             }
 
             Log("BG game ended");
+        }
+
+        private void ResetDecisionRecording()
+        {
+            _decisionLifecycle = null;
+            _decisionEventRecorder = null;
+            if (_decisionPolicies != null)
+                _decisionOrchestrator = new DecisionOrchestrator(
+                    _decisionPolicies.Legacy, _decisionPolicies.Unified,
+                    NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
+        }
+
+        private IList<string> InferObservedActionKeys(GameState previous, GameState current)
+        {
+            if (previous == null || current == null || _decisionPolicies == null)
+                return new List<string>();
+
+            return ObservedActionInference.Infer(previous, current,
+                _decisionPolicies.Candidates.Generate(previous));
         }
 
         /// <summary>从Power.log事件或HDT API提取最终排名(1-8)</summary>
@@ -1359,7 +1459,36 @@ namespace BobCoach
             UpdatePoolFromStateChange(state);
             _poolTracker.OnNewTurn(state.Turn, state.Opponents.FindAll(o => o.Alive).Count);
 
-            var bestAction = SafeCall(() => _engine.GetBestAction(state), "GetBestAction");
+            DecisionResult rankingDecision;
+            if (_decisionLifecycle != null && _decisionEventRecorder != null)
+            {
+                try
+                {
+                    var observedActionKeys = InferObservedActionKeys(_prevState, state);
+                    _decisionLifecycle.AttachObservedActions(observedActionKeys,
+                        DateTime.UtcNow.ToString("o"));
+                    var candidates = _decisionPolicies.Candidates.Generate(state);
+                    var context = _decisionLifecycle.BeginOrReuse(state, candidates);
+                    rankingDecision = _decisionOrchestrator.Decide(state, context.DecisionId);
+                    _decisionEventRecorder.AttachRecommendation(context.DecisionId,
+                        rankingDecision, DateTime.UtcNow.ToString("o"));
+                }
+                catch (Exception ex)
+                {
+                    Log("Decision recording error: " + ex.Message);
+                    ResetDecisionRecording();
+                    rankingDecision = _decisionOrchestrator.Decide(state);
+                }
+            }
+            else
+            {
+                if (_decisionOrchestrator == null)
+                    _decisionOrchestrator = new DecisionOrchestrator(
+                        _decisionPolicies.Legacy, _decisionPolicies.Unified,
+                        NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
+                rankingDecision = _decisionOrchestrator.Decide(state);
+            }
+            var bestAction = rankingDecision.SelectedAction;
             var t0 = DateTime.UtcNow;
             var levelResult = SafeCall(() => _engine.GetLevelUpSuggestion(state), "GetLevelUpSuggestion");
             var cardScores = SafeCall(() => _engine.GetShopCardScores(state), "GetShopCardScores") ?? new List<ShopCardScore>();
@@ -1478,7 +1607,7 @@ namespace BobCoach
                     BoardPower = _fe.ComputeBoardPower(state.BoardMinions),
                     OpponentPower = state.Opponents.Count > 0
                         ? _fe.ComputeAvgOpponentPower(state.Opponents) : 0,
-                    Board = state.BoardMinions.Select(m => new MinionSnapshot
+                    Board = state.BoardMinions.Select(m => new Engine.MinionSnapshot
                     {
                         CardId = m.CardId, Name = m.CardName ?? "",
                         Attack = m.Attack, Health = m.Health, Tier = m.Tier, Position = m.Position,
@@ -1486,7 +1615,7 @@ namespace BobCoach
                         Reborn = m.Reborn, Poisonous = m.Poisonous, Venomous = m.Venomous,
                         Windfury = m.Windfury, Tribe = m.Tribe ?? "", IsSpell = m.IsSpell, Cost = m.Cost,
                     }).ToList(),
-                    Shop = state.ShopMinions.Select(m => new MinionSnapshot
+                    Shop = state.ShopMinions.Select(m => new Engine.MinionSnapshot
                     {
                         CardId = m.CardId, Name = m.CardName ?? "",
                         Attack = m.Attack, Health = m.Health, Tier = m.Tier, Position = m.Position,
@@ -1496,7 +1625,7 @@ namespace BobCoach
                         Stealth = m.Stealth, Cleave = m.Cleave, Overkill = m.Overkill,
                         Tribe = m.Tribe ?? "", IsSpell = m.IsSpell, Cost = m.Cost,
                     }).ToList(),
-                    Hand = state.HandMinions.Select(m => new MinionSnapshot
+                    Hand = state.HandMinions.Select(m => new Engine.MinionSnapshot
                     {
                         CardId = m.CardId, Name = m.CardName ?? "",
                         Attack = m.Attack, Health = m.Health, Tier = m.Tier, Position = m.Position,
@@ -1510,7 +1639,7 @@ namespace BobCoach
                     {
                         HeroId = o.HeroCardId ?? "", HeroName = o.HeroName ?? "",
                         Health = o.Health, TavernTier = o.TavernTier, Alive = o.Alive,
-                        Board = o.BoardMinions.Select(m => new MinionSnapshot
+                        Board = o.BoardMinions.Select(m => new Engine.MinionSnapshot
                         {
                             CardId = m.CardId, Name = m.CardName ?? "",
                             Attack = m.Attack, Health = m.Health, Tier = m.Tier, Position = m.Position,

@@ -19,19 +19,35 @@ namespace BobCoach.Engine.Decision
     public sealed class DecisionEventRecorder : IShadowComparisonSink
     {
         private readonly string _path;
+        private readonly string _modelId;
+        private readonly string _modelPayloadSha256;
         private readonly object _sync = new object();
         private readonly HashSet<string> _writtenKeys = new HashSet<string>(StringComparer.Ordinal);
 
         public DecisionEventRecorder(string path)
+            : this(path, null, null)
+        {
+        }
+
+        public DecisionEventRecorder(string path, string modelId, string modelPayloadSha256)
         {
             if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("path");
             _path = path;
+            _modelId = NormalizeIdentity(modelId);
+            _modelPayloadSha256 = NormalizeIdentity(modelPayloadSha256);
             LoadExistingEventKeys(_writtenKeys, path);
         }
 
         public static DecisionEventRecorder CreateForLocalReplay()
         {
-            return new DecisionEventRecorder(BobCoachDataPaths.GetPath("decision-events.jsonl"));
+            return CreateForLocalReplay(null, null);
+        }
+
+        public static DecisionEventRecorder CreateForLocalReplay(string modelId,
+            string modelPayloadSha256)
+        {
+            return new DecisionEventRecorder(BobCoachDataPaths.GetPath("decision-events.jsonl"),
+                modelId, modelPayloadSha256);
         }
 
         public void RecordCreated(DecisionEventRecord record)
@@ -86,8 +102,14 @@ namespace BobCoach.Engine.Decision
                 if (_writtenKeys.Contains(key)) return;
                 var directory = Path.GetDirectoryName(_path);
                 if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-                var line = JsonConvert.SerializeObject(new { eventKey = key, eventType, payload }, Formatting.None)
-                    + Environment.NewLine;
+                var line = JsonConvert.SerializeObject(new
+                {
+                    eventKey = key,
+                    eventType,
+                    modelId = _modelId,
+                    modelPayloadSha256 = _modelPayloadSha256,
+                    payload
+                }, Formatting.None) + Environment.NewLine;
                 var bytes = new UTF8Encoding(false).GetBytes(line);
                 using (var stream = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read))
                 {
@@ -157,6 +179,11 @@ namespace BobCoach.Engine.Decision
         private static void RequireDecisionId(string decisionId)
         {
             if (string.IsNullOrWhiteSpace(decisionId)) throw new ArgumentException("decisionId");
+        }
+
+        private static string NormalizeIdentity(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "unknown" : value;
         }
     }
 }
