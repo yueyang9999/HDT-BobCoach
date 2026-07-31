@@ -48,9 +48,9 @@ assert.ok(compileItems.includes("Core\\Decision\\ActionFeatureSchema.cs"),
     "versioned action feature schema must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\Decision\\ActionFeatureExtractor.cs"),
     "action feature extractor must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 187, "unexpected compile item count");
+assert.strictEqual(compileItems.length, 188, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e",
+    "0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849",
     "compile set changed");
 
 for (const token of [
