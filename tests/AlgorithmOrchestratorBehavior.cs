@@ -115,7 +115,9 @@ internal static class AlgorithmOrchestratorBehavior
         {
             ShadowPreservesLegacyOutputAndRecordsDifferences();
             LegacyOnlyAvoidsUnifiedPolicyAndComparison();
+            InvalidRuntimeModeDegradesToLegacyOnly();
             UnifiedFailureFallsBackToLegacy();
+            NullPolicyResultsAreContainedAndFallback();
             RecorderAndDiagnosticFailuresAreContained();
             ComparisonFingerprintIsStableAndDecisionScoped();
             ProductionRecorderRejectsBlankDecisionIdAndDeduplicates();
@@ -155,6 +157,20 @@ internal static class AlgorithmOrchestratorBehavior
         AssertEqual(0, sink.Comparisons.Count, "legacy-only does not record comparison");
     }
 
+    private static void InvalidRuntimeModeDegradesToLegacyOnly()
+    {
+        var legacy = new StaticPolicy("legacy-v1.1.0", Result("legacy-v1.1.0", "Refresh|-1||", 0.8d));
+        var unified = new CountingPolicy("unified-linear-v1",
+            Result("unified-linear-v1", "BuyMinion|0|CARD_A|shop", 0.6d));
+        var sink = new CollectingShadowComparisonSink();
+        var visible = new DecisionOrchestrator(legacy, unified, sink, (DecisionRuntimeMode)999)
+            .Decide(State(), "invalid-mode");
+
+        AssertEqual("legacy-v1.1.0", visible.PolicyId, "invalid mode visible policy");
+        AssertEqual(0, unified.DecideCount, "invalid mode does not execute unified policy");
+        AssertEqual(0, sink.Comparisons.Count, "invalid mode does not record comparison");
+    }
+
     private static void UnifiedFailureFallsBackToLegacy()
     {
         var legacy = new StaticPolicy("legacy-v1.1.0", Result("legacy-v1.1.0", "Refresh|-1||", 0.8d));
@@ -164,6 +180,25 @@ internal static class AlgorithmOrchestratorBehavior
 
         AssertEqual("legacy-v1.1.0", safe.PolicyId, "exception fallback policy");
         AssertEqual(FallbackReason.ModelUnavailable, safe.FallbackReason, "exception fallback reason");
+    }
+
+    private static void NullPolicyResultsAreContainedAndFallback()
+    {
+        var legacyResult = Result("legacy-v1.1.0", "Refresh|-1||", 0.8d);
+        var diagnostics = new CollectingDecisionDiagnostics();
+        var shadow = new DecisionOrchestrator(new StaticPolicy("legacy-v1.1.0", legacyResult),
+            new NullPolicy("unified-linear-v1"), new CollectingShadowComparisonSink(),
+            DecisionRuntimeMode.Shadow, diagnostics).Decide(State(), "null-unified");
+        AssertEqual("legacy-v1.1.0", shadow.PolicyId, "null unified keeps shadow legacy output");
+        AssertEqual(1, diagnostics.Entries.Count, "null unified is diagnostic input");
+
+        var legacyFallback = new DecisionOrchestrator(new NullPolicy("legacy-v1.1.0"),
+            new StaticPolicy("unified-linear-v1", Result("unified-linear-v1", "BuyMinion|0|CARD_A|shop", 0.6d)),
+            new CollectingShadowComparisonSink(), DecisionRuntimeMode.LegacyOnly)
+            .Decide(State(), "null-legacy");
+        AssertEqual("unavailable", legacyFallback.PolicyId, "null legacy uses unavailable policy");
+        AssertEqual(FallbackReason.NoSafeAction, legacyFallback.FallbackReason,
+            "null legacy uses the existing conservative fallback");
     }
 
     private static void RecorderAndDiagnosticFailuresAreContained()
@@ -312,6 +347,22 @@ internal static class AlgorithmOrchestratorBehavior
         public string PolicyId { get; private set; }
         public ThrowingPolicy(string policyId) { PolicyId = policyId; }
         public DecisionResult Decide(GameState state) { throw new InvalidOperationException("policy failure"); }
+    }
+
+    private sealed class NullPolicy : IDecisionPolicy
+    {
+        public string PolicyId { get; private set; }
+        public NullPolicy(string policyId) { PolicyId = policyId; }
+        public DecisionResult Decide(GameState state) { return null; }
+    }
+
+    private sealed class CountingPolicy : IDecisionPolicy
+    {
+        private readonly DecisionResult _result;
+        public string PolicyId { get; private set; }
+        public int DecideCount { get; private set; }
+        public CountingPolicy(string policyId, DecisionResult result) { PolicyId = policyId; _result = result; }
+        public DecisionResult Decide(GameState state) { DecideCount++; return _result; }
     }
 
     private sealed class CollectingShadowComparisonSink : IShadowComparisonSink

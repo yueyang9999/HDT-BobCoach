@@ -144,7 +144,9 @@ namespace BobCoach.Engine.Decision
             _unified = unified;
             _comparisonSink = comparisonSink ?? NoOpShadowComparisonSink.Instance;
             _diagnostics = diagnostics ?? NoOpDecisionDiagnostics.Instance;
-            _mode = mode;
+            _mode = mode == DecisionRuntimeMode.Shadow || mode == DecisionRuntimeMode.Unified
+                ? mode
+                : DecisionRuntimeMode.LegacyOnly;
         }
 
         public DecisionResult Decide(GameState state)
@@ -180,7 +182,12 @@ namespace BobCoach.Engine.Decision
         private DecisionResult SafeDecide(IDecisionPolicy policy, GameState state,
             FallbackReason exceptionReason)
         {
-            try { return policy.Decide(state); }
+            try
+            {
+                var result = policy.Decide(state);
+                if (result == null) throw new InvalidOperationException("policy returned null");
+                return result;
+            }
             catch (Exception ex)
             {
                 TryRecordDiagnostic(policy.PolicyId, ex);
