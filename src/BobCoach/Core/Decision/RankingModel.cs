@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 namespace BobCoach.Engine.Decision
 {
@@ -210,8 +211,23 @@ namespace BobCoach.Engine.Decision
         private static T DeserializeStrictObject<T>(string json)
         {
             var token = JObject.Parse(json, StrictJsonLoad);
+            var serializer = JsonSerializer.Create(StrictJson);
+            RequireCanonicalPropertyNames<T>(token, serializer);
             using (var reader = token.CreateReader())
-                return JsonSerializer.Create(StrictJson).Deserialize<T>(reader);
+                return serializer.Deserialize<T>(reader);
+        }
+
+        private static void RequireCanonicalPropertyNames<T>(JObject token, JsonSerializer serializer)
+        {
+            var contract = serializer.ContractResolver.ResolveContract(typeof(T)) as JsonObjectContract;
+            if (contract == null) throw new JsonSerializationException("Expected object contract");
+
+            var canonicalNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in contract.Properties)
+                if (!property.Ignored) canonicalNames.Add(property.PropertyName);
+            foreach (var property in token.Properties())
+                if (!canonicalNames.Contains(property.Name))
+                    throw new JsonSerializationException("Non-canonical property: " + property.Name);
         }
 
         private static void ValidateSchemaNamesLengthsAndFiniteNumbers(RankingModelPayload model,
@@ -290,13 +306,15 @@ namespace BobCoach.Engine.Decision
         private static bool IsSynthetic(RankingModelPayload model)
         {
             return HasSyntheticPrefix(model.ModelId) || HasSyntheticPrefix(model.TrainingSetIdentity)
-                || HasSyntheticPrefix(model.GameBuild) || HasSyntheticPrefix(model.SeasonId)
+                || HasSyntheticPrefix(model.SeasonRange) || HasSyntheticPrefix(model.GameBuild)
+                || HasSyntheticPrefix(model.SeasonId)
                 || HasSyntheticPrefix(model.CardPoolIdentity);
         }
 
         private static bool HasSyntheticPrefix(string value)
         {
-            return value != null && value.StartsWith("synthetic-", StringComparison.OrdinalIgnoreCase);
+            return value != null
+                && value.Trim().StartsWith("synthetic-", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string Sha256Hex(byte[] value)

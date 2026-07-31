@@ -277,3 +277,68 @@ Fresh final verification completed with exit code 0:
 ## Required Conclusion (Preserved)
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+
+## Canonical-Property And Synthetic-Gate Review RED Evidence
+
+Focused command with process-level
+`BOBCOACH_HDT_DIR=%LOCALAPPDATA%\HearthstoneDeckTracker\app-1.54.1`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
+```
+
+Exact RED output after adding the envelope and payload case-variant alias
+regressions, before changing production code (exit code 1):
+
+```text
+FAIL case-variant envelope property did not throw ModelValidationException
+```
+
+After canonical property enforcement fixed the first RED, the same focused
+command reached the synthetic season-range regression and produced this exact
+second RED output (exit code 1):
+
+```text
+FAIL synthetic artifact expected message=synthetic artifact actual=Invalid ranking model artifact: approved payload checksum mismatch
+```
+
+The smallest production fixes enforce exact canonical DTO property names
+before deserialization, include `SeasonRange` in the synthetic-artifact gate,
+and apply the reserved-prefix check to trimmed values. The focused command then
+completed GREEN (exit code 0):
+
+```text
+PASS model loader rejects corruption, schema drift, and invalid numbers
+```
+
+## Canonical-Property And Synthetic-Gate Final Verification
+
+Fresh verification against the final production and test changes produced:
+
+- `tests\test_algorithm_model_contract.ps1`: PASS with
+  `PASS model loader rejects corruption, schema drift, and invalid numbers`.
+- Controller rerun of `tests\run_behavior_tests.ps1` with process-level
+  `BOBCOACH_HDT_DIR=C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1`:
+  PASS. The two existing `CardSemanticFactSource.CardId` CS0649 warnings and
+  the existing UI lifecycle static warning were not suppressed.
+- `tests\run_contract_tests.ps1`: PASS, all 13 contracts.
+- `node tests\test_release_build_contract.js`: PASS, compile set `188`,
+  SHA-256 `0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849`.
+- `tools\build\validate_repository.ps1`: PASS, 408 tracked or untracked
+  non-ignored files scanned.
+- Release build against the existing HDT `1.54.1` directory with
+  `-AllowNewerHdt`: PASS. `BobCoach.dll` is 737,280 bytes with SHA-256
+  `D4D5B09947FE22B92A41D204EFB191FC8BB3A793549818F6761287B48A08D4DF`.
+  The managed command policy blocked cleanup of the two-file
+  `%TEMP%\bobcoach_build_8679604f-0aef-4f06-8e55-b918406b97c3` output after
+  its location, file count, and byte count were verified.
+- `git diff --check`: PASS, with only Git's LF-to-CRLF notices.
+
+Self-review confirmed that the diff contains no production model, runtime
+policy activation, season content, inferred weights, or strategy-quality
+claim. Unknown identities still fail closed, the new policy remains Shadow,
+and `legacy-v1.1.0` remains the visible recommendation and fallback policy.
+
+## Required Conclusion (Preserved)
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。

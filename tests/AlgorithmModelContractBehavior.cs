@@ -126,6 +126,12 @@ internal static class AlgorithmModelContractBehavior
         AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
             PayloadWithDuplicateProperty(root, "ModelId")), "duplicate payload property", "payload json");
         AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
+            EnvelopeWithCaseVariantAlias(root, "PayloadSha256", "payloadsha256")),
+            "case-variant envelope property", "artifact json");
+        AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
+            PayloadWithCaseVariantAlias(root, "ModelId", "modelid")),
+            "case-variant payload property", "payload json");
+        AssertThrows<ModelValidationException>(() => RankingModelLoader.Load(
             PayloadWithoutProperty(root, "ModelId")), "missing payload identity", "payload json");
 
         AssertPayloadRejects(root, model => model.FeatureNames = model.FeatureNames.Take(44).ToArray(),
@@ -174,6 +180,12 @@ internal static class AlgorithmModelContractBehavior
                 "artifact card pool identity mismatch");
             AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
                 "synthetic artifact", model => model.ModelId = "synthetic-model");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.SeasonRange = "synthetic-season-range");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.ModelId = " synthetic-model ");
+            AssertRuntimeRejects(root, context, model => model.EffectAcceptanceStatus = "accepted",
+                "synthetic artifact", model => model.TrainingSetIdentity = "\tsynthetic-training\r\n");
             using (var unknownContext = ResolvedRuntimeEnvelope(root, model => { }))
             {
                 AssertThrows<ModelValidationException>(() => RankingModelLoader.LoadForRuntime(unknownContext,
@@ -408,6 +420,24 @@ internal static class AlgorithmModelContractBehavior
         if (value == null) throw new InvalidOperationException("payload property not found");
         return EnvelopeWithPayload(envelope, payload.Insert(closingBrace,
             ",\"" + propertyName + "\":" + JsonConvert.SerializeObject(value)));
+    }
+
+    private static MemoryStream EnvelopeWithCaseVariantAlias(string root, string propertyName,
+        string alias)
+    {
+        var document = JObject.Parse(File.ReadAllText(Path.Combine(root, "tests", "fixtures", "algorithm",
+            "linear-v1.valid.envelope.json"), Encoding.UTF8));
+        document.Add(alias, document[propertyName]);
+        return new MemoryStream(Encoding.UTF8.GetBytes(document.ToString(Formatting.None)));
+    }
+
+    private static MemoryStream PayloadWithCaseVariantAlias(string root, string propertyName,
+        string alias)
+    {
+        var envelope = ReadEnvelope(root);
+        var payload = JObject.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(envelope.PayloadBase64)));
+        payload.Add(alias, payload[propertyName]);
+        return EnvelopeWithPayload(envelope, payload.ToString(Formatting.None));
     }
 
     private static MemoryStream EnvelopeWithInvalidUtf8(string root)
