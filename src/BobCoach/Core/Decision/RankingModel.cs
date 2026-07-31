@@ -91,6 +91,11 @@ namespace BobCoach.Engine.Decision
         }
     }
 
+    public interface IRankingModelRuntimeContextProvider
+    {
+        RankingModelRuntimeContext GetRuntimeContext();
+    }
+
     public sealed class ModelValidationException : Exception
     {
         public ModelValidationException(string message) : base(message) { }

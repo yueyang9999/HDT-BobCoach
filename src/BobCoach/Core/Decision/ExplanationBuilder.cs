@@ -79,10 +79,6 @@ namespace BobCoach.Engine.Decision
                 .Take(3)
                 .ToList();
 
-            if (reasons.Count < 3 && planning != null
-                && planning.Status == PlannerStatus.Completed)
-                reasons.Add("follow-up path stays flexible");
-
             return string.Join("; ", reasons.Take(3));
         }
     }

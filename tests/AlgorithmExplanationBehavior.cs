@@ -155,6 +155,74 @@ namespace BobCoach.Engine.Decision
             return false;
         }
     }
+
+    internal sealed class MismatchedSeasonExtension : ISeasonFeatureExtension
+    {
+        public string GameBuild { get { return "wrong-build"; } }
+        public string SeasonId { get { return "season-task11"; } }
+        public string CardPoolIdentity { get { return "pool-task11"; } }
+
+        public bool TryEvaluate(GameState state, ActionDescriptor action, GameState nextState,
+            out double value)
+        {
+            value = 0d;
+            return false;
+        }
+    }
+
+    internal sealed class ApprovedSeasonExtension : ISeasonFeatureExtension,
+        IRankingModelRuntimeContextProvider
+    {
+        private readonly RankingModelRuntimeContext _runtimeContext;
+
+        public string GameBuild { get { return "build-task11"; } }
+        public string SeasonId { get { return "season-task11"; } }
+        public string CardPoolIdentity { get { return "pool-task11"; } }
+
+        public ApprovedSeasonExtension(RankingModelRuntimeContext runtimeContext)
+        {
+            _runtimeContext = runtimeContext;
+        }
+
+        public RankingModelRuntimeContext GetRuntimeContext()
+        {
+            return _runtimeContext;
+        }
+
+        public bool TryEvaluate(GameState state, ActionDescriptor action, GameState nextState,
+            out double value)
+        {
+            value = 0d;
+            return false;
+        }
+    }
+
+    internal sealed class ThrowingRuntimeContextExtension : ISeasonFeatureExtension,
+        IRankingModelRuntimeContextProvider
+    {
+        private readonly InvalidOperationException _failure;
+
+        public string GameBuild { get { return "build-task11"; } }
+        public string SeasonId { get { return "season-task11"; } }
+        public string CardPoolIdentity { get { return "pool-task11"; } }
+
+        public ThrowingRuntimeContextExtension(InvalidOperationException failure)
+        {
+            _failure = failure;
+        }
+
+        public RankingModelRuntimeContext GetRuntimeContext()
+        {
+            throw _failure;
+        }
+
+        public bool TryEvaluate(GameState state, ActionDescriptor action, GameState nextState,
+            out double value)
+        {
+            value = 0d;
+            return false;
+        }
+    }
 }
 
 internal static class AlgorithmExplanationBehavior
@@ -168,12 +236,12 @@ internal static class AlgorithmExplanationBehavior
             _fixturePath = args[0];
             ExplanationUsesOnlyLargestKnownContributions();
             ExplanationReflectsContributionDirection();
-            ExplanationIgnoresZeroContributions();
-            ExplanationUsesPlanningOnlyWhenSpaceRemains();
+            ExplanationIgnoresZeroAndUnknownContributions();
+            ExplanationIgnoresPlanningResult();
             FactorySharesCandidateGeneratorAndReportsIdentity();
             FactoryFailsClosedForExpectedModelAbsence();
             FactoryRequiresExplicitRuntimeApproval();
-            FactoryThreeParameterEntryFailsClosedWithoutRuntimeApproval();
+            FactoryThreeParameterEntryUsesIndependentRuntimeApproval();
             FactoryPreservesProgrammerAndStreamStateErrors();
             Console.WriteLine("PASS explanations reflect score contributions only");
             return 0;
@@ -206,14 +274,14 @@ internal static class AlgorithmExplanationBehavior
         AssertEqual(2, text.Count(ch => ch == ';'), "at most three reasons");
     }
 
-    private static void ExplanationUsesPlanningOnlyWhenSpaceRemains()
+    private static void ExplanationIgnoresPlanningResult()
     {
         var withSpace = new ExplanationBuilder().Build(Ranked(new[]
         {
             new DecisionFactor("board_power_delta", 2d),
             new DecisionFactor("remaining_gold", 1d),
         }), PlanningResult.Completed());
-        AssertContains(withSpace, "follow-up path stays flexible", "completed planning reason");
+        AssertNotContains(withSpace, "follow-up path", "planning is not a score contribution");
 
         var full = new ExplanationBuilder().Build(Ranked(new[]
         {
@@ -245,20 +313,23 @@ internal static class AlgorithmExplanationBehavior
         AssertNotContains(positive, "weighs against", "positive contribution is not a penalty");
     }
 
-    private static void ExplanationIgnoresZeroContributions()
+    private static void ExplanationIgnoresZeroAndUnknownContributions()
     {
-        var text = new ExplanationBuilder().Build(Ranked(new[]
+        var zero = new ExplanationBuilder().Build(Ranked(new[]
         {
             new DecisionFactor("board_power_delta", 0d),
             new DecisionFactor("remaining_gold", 0d),
             new DecisionFactor("unknown_effect_count", 0d),
         }), PlanningResult.Completed());
+        AssertEqual("", zero, "zero contributions");
 
-        AssertNotContains(text, "board power", "zero board contribution");
-        AssertNotContains(text, "remaining gold", "zero gold contribution");
-        AssertNotContains(text, "uncertain effect", "zero uncertainty contribution");
-        AssertContains(text, "follow-up path stays flexible",
-            "zero contributions cannot displace a planner reason");
+        var unknown = new ExplanationBuilder().Build(Ranked(new[]
+        {
+            new DecisionFactor("not_in_schema", 100d),
+        }), PlanningResult.Completed());
+        AssertEqual("", unknown, "unknown contributions");
+        AssertEqual("", new ExplanationBuilder().Build(Ranked(new DecisionFactor[0]),
+            PlanningResult.Completed()), "empty factors");
     }
 
     private static void FactorySharesCandidateGeneratorAndReportsIdentity()
@@ -307,11 +378,24 @@ internal static class AlgorithmExplanationBehavior
                     "season-task11")), "mismatched runtime approval");
     }
 
-    private static void FactoryThreeParameterEntryFailsClosedWithoutRuntimeApproval()
+    private static void FactoryThreeParameterEntryUsesIndependentRuntimeApproval()
     {
         using (var stream = AcceptedEnvelope())
             AssertUnavailable(DecisionPolicyFactory.Create(new DecisionEngine(), stream,
                 new ValidSeasonExtension()), "three-parameter entry without runtime approval");
+
+        using (var stream = AcceptedEnvelope())
+        {
+            var bundle = DecisionPolicyFactory.Create(new DecisionEngine(), stream,
+                new ApprovedSeasonExtension(ApprovedRuntimeContext()));
+            var unified = (UnifiedRankingPolicy)bundle.Unified;
+            AssertSame(bundle.Candidates, unified.Candidates,
+                "three-parameter entry candidate generator");
+            AssertEqual("linear-task11", bundle.ModelId,
+                "three-parameter entry model identity");
+            AssertTrue(bundle.ModelPayloadSha256.Length == 64,
+                "three-parameter entry checksum identity");
+        }
 
         AssertThrows<ArgumentNullException>(() => DecisionPolicyFactory.Create(null, null,
             new ValidSeasonExtension()), "three-parameter null engine");
@@ -326,6 +410,11 @@ internal static class AlgorithmExplanationBehavior
                 new DecisionEngine(), stream, new InvalidDependencyExtension(),
                 ApprovedRuntimeContext()),
                 "invalid internal dependency");
+        using (var stream = AcceptedEnvelope())
+            AssertThrows<ModelValidationException>(() => DecisionPolicyFactory.Create(
+                new DecisionEngine(), stream, new MismatchedSeasonExtension(),
+                ApprovedRuntimeContext()),
+                "composition identity mismatch");
 
         var disposed = new MemoryStream();
         disposed.Dispose();
@@ -336,6 +425,13 @@ internal static class AlgorithmExplanationBehavior
             new DecisionEngine(), new ThrowingReadStream(
                 new InvalidOperationException("deliberate stream state failure")),
             new ValidSeasonExtension(), ApprovedRuntimeContext()), "unexpected stream state failure");
+
+        var providerFailure = new InvalidOperationException("deliberate approval provider failure");
+        using (var stream = AcceptedEnvelope())
+            AssertThrows<InvalidOperationException>(() => DecisionPolicyFactory.Create(
+                new DecisionEngine(), stream,
+                new ThrowingRuntimeContextExtension(providerFailure)),
+                "runtime approval provider failure");
     }
 
     private static RankedAction Ranked(IEnumerable<DecisionFactor> factors)

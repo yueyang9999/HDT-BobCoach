@@ -31,9 +31,9 @@ namespace BobCoach.Engine.Decision
         {
             if (engine == null) throw new ArgumentNullException("engine");
 
-            var legacy = new LegacyDecisionPolicy(engine);
-            var candidates = new CandidateGenerator(new ActionEnumerator());
-            return Unavailable(legacy, candidates);
+            var provider = seasonExtension as IRankingModelRuntimeContextProvider;
+            var runtimeContext = provider == null ? null : provider.GetRuntimeContext();
+            return Create(engine, modelArtifact, seasonExtension, runtimeContext);
         }
 
         public static DecisionPolicyBundle Create(DecisionEngine engine, Stream modelArtifact,
@@ -46,13 +46,10 @@ namespace BobCoach.Engine.Decision
             if (modelArtifact == null || seasonExtension == null)
                 return Unavailable(legacy, candidates);
 
+            RankingModelPayload model;
             try
             {
-                var model = RankingModelLoader.LoadForRuntime(modelArtifact, runtimeContext);
-                var unified = UnifiedRankingPolicy.CreateProduction(model, candidates,
-                    seasonExtension);
-                return new DecisionPolicyBundle(legacy, unified, candidates,
-                    model.ModelId, model.PayloadSha256);
+                model = RankingModelLoader.LoadForRuntime(modelArtifact, runtimeContext);
             }
             catch (ModelValidationException)
             {
@@ -62,6 +59,11 @@ namespace BobCoach.Engine.Decision
             {
                 return Unavailable(legacy, candidates);
             }
+
+            var unified = UnifiedRankingPolicy.CreateProduction(model, candidates,
+                seasonExtension);
+            return new DecisionPolicyBundle(legacy, unified, candidates,
+                model.ModelId, model.PayloadSha256);
         }
 
         private static DecisionPolicyBundle Unavailable(IDecisionPolicy legacy,

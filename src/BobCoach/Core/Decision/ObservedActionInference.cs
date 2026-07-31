@@ -38,11 +38,11 @@ namespace BobCoach.Engine.Decision
             switch (candidate.Action.Type)
             {
                 case ActionType.BuyMinion:
+                    return MatchesPurchasedEntity(candidate, current, currentBoardAndHand);
                 case ActionType.BuySpell:
-                    return candidate.EntityId > 0
-                        && currentBoardAndHand.Contains(candidate.EntityId)
-                        && !Items(current.ShopMinions)
-                            .Any(item => item.EntityId == candidate.EntityId);
+                    return MatchesPurchasedEntity(candidate, current, currentBoardAndHand)
+                        || MatchesImmediatelyConsumedSpell(candidate, previous, current,
+                            currentBoardAndHand);
                 case ActionType.SellMinion:
                     return candidate.EntityId > 0
                         && !currentBoard.Contains(candidate.EntityId)
@@ -59,6 +59,29 @@ namespace BobCoach.Engine.Decision
                 default:
                     return false;
             }
+        }
+
+        private static bool MatchesPurchasedEntity(ActionDescriptor candidate, GameState current,
+            ISet<int> currentBoardAndHand)
+        {
+            return candidate.EntityId > 0
+                && currentBoardAndHand.Contains(candidate.EntityId)
+                && !Items(current.ShopMinions)
+                    .Any(item => item.EntityId == candidate.EntityId);
+        }
+
+        private static bool MatchesImmediatelyConsumedSpell(ActionDescriptor candidate,
+            GameState previous, GameState current, ISet<int> currentBoardAndHand)
+        {
+            return candidate.EntityId > 0
+                && candidate.GoldCost >= 0
+                && previous.Turn == current.Turn
+                && Items(previous.ShopMinions)
+                    .Any(item => item.EntityId == candidate.EntityId)
+                && !Items(current.ShopMinions)
+                    .Any(item => item.EntityId == candidate.EntityId)
+                && !currentBoardAndHand.Contains(candidate.EntityId)
+                && previous.Gold - current.Gold == candidate.GoldCost;
         }
 
         private static bool MatchesRefresh(ActionDescriptor candidate, GameState previous,

@@ -59,6 +59,9 @@ internal static class AlgorithmObservedActionInferenceBehavior
             IgnoresTurnStartShopReplacement();
             InfersPaidRefreshWithinTheSameTurn();
             InfersFreeRefreshWithinTheSameTurn();
+            InfersImmediatelyConsumedBuySpell();
+            RejectsBuySpellWithoutMatchingGoldSpend();
+            RejectsBuySpellAcrossTurns();
             MarksMultipleMatchingCandidatesUnresolved();
             IgnoresStateChangesWithoutMatchingCandidates();
             Console.WriteLine("PASS observed actions require unique player-action evidence");
@@ -96,6 +99,36 @@ internal static class AlgorithmObservedActionInferenceBehavior
 
         AssertActions(new[] { "Refresh|-1||" }, Infer(previous, current, Refresh(0)),
             "free refresh");
+    }
+
+    private static void InfersImmediatelyConsumedBuySpell()
+    {
+        var previous = State(4, 5, 0, 11, 12);
+        var current = State(4, 3, 0, 12);
+
+        AssertActions(new[] { "BuySpell|0|SPELL_A|shop" }, Infer(previous, current,
+            Candidate(BobCoach.Engine.ActionType.BuySpell,
+                "BuySpell|0|SPELL_A|shop", 11, 2)), "immediately consumed tavern spell");
+    }
+
+    private static void RejectsBuySpellWithoutMatchingGoldSpend()
+    {
+        var previous = State(4, 5, 0, 11, 12);
+        var current = State(4, 4, 0, 12);
+
+        AssertActions(new string[0], Infer(previous, current,
+            Candidate(BobCoach.Engine.ActionType.BuySpell,
+                "BuySpell|0|SPELL_A|shop", 11, 2)), "spell purchase gold mismatch");
+    }
+
+    private static void RejectsBuySpellAcrossTurns()
+    {
+        var previous = State(4, 5, 0, 11, 12);
+        var current = State(5, 3, 0, 12);
+
+        AssertActions(new string[0], Infer(previous, current,
+            Candidate(BobCoach.Engine.ActionType.BuySpell,
+                "BuySpell|0|SPELL_A|shop", 11, 2)), "spell purchase across turns");
     }
 
     private static void MarksMultipleMatchingCandidatesUnresolved()
