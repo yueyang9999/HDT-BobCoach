@@ -182,3 +182,70 @@ and preference-free`.
    acceptance.
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+
+## Final Review Remediation: Exact Extension Provenance
+
+The remaining Important review finding is closed in the implementation
+submitted for fresh review. `ISeasonFeatureExtension` now declares its exact
+`GameBuild`, `SeasonId`, and `CardPoolIdentity`. The extractor calls an
+extension only when all three identities are non-empty, non-whitespace, and
+not `unknown` on both the observed state and the extension, and every identity
+matches with `StringComparison.Ordinal`. Any missing, unknown, or mismatched
+identity returns exactly `season_extension_value=0` with coverage `0`.
+
+### TDD Evidence
+
+RED command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_features.ps1
+```
+
+Actual RED result before production changes: `FAIL season extension build
+mismatch value expected=0 actual=7`.
+
+GREEN result after the minimal interface and gate change: `PASS 45 named
+state-action features are deterministic and preference-free`. The regression
+also covers exact matches; build, season, and card-pool mismatches; and each
+state-side and extension-side `unknown` identity.
+
+### Verification
+
+- `tests/test_algorithm_features.ps1`: PASS.
+- `tests/test_value_function_weight_contract.ps1`: PASS.
+- `tests/run_behavior_tests.ps1` with the local HDT 1.54.0 baseline: PASS.
+- `tests/run_contract_tests.ps1` with the local HDT 1.54.0 baseline: PASS.
+- `node tests/test_release_build_contract.js`: PASS, compile set `187`,
+  SHA-256 `35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e`.
+- `tools/build/validate_repository.ps1`: PASS, 402 files scanned.
+- `git diff --check`: PASS.
+- `npm test` with the local HDT 1.54.0 baseline: contract and behavior suites,
+  deterministic Release DLL builds, and deterministic offline ZIP hashes
+  passed. The command exited `1` only when the final AppData installer
+  contract correctly refused to write while `HearthstoneDeckTracker` PID
+  81244 was running; the protected process was not stopped or bypassed.
+
+The behavior suite continues to emit its existing
+`CardSemanticFactSource.CardId` compiler warning and one existing UI contract
+warning. Neither is introduced or suppressed by this remediation.
+
+### Next-Season Data Boundary
+
+1. **Independent of next-season data:** Yes. The change defines provenance
+   identity and a generic exact-match gate; it contains no card, mechanic,
+   pool, weight, or strategy facts.
+2. **Unsupported assumptions:** No trustworthy complete next-season build,
+   season, card-pool, entity, or mechanic fact source currently exists, so no
+   extension value is treated as available without matching provenance.
+3. **Missing-data degradation:** Any empty, whitespace, `unknown`, or
+   mismatched provenance fails closed to value `0` and coverage `0`. The new
+   policy remains Shadow and `legacy-v1.1.0` remains visible and the fallback.
+4. **Engineering-only tests:** These tests prove interface compatibility,
+   deterministic exact matching, and conservative failure closure only. They
+   do not prove strategy quality, accuracy, win rate, placement, or uplift.
+5. **Calibration after data arrives:** Populate extensions only from a
+   trustworthy version-matched fact source, validate the three identities and
+   semantic mappings, then calibrate coverage/confidence/OOD gates using real
+   labeled scenarios while retaining Shadow through effect acceptance.
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。

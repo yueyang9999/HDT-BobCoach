@@ -12,6 +12,7 @@ internal static class AlgorithmFeatureBehavior
         {
             VerifiesSchemaAndUnknownBoundary();
             VerifiesUnverifiedFactsFailClosed();
+            VerifiesSeasonExtensionRequiresExactProvenance();
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
@@ -114,6 +115,60 @@ internal static class AlgorithmFeatureBehavior
             "unknown_effect_count", "simulator_coverage", "stochastic_range", "low_health_x_immediate_power",
             "pair_x_matching_shop", "remaining_gold_x_follow_ups", "target_tier_delta",
         };
+    }
+
+    private static void VerifiesSeasonExtensionRequiresExactProvenance()
+    {
+        var extension = new TestSeasonFeatureExtension("build-verified", "season-verified", "pool-verified", 7d);
+        var extractor = new ActionFeatureExtractor(extension);
+
+        AssertSeasonExtensionAvailable(extractor, State(20), "exact provenance");
+
+        var buildMismatch = State(20);
+        buildMismatch.GameBuild = "build-stale";
+        AssertUnavailable(extractor.Extract(buildMismatch, Buy(buildMismatch),
+            new Simulator().Simulate(buildMismatch, Buy(buildMismatch).Action)),
+            "season_extension_value", "season extension build mismatch");
+
+        var seasonMismatch = State(20);
+        seasonMismatch.SeasonId = "season-stale";
+        AssertUnavailable(extractor.Extract(seasonMismatch, Buy(seasonMismatch),
+            new Simulator().Simulate(seasonMismatch, Buy(seasonMismatch).Action)),
+            "season_extension_value", "season extension season mismatch");
+
+        var cardPoolMismatch = State(20);
+        cardPoolMismatch.CardPoolIdentity = "pool-stale";
+        AssertUnavailable(extractor.Extract(cardPoolMismatch, Buy(cardPoolMismatch),
+            new Simulator().Simulate(cardPoolMismatch, Buy(cardPoolMismatch).Action)),
+            "season_extension_value", "season extension card pool mismatch");
+
+        var unknown = State(20);
+        unknown.GameBuild = "unknown";
+        AssertUnavailable(extractor.Extract(unknown, Buy(unknown),
+            new Simulator().Simulate(unknown, Buy(unknown).Action)),
+            "season_extension_value", "season extension unknown build provenance");
+
+        unknown = State(20);
+        unknown.SeasonId = "unknown";
+        AssertUnavailable(extractor.Extract(unknown, Buy(unknown),
+            new Simulator().Simulate(unknown, Buy(unknown).Action)),
+            "season_extension_value", "season extension unknown season provenance");
+
+        unknown = State(20);
+        unknown.CardPoolIdentity = "unknown";
+        AssertUnavailable(extractor.Extract(unknown, Buy(unknown),
+            new Simulator().Simulate(unknown, Buy(unknown).Action)),
+            "season_extension_value", "season extension unknown card pool provenance");
+
+        AssertSeasonExtensionUnavailable(
+            new TestSeasonFeatureExtension("unknown", "season-verified", "pool-verified", 7d),
+            "season extension unknown extension build provenance");
+        AssertSeasonExtensionUnavailable(
+            new TestSeasonFeatureExtension("build-verified", "unknown", "pool-verified", 7d),
+            "season extension unknown extension season provenance");
+        AssertSeasonExtensionUnavailable(
+            new TestSeasonFeatureExtension("build-verified", "season-verified", "unknown", 7d),
+            "season extension unknown extension card pool provenance");
     }
 
     private static void VerifiesDeterministicPreferenceFreeExtraction()
@@ -225,6 +280,44 @@ internal static class AlgorithmFeatureBehavior
     {
         AssertEqual(0d, vector[feature], label + " value");
         AssertEqual(0d, vector.Coverage[ActionFeatureSchema.IndexOf(feature)], label + " coverage");
+    }
+
+    private static void AssertSeasonExtensionAvailable(ActionFeatureExtractor extractor, GameState state, string label)
+    {
+        var vector = extractor.Extract(state, Buy(state), new Simulator().Simulate(state, Buy(state).Action));
+        AssertEqual(7d, vector["season_extension_value"], label + " value");
+        AssertEqual(1d, vector.Coverage[ActionFeatureSchema.IndexOf("season_extension_value")], label + " coverage");
+    }
+
+    private static void AssertSeasonExtensionUnavailable(ISeasonFeatureExtension extension, string label)
+    {
+        var state = State(20);
+        AssertUnavailable(new ActionFeatureExtractor(extension).Extract(
+            state, Buy(state), new Simulator().Simulate(state, Buy(state).Action)),
+            "season_extension_value", label);
+    }
+
+    private sealed class TestSeasonFeatureExtension : ISeasonFeatureExtension
+    {
+        private readonly double _value;
+
+        public TestSeasonFeatureExtension(string gameBuild, string seasonId, string cardPoolIdentity, double value)
+        {
+            GameBuild = gameBuild;
+            SeasonId = seasonId;
+            CardPoolIdentity = cardPoolIdentity;
+            _value = value;
+        }
+
+        public string GameBuild { get; private set; }
+        public string SeasonId { get; private set; }
+        public string CardPoolIdentity { get; private set; }
+
+        public bool TryEvaluate(GameState state, ActionDescriptor action, GameState nextState, out double value)
+        {
+            value = _value;
+            return true;
+        }
     }
 
     private static void AssertEqual<T>(T expected, T actual, string label)

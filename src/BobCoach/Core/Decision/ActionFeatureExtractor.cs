@@ -33,8 +33,7 @@ namespace BobCoach.Engine.Decision
             var pairDelta = pairCoverage ? PairCount(nextState) - PairCount(state) : 0d;
             var tripleDelta = pairCoverage ? TripleProgress(nextState) - TripleProgress(state) : 0d;
             var seasonValue = 0d;
-            var seasonKnown = HasKnownSeason(state)
-                && string.Equals(state.SeasonId, _seasonExtension.SeasonId, StringComparison.Ordinal)
+            var seasonKnown = HasExactSeasonProvenance(state, _seasonExtension)
                 && _seasonExtension.TryEvaluate(state, action, nextState, out seasonValue);
 
             Set(values, coverage, "turn", state.Turn, 1d);
@@ -112,13 +111,24 @@ namespace BobCoach.Engine.Decision
         private static int Count<T>(ICollection<T> values) { return values == null ? 0 : values.Count; }
         private static double IsBuy(ActionType type) { return type == ActionType.BuyMinion || type == ActionType.BuySpell ? 1d : 0d; }
 
-        private static bool HasKnownSeason(GameState state)
+        private static bool HasExactSeasonProvenance(GameState state, ISeasonFeatureExtension extension)
         {
-            return state != null && !string.IsNullOrEmpty(state.GameBuild) && !string.IsNullOrEmpty(state.SeasonId)
-                && !string.IsNullOrEmpty(state.CardPoolIdentity)
-                && !string.Equals(state.GameBuild, "unknown", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(state.SeasonId, "unknown", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(state.CardPoolIdentity, "unknown", StringComparison.OrdinalIgnoreCase);
+            return state != null && extension != null
+                && IsKnownIdentity(state.GameBuild)
+                && IsKnownIdentity(state.SeasonId)
+                && IsKnownIdentity(state.CardPoolIdentity)
+                && IsKnownIdentity(extension.GameBuild)
+                && IsKnownIdentity(extension.SeasonId)
+                && IsKnownIdentity(extension.CardPoolIdentity)
+                && string.Equals(state.GameBuild, extension.GameBuild, StringComparison.Ordinal)
+                && string.Equals(state.SeasonId, extension.SeasonId, StringComparison.Ordinal)
+                && string.Equals(state.CardPoolIdentity, extension.CardPoolIdentity, StringComparison.Ordinal);
+        }
+
+        private static bool IsKnownIdentity(string identity)
+        {
+            return !string.IsNullOrWhiteSpace(identity)
+                && !string.Equals(identity, "unknown", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool HasResolvedCardIdentities(params IEnumerable<MinionData>[] groups)

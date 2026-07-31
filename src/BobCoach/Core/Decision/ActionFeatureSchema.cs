@@ -52,14 +52,18 @@ namespace BobCoach.Engine.Decision
 
     public interface ISeasonFeatureExtension
     {
+        string GameBuild { get; }
         string SeasonId { get; }
+        string CardPoolIdentity { get; }
         bool TryEvaluate(GameState state, ActionDescriptor action, GameState nextState, out double value);
     }
 
     public sealed class NullSeasonFeatureExtension : ISeasonFeatureExtension
     {
         public static readonly NullSeasonFeatureExtension Instance = new NullSeasonFeatureExtension();
+        public string GameBuild { get { return "unknown"; } }
         public string SeasonId { get { return "none"; } }
+        public string CardPoolIdentity { get { return "unknown"; } }
 
         private NullSeasonFeatureExtension() { }
 
