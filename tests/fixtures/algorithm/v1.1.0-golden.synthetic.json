@@ -1,0 +1,19 @@
+{
+  "benchmarkId": "v1.1.0-golden-synthetic-v1",
+  "policyId": "legacy-v1.1.0",
+  "scenarioSchemaVersion": 1,
+  "scenarios": [
+    {
+      "scenarioId": "synthetic-upgrade-affordable",
+      "gameId": "synthetic-game-1",
+      "capturedAtUtc": "2026-07-31T00:00:00Z",
+      "category": "level",
+      "state": { "gameActive": true, "turn": 2, "gold": 5, "tavernTier": 1, "tavernUpgradeCost": 5 },
+      "candidates": [{ "type": "Upgrade", "targetIndex": -1, "cardId": "", "purchaseSource": "" }],
+      "actionLabels": [{ "actionKey": "Upgrade|-1||", "grade": "preferred" }],
+      "acceptedActionKeys": ["Upgrade|-1||"],
+      "severity": "high-impact",
+      "legacyActionKey": "Upgrade|-1||"
+    }
+  ]
+}

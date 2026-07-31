@@ -11,6 +11,10 @@ This repository contains only the distributable BobCoach plugin for Hearthstone 
 - `tools/build/`: deterministic build and validation tools.
 - `tools/release/`: packaging, manifest, checksum, and release verification tools.
 - `tools/migrate/`: one-time allowlist migration helpers retained for provenance and auditability.
+- `src/BobCoach/Core/Decision/`: new decision contracts, ranking, confidence, planning, fallback, and explanation runtime code.
+- `src/BobCoach/Resources/DecisionModels/`: checksum-validated approved models embedded into the plugin; candidate and rejected models are prohibited.
+- `tests/fixtures/algorithm/`: synthetic, minimal algorithm schemas and fixtures only; no replay-derived states or labels.
+- `tools/model/`: deterministic offline model tooling: Node.js standard-library-only data preparation/training/evaluation plus the C# 7.3 policy benchmark harness compiled by its PowerShell runner; no downloaded runtime or package dependencies.
 - `docs/README.md`: Chinese-first documentation index and authority map for users, maintainers, contributors, policy, and historical records.
 - `docs/user/`: installation, upgrade, rollback, uninstall, privacy, and troubleshooting documentation.
 - `docs/maintainer/`: architecture, dependency, build, release, and maintenance documentation.
@@ -70,5 +74,6 @@ For release candidates, additionally verify offline install, upgrade, rollback, 
 ## Cleanup
 
 - Generated files belong outside the repository or in ignored directories and must be removable without affecting source.
+- Algorithm tools require an explicit external data root outside the repository. Raw replays, labels, datasets, candidate models, acceptance reports, and validation evidence are never written to the repository and must be removable without changing source.
 - Validation evidence stays in the project evidence store, not Git.
 - Before adding a new top-level directory, update this file with its purpose, naming, and cleanup policy.

@@ -1,0 +1,7 @@
+{
+  "scenarioSchemaVersion": 1,
+  "required": ["scenarioId", "gameId", "capturedAtUtc", "category", "state", "candidates", "actionLabels", "acceptedActionKeys", "severity"],
+  "categories": ["level", "refresh", "buy", "sell", "freeze", "play", "transition"],
+  "severities": ["normal", "high-impact", "severe"],
+  "actionGrades": ["preferred", "acceptable", "weak", "severe-error", "not-evaluable"]
+}
