@@ -64,6 +64,7 @@ internal static class AlgorithmBeamPlannerBehavior
         {
             ReturnsExplicitUnavailableExpectedShopEstimate();
             UsesOnlyCompleteVersionMatchedExpectedShopFacts();
+            TreatsAllNullRootsAsNotRequested();
             TraversesDeterministicallyWithinHardBounds();
             IgnoresUncalibratedContinuationScores();
             RetainsBestCompletePathWhenBudgetExpires();
@@ -105,6 +106,16 @@ internal static class AlgorithmBeamPlannerBehavior
 
         var unknown = estimator.Estimate(new GameState { GameBuild = "unknown" });
         AssertTrue(!unknown.IsAvailable, "unresolved build fails closed");
+    }
+
+    private static void TreatsAllNullRootsAsNotRequested()
+    {
+        var result = new BeamPlanner(SyntheticGraph.Deep(), new ExpectedShopEstimator(),
+            new FakeClock(0.01d)).Plan(new GameState(),
+                new RankedAction[] { null, null }, TimeSpan.FromMilliseconds(25));
+
+        AssertEqual(PlannerStatus.NotRequested, result.Status,
+            "all-null roots are not a planning request");
     }
 
     private static void TraversesDeterministicallyWithinHardBounds()

@@ -36,6 +36,8 @@ remains diagnostic-only in production. The unified policy stays in Shadow;
   expected value, inheriting an invented continuation score, or entering the
   completed-path candidates. Null actions and null/terminal transitions also
   fail closed without entering completed-path candidates.
+- A non-empty root list whose entries all filter out as null is treated as not
+  requested before the planner reads the first ordered root.
 - Limited production continuation to deterministic buy, sell, and upgrade
   actions. Production planning cannot replace the originally ranked root, and
   no public constructor exposes a root-replacement switch.
@@ -80,7 +82,7 @@ PASS beam planning is deterministic, bounded, and timeout-safe
 The tests cover unavailable estimates, exact identity matching, fractional
 coverage, score-independent continuation traversal, hard bounds, budget checks
 around each interruptible call boundary, timeout retention, detached states,
-fail-closed refresh/null/unsupported behavior, selective invocation,
+fail-closed refresh/null/unsupported behavior, all-null root input, selective invocation,
 diagnostic-only root selection, and the absence of a public replacement switch.
 
 ### Review Remediation TDD
@@ -104,6 +106,29 @@ The review RED outputs are retained outside the repository at
 `$env:TEMP\bobcoach-task10-review-red.txt` and
 `$env:TEMP\bobcoach-task10-review-red-planner.txt`. The final focused GREEN is
 retained at `$env:TEMP\bobcoach-task10-review-green-final.txt`.
+
+A later fresh review found that a non-empty root list containing only null
+entries became empty after stable filtering and was then indexed. The focused
+P3 RED failed at that access with the localized equivalent of:
+
+```text
+FAIL index out of range (parameter: index)
+```
+
+The RED is retained at `$env:TEMP\bobcoach-task10-null-roots-red.txt`. The
+minimum fix checks `orderedRoots.Count == 0` immediately after filtering and
+returns `PlanningResult.NotRequested()`. The focused GREEN is retained at
+`$env:TEMP\bobcoach-task10-null-roots-green.txt` and reported:
+
+```text
+VALIDATION machine=Ningbing os=Microsoft Windows NT 6.2.9200.0 processors=32 framework=4.0.30319.42000
+LATENCY ranking P50=0.048ms P95=0.072ms P99=0.152ms
+LATENCY planning P50=0.096ms P95=0.203ms P99=0.273ms
+PASS beam planning is deterministic, bounded, and timeout-safe
+```
+
+The machine name is ASCII-normalized in this report; the harness retains the
+host-provided value in the external evidence log.
 
 The ranking latency loop now executes the production `LinearPairwiseRanker`
 over 16 feature vectors for all 1,000 decisions rather than timing a LINQ sort

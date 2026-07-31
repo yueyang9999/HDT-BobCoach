@@ -115,6 +115,7 @@ namespace BobCoach.Engine.Decision
 
             var started = _clock.Elapsed;
             var orderedRoots = StableRank(ranked).Take(RootLimit).ToList();
+            if (orderedRoots.Count == 0) return PlanningResult.NotRequested();
             var rankedRootKey = orderedRoots[0].ActionKey ?? "";
             if (_source == null) return PlanningResult.Unsupported(rankedRootKey);
 
