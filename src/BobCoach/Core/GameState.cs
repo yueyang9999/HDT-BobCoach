@@ -79,6 +79,11 @@ namespace BobCoach.Engine
     {
         public bool GameActive;
         public bool IsDuos;
+        // Rule identities are supplied by the game/runtime integration when available.
+        // A missing identity remains null here and is recorded as explicit "unknown" by the decision snapshot.
+        public string GameBuild;
+        public string SeasonId;
+        public string CardPoolIdentity;
         public string HeroCardId = "";
         public string HeroName = "";
         public string AnomalyId = "";       // 兼容字段: 当前主畸变ID

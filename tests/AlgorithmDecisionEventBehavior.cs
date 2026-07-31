@@ -11,6 +11,9 @@ namespace BobCoach.Engine
     {
         public bool GameActive;
         public bool IsDuos;
+        public string GameBuild;
+        public string SeasonId;
+        public string CardPoolIdentity;
         public string HeroCardId = "";
         public string AnomalyId = "";
         public int Gold;
@@ -86,6 +89,7 @@ internal static class AlgorithmDecisionEventBehavior
         try
         {
             PreservesDetachedPreActionStateAndFingerprints();
+            CapturesRuleIdentitiesAndDistinguishesUnknownValues();
             AppendsIdempotentObservationEventsWithoutQualityLabels();
             ReusesOnlyOpenUnchangedDecisionGenerations();
             RejectsMalformedPriorEventLogs();
@@ -148,6 +152,58 @@ internal static class AlgorithmDecisionEventBehavior
         AssertEqual(2, File.ReadAllLines(path).Length, "persisted created dedupe");
     }
 
+    private static void CapturesRuleIdentitiesAndDistinguishesUnknownValues()
+    {
+        var baseline = State(5, 4);
+        baseline.GameBuild = "12345";
+        baseline.SeasonId = "season-9";
+        baseline.CardPoolIdentity = "pool-9";
+        var baselineRecord = DecisionEventRecord.Create("identity-baseline", "game-1", baseline, Candidates());
+
+        AssertEqual("12345", baselineRecord.State.GameBuild, "snapshot captures game build");
+        AssertEqual("season-9", baselineRecord.State.SeasonId, "snapshot captures season ID");
+        AssertEqual("pool-9", baselineRecord.State.CardPoolIdentity, "snapshot captures card-pool identity");
+
+        var changedBuild = Clone(baseline);
+        changedBuild.GameBuild = "12346";
+        var changedBuildRecord = DecisionEventRecord.Create(
+            "identity-build", "game-1", changedBuild, Candidates());
+        AssertEqual("12346", changedBuildRecord.State.GameBuild,
+            "game build changes the snapshot");
+        AssertTrue(baselineRecord.StateFingerprint != changedBuildRecord.StateFingerprint,
+            "game build changes the state fingerprint");
+
+        var changedSeason = Clone(baseline);
+        changedSeason.SeasonId = "season-10";
+        var changedSeasonRecord = DecisionEventRecord.Create(
+            "identity-season", "game-1", changedSeason, Candidates());
+        AssertEqual("season-10", changedSeasonRecord.State.SeasonId,
+            "season ID changes the snapshot");
+        AssertTrue(baselineRecord.StateFingerprint != changedSeasonRecord.StateFingerprint,
+            "season ID changes the state fingerprint");
+
+        var changedCardPool = Clone(baseline);
+        changedCardPool.CardPoolIdentity = "pool-10";
+        var changedCardPoolRecord = DecisionEventRecord.Create(
+            "identity-pool", "game-1", changedCardPool, Candidates());
+        AssertEqual("pool-10", changedCardPoolRecord.State.CardPoolIdentity,
+            "card-pool identity changes the snapshot");
+        AssertTrue(baselineRecord.StateFingerprint != changedCardPoolRecord.StateFingerprint,
+            "card-pool identity changes the state fingerprint");
+
+        var missing = State(5, 4);
+        missing.GameBuild = null;
+        missing.SeasonId = " ";
+        missing.CardPoolIdentity = "";
+        var unknownRecord = DecisionEventRecord.Create("identity-unknown", "game-1", missing, Candidates());
+        AssertEqual(GameStateSnapshot.UnknownIdentity, unknownRecord.State.GameBuild,
+            "missing game build is explicit unknown");
+        AssertEqual(GameStateSnapshot.UnknownIdentity, unknownRecord.State.SeasonId,
+            "missing season ID is explicit unknown");
+        AssertEqual(GameStateSnapshot.UnknownIdentity, unknownRecord.State.CardPoolIdentity,
+            "missing card-pool identity is explicit unknown");
+    }
+
     private static void ReusesOnlyOpenUnchangedDecisionGenerations()
     {
         var recorder = new DecisionEventRecorder(NewPath());
@@ -208,6 +264,9 @@ internal static class AlgorithmDecisionEventBehavior
         result.Health = state.Health;
         result.MaxHealth = state.MaxHealth;
         result.HeroCardId = state.HeroCardId;
+        result.GameBuild = state.GameBuild;
+        result.SeasonId = state.SeasonId;
+        result.CardPoolIdentity = state.CardPoolIdentity;
         return result;
     }
 

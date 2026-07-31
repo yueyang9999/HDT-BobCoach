@@ -59,6 +59,8 @@ namespace BobCoach.Engine.Decision
 
     public sealed class GameStateSnapshot
     {
+        public const string UnknownIdentity = "unknown";
+
         public bool GameActive { get; private set; }
         public bool IsDuos { get; private set; }
         public string GameBuild { get; private set; }
@@ -92,10 +94,9 @@ namespace BobCoach.Engine.Decision
             {
                 GameActive = state.GameActive,
                 IsDuos = state.IsDuos,
-                // The current HDT contract does not expose these identities separately.
-                GameBuild = "",
-                SeasonId = "",
-                CardPoolIdentity = "",
+                GameBuild = NormalizeIdentity(state.GameBuild),
+                SeasonId = NormalizeIdentity(state.SeasonId),
+                CardPoolIdentity = NormalizeIdentity(state.CardPoolIdentity),
                 HeroCardId = state.HeroCardId ?? "",
                 AnomalyId = state.AnomalyId ?? "",
                 Gold = state.Gold,
@@ -125,6 +126,11 @@ namespace BobCoach.Engine.Decision
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToList();
             return new ReadOnlyCollection<string>(copy);
+        }
+
+        private static string NormalizeIdentity(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? UnknownIdentity : value.Trim();
         }
 
         private static IList<MinionSnapshot> ReadOnlyMinions(IEnumerable<MinionData> values)
