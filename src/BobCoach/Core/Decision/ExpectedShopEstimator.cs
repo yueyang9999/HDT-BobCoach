@@ -21,8 +21,7 @@ namespace BobCoach.Engine.Decision
 
         public static ExpectedShopEstimate Unavailable(string identity)
         {
-            return new ExpectedShopEstimate(false, 0d, 0d,
-                IsResolved(identity) ? identity : "unknown");
+            return new ExpectedShopEstimate(false, 0d, 0d, "unknown");
         }
 
         public static ExpectedShopEstimate Available(double expectedValue, double coverage,

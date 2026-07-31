@@ -15,6 +15,8 @@ $outputDirectory = Join-Path $env:TEMP ("bobcoach_algorithm_beam_planner_{0}" -f
 $output = Join-Path $outputDirectory "AlgorithmBeamPlannerBehavior.exe"
 $sources = @(@(
     "Core\Decision\Contracts.cs",
+    "Core\Decision\ActionFeatureSchema.cs",
+    "Core\Decision\LinearPairwiseRanker.cs",
     "Core\Decision\ExpectedShopEstimator.cs",
     "Core\Decision\BeamPlanner.cs"
 ) | ForEach-Object { Join-Path $root (Join-Path "src\BobCoach" $_) } | Where-Object { Test-Path -LiteralPath $_ })

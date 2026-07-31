@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using BobCoach.Engine;
 using BobCoach.Engine.Decision;
 
@@ -31,6 +32,30 @@ namespace BobCoach.Engine
     }
 }
 
+namespace BobCoach.Engine.Decision
+{
+    public sealed class RankingModelPayload
+    {
+        public double[] Means { get; set; }
+        public double[] StandardDeviations { get; set; }
+        public double[] Weights { get; set; }
+        public double[] ActionTypeBiases { get; set; }
+        public double Intercept { get; set; }
+    }
+
+    public sealed class ActionDescriptor
+    {
+        public GameAction Action { get; private set; }
+        public string ActionKey { get; private set; }
+
+        public ActionDescriptor(GameAction action, string actionKey)
+        {
+            Action = action;
+            ActionKey = actionKey;
+        }
+    }
+}
+
 internal static class AlgorithmBeamPlannerBehavior
 {
     private static int Main()
@@ -40,8 +65,10 @@ internal static class AlgorithmBeamPlannerBehavior
             ReturnsExplicitUnavailableExpectedShopEstimate();
             UsesOnlyCompleteVersionMatchedExpectedShopFacts();
             TraversesDeterministicallyWithinHardBounds();
+            IgnoresUncalibratedContinuationScores();
             RetainsBestCompletePathWhenBudgetExpires();
-            StopsUnavailableRefreshWithoutInventingAStateOrValue();
+            ExcludesUnavailableAndUnsupportedPathsFromCompletedResults();
+            StopsAtEveryInterruptibleBudgetBoundary();
             KeepsProductionPlanningDiagnosticOnly();
             RunsLatencyHarnesses();
             Console.WriteLine("PASS beam planning is deterministic, bounded, and timeout-safe");
@@ -61,6 +88,10 @@ internal static class AlgorithmBeamPlannerBehavior
         AssertEqual(0d, estimate.ExpectedValue, "unavailable expected value");
         AssertEqual(0d, estimate.Coverage, "unavailable coverage");
         AssertEqual("unknown", estimate.Identity, "unavailable identity");
+
+        var resolvedIdentity = ExpectedShopEstimate.Unavailable("known-pool");
+        AssertEqual("unknown", resolvedIdentity.Identity,
+            "unavailable estimate never retains a resolved identity");
     }
 
     private static void UsesOnlyCompleteVersionMatchedExpectedShopFacts()
@@ -82,9 +113,9 @@ internal static class AlgorithmBeamPlannerBehavior
         var ranked = Roots(8);
         var original = new GameState();
         var first = new BeamPlanner(graph, new ExpectedShopEstimator(),
-            new FakeClock(1), true).Plan(original, ranked, TimeSpan.FromMilliseconds(25));
+            new FakeClock(0.01d)).Plan(original, ranked, TimeSpan.FromMilliseconds(25));
         var second = new BeamPlanner(graph, new ExpectedShopEstimator(),
-            new FakeClock(1), true).Plan(new GameState(), ranked, TimeSpan.FromMilliseconds(25));
+            new FakeClock(0.01d)).Plan(new GameState(), ranked, TimeSpan.FromMilliseconds(25));
 
         AssertEqual(PlannerStatus.Completed, first.Status, "completed status");
         AssertEqual(first.ActionKey, second.ActionKey, "deterministic plan");
@@ -99,10 +130,25 @@ internal static class AlgorithmBeamPlannerBehavior
         AssertEqual(0, original.MutationMarker, "simulation states stay detached");
     }
 
+    private static void IgnoresUncalibratedContinuationScores()
+    {
+        var graph = SyntheticGraph.UncalibratedScores();
+        var result = new BeamPlanner(graph, new ExpectedShopEstimator(),
+            new FakeClock(0.01d)).Plan(new GameState(), new[] { Ranked("root", 10d) },
+                TimeSpan.FromMilliseconds(25));
+
+        var expandedChildren = graph.AppliedActionKeys.Skip(1).Take(6).ToList();
+        AssertEqual("root/child-a|root/child-b|root/child-c|root/child-d|root/child-e|root/child-f",
+            string.Join("|", expandedChildren),
+            "continuation traversal uses ordinal keys rather than uncalibrated scores");
+        AssertEqual("root/child-a", result.BestCompletePath[1],
+            "uncalibrated child score cannot select the retained path");
+    }
+
     private static void RetainsBestCompletePathWhenBudgetExpires()
     {
         var result = new BeamPlanner(SyntheticGraph.Deep(), new ExpectedShopEstimator(),
-            new FakeClock(30), true).Plan(new GameState(), Roots(8),
+            new FakeClock(5)).Plan(new GameState(), Roots(8),
                 TimeSpan.FromMilliseconds(25));
 
         AssertEqual(PlannerStatus.TimedOut, result.Status, "timeout status");
@@ -111,17 +157,77 @@ internal static class AlgorithmBeamPlannerBehavior
             "timeout retains bounded roots");
     }
 
-    private static void StopsUnavailableRefreshWithoutInventingAStateOrValue()
+    private static void ExcludesUnavailableAndUnsupportedPathsFromCompletedResults()
     {
         var graph = SyntheticGraph.Deep();
         var refresh = Ranked("refresh", 100d, ActionType.Refresh);
         var result = new BeamPlanner(graph, new ExpectedShopEstimator(),
-            new FakeClock(1), true).Plan(new GameState(), new[] { refresh },
+            new FakeClock(0.01d)).Plan(new GameState(), new[] { refresh },
                 TimeSpan.FromMilliseconds(25));
 
         AssertEqual(PlannerStatus.Completed, result.Status, "unavailable refresh completes safely");
-        AssertEqual(1, result.BestCompletePath.Count, "refresh path terminates at root");
+        AssertEqual(0, result.BestCompletePath.Count,
+            "unavailable refresh is not a completed path");
         AssertEqual(0, graph.ApplyCount, "unavailable refresh is never simulated");
+
+        var unsupported = new BeamPlanner(graph, new ExpectedShopEstimator(),
+            new FakeClock(0.01d)).Plan(new GameState(),
+                new[] { Ranked("discover", 100d, ActionType.PickDiscover) },
+                TimeSpan.FromMilliseconds(25));
+        AssertEqual(0, unsupported.BestCompletePath.Count,
+            "unsupported stochastic action is not a completed path");
+        AssertEqual(0, graph.ApplyCount, "unsupported action is never simulated");
+
+        var nullAction = new BeamPlanner(graph, new ExpectedShopEstimator(),
+            new FakeClock(0.01d)).Plan(new GameState(),
+                new[] { new RankedAction(null, "null-action", 100d, null) },
+                TimeSpan.FromMilliseconds(25));
+        AssertEqual(0, nullAction.BestCompletePath.Count,
+            "null action is not a completed path");
+
+        var nullTransition = new BeamPlanner(SyntheticGraph.NullTransition(),
+            new ExpectedShopEstimator(), new FakeClock(0.01d)).Plan(new GameState(),
+                new[] { Ranked("null-transition", 100d) }, TimeSpan.FromMilliseconds(25));
+        AssertEqual(0, nullTransition.BestCompletePath.Count,
+            "null transition is not a completed path");
+
+        var terminal = new BeamPlanner(SyntheticGraph.Terminal(),
+            new ExpectedShopEstimator(), new FakeClock(0.01d)).Plan(new GameState(),
+                new[] { Ranked("terminal", 100d) }, TimeSpan.FromMilliseconds(25));
+        AssertEqual(0, terminal.BestCompletePath.Count,
+            "terminal transition without a state is not a completed path");
+    }
+
+    private static void StopsAtEveryInterruptibleBudgetBoundary()
+    {
+        var rootGraph = SyntheticGraph.Deep();
+        var rootResult = new BeamPlanner(rootGraph, new ExpectedShopEstimator(),
+            new FakeClock(10d)).Plan(new GameState(), Roots(4),
+                TimeSpan.FromMilliseconds(25));
+        AssertEqual(PlannerStatus.TimedOut, rootResult.Status,
+            "root boundary timeout status");
+        AssertEqual(1, rootGraph.ApplyCount,
+            "budget expiry prevents the next root transition");
+
+        var rankClock = new ManualClock();
+        var rankGraph = SyntheticGraph.AdvanceAfterRank(rankClock, 30d);
+        var rankResult = new BeamPlanner(rankGraph, new ExpectedShopEstimator(), rankClock)
+            .Plan(new GameState(), new[] { Ranked("root", 10d) },
+                TimeSpan.FromMilliseconds(25));
+        AssertEqual(PlannerStatus.TimedOut, rankResult.Status,
+            "post-rank boundary timeout status");
+        AssertEqual(1, rankGraph.ApplyCount,
+            "timeout after ranking prevents a child transition");
+
+        var applyClock = new ManualClock();
+        var applyGraph = SyntheticGraph.AdvanceAfterFirstChildApply(applyClock, 30d);
+        var applyResult = new BeamPlanner(applyGraph, new ExpectedShopEstimator(), applyClock)
+            .Plan(new GameState(), new[] { Ranked("root", 10d) },
+                TimeSpan.FromMilliseconds(25));
+        AssertEqual(PlannerStatus.TimedOut, applyResult.Status,
+            "post-apply boundary timeout status");
+        AssertEqual(2, applyGraph.ApplyCount,
+            "timeout after one child prevents subsequent child transitions");
     }
 
     private static void KeepsProductionPlanningDiagnosticOnly()
@@ -137,16 +243,44 @@ internal static class AlgorithmBeamPlannerBehavior
 
         AssertEqual("ranked-root", result.ActionKey,
             "diagnostic planning cannot replace ranked root");
+
+        var exposesReplacementSwitch = typeof(BeamPlanner).GetConstructors(
+            BindingFlags.Instance | BindingFlags.Public).Any(constructor =>
+                constructor.GetParameters().Any(parameter => parameter.ParameterType == typeof(bool)));
+        AssertTrue(!exposesReplacementSwitch,
+            "production constructors cannot expose root replacement");
     }
 
     private static void RunsLatencyHarnesses()
     {
+        Console.WriteLine("VALIDATION machine={0} os={1} processors={2} framework={3}",
+            Environment.MachineName, Environment.OSVersion, Environment.ProcessorCount,
+            Environment.Version);
+        var featureCount = ActionFeatureSchema.Names.Count;
+        var ranker = new LinearPairwiseRanker(new RankingModelPayload
+        {
+            Means = new double[featureCount],
+            StandardDeviations = Enumerable.Repeat(1d, featureCount).ToArray(),
+            Weights = Enumerable.Repeat(0.01d, featureCount).ToArray(),
+            ActionTypeBiases = new double[ActionTypeBiases.OrderedTypes.Count],
+            Intercept = 0d,
+        });
+        var rankingCandidates = Enumerable.Range(0, 16).Select(index =>
+            new LinearRankedCandidate(new ActionDescriptor(new GameAction
+            {
+                Type = ActionType.BuyMinion,
+                CardId = "candidate-" + index,
+                PurchaseSource = "synthetic",
+                TargetIndex = -1,
+            }, "candidate-" + index), new ActionFeatureVector(
+                Enumerable.Repeat((double)index, featureCount).ToArray(),
+                Enumerable.Repeat(1d, featureCount).ToArray()))).ToList();
+
         var rankingSamples = new List<double>();
         for (var index = 0; index < 1000; index++)
         {
             var stopwatch = Stopwatch.StartNew();
-            Roots(16).OrderByDescending(item => item.Score)
-                .ThenBy(item => item.ActionKey, StringComparer.Ordinal).ToList();
+            ranker.Rank(rankingCandidates);
             stopwatch.Stop();
             rankingSamples.Add(stopwatch.Elapsed.TotalMilliseconds);
         }
@@ -156,7 +290,7 @@ internal static class AlgorithmBeamPlannerBehavior
         {
             var stopwatch = Stopwatch.StartNew();
             new BeamPlanner(SyntheticGraph.Deep(), new ExpectedShopEstimator(),
-                new FakeClock(1), true).Plan(new GameState(), Roots(8),
+                new FakeClock(0.01d)).Plan(new GameState(), Roots(8),
                     TimeSpan.FromMilliseconds(25));
             stopwatch.Stop();
             planningSamples.Add(stopwatch.Elapsed.TotalMilliseconds);
@@ -242,18 +376,68 @@ internal static class AlgorithmBeamPlannerBehavior
         }
     }
 
+    private sealed class ManualClock : IMonotonicElapsedTimeSource
+    {
+        private TimeSpan _elapsed;
+        public TimeSpan Elapsed { get { return _elapsed; } }
+        public void Advance(double milliseconds)
+        {
+            _elapsed += TimeSpan.FromMilliseconds(milliseconds);
+        }
+    }
+
     private sealed class SyntheticGraph : IPlanningTransitionSource
     {
         private readonly bool _replacement;
+        private readonly bool _uncalibratedScores;
+        private readonly ManualClock _clock;
+        private readonly double _advanceAfterRank;
+        private readonly double _advanceAfterFirstChildApply;
+        private readonly bool _nullTransition;
+        private readonly bool _terminal;
         public int ApplyCount { get; private set; }
+        public IList<string> AppliedActionKeys { get; private set; }
 
-        private SyntheticGraph(bool replacement) { _replacement = replacement; }
-        public static SyntheticGraph Deep() { return new SyntheticGraph(false); }
-        public static SyntheticGraph Replacement() { return new SyntheticGraph(true); }
+        private SyntheticGraph(bool replacement = false, bool uncalibratedScores = false,
+            ManualClock clock = null, double advanceAfterRank = 0d,
+            double advanceAfterFirstChildApply = 0d, bool nullTransition = false,
+            bool terminal = false)
+        {
+            _replacement = replacement;
+            _uncalibratedScores = uncalibratedScores;
+            _clock = clock;
+            _advanceAfterRank = advanceAfterRank;
+            _advanceAfterFirstChildApply = advanceAfterFirstChildApply;
+            _nullTransition = nullTransition;
+            _terminal = terminal;
+            AppliedActionKeys = new List<string>();
+        }
+
+        public static SyntheticGraph Deep() { return new SyntheticGraph(); }
+        public static SyntheticGraph Replacement() { return new SyntheticGraph(replacement: true); }
+        public static SyntheticGraph UncalibratedScores()
+        { return new SyntheticGraph(uncalibratedScores: true); }
+        public static SyntheticGraph AdvanceAfterRank(ManualClock clock, double milliseconds)
+        { return new SyntheticGraph(clock: clock, advanceAfterRank: milliseconds); }
+        public static SyntheticGraph AdvanceAfterFirstChildApply(ManualClock clock,
+            double milliseconds)
+        { return new SyntheticGraph(clock: clock, advanceAfterFirstChildApply: milliseconds); }
+        public static SyntheticGraph NullTransition()
+        { return new SyntheticGraph(nullTransition: true); }
+        public static SyntheticGraph Terminal()
+        { return new SyntheticGraph(terminal: true); }
 
         public PlanningTransition Apply(GameState state, RankedAction action)
         {
             ApplyCount++;
+            AppliedActionKeys.Add(action.ActionKey);
+            if (_clock != null && _advanceAfterFirstChildApply > 0d
+                && action.ActionKey.IndexOf("/child-", StringComparison.Ordinal) >= 0
+                && AppliedActionKeys.Count(key => key.IndexOf("/child-",
+                    StringComparison.Ordinal) >= 0) == 1)
+                _clock.Advance(_advanceAfterFirstChildApply);
+            if (_nullTransition) return null;
+            if (_terminal) return PlanningTransition.Terminal();
             return new PlanningTransition(new GameState
             {
                 GameBuild = state.GameBuild,
@@ -267,6 +451,14 @@ internal static class AlgorithmBeamPlannerBehavior
         public IList<RankedAction> Rank(GameState state)
         {
             if (Depth(state) >= 4) return new List<RankedAction>();
+            if (_clock != null && _advanceAfterRank > 0d)
+                _clock.Advance(_advanceAfterRank);
+            if (_uncalibratedScores)
+            {
+                return new[] { "h", "g", "f", "e", "d", "c", "b", "a" }
+                    .Select((suffix, index) => Ranked(state.NodeKey + "/child-" + suffix,
+                        index == 0 ? 1000000d : -index)).ToList();
+            }
             var bonus = _replacement && state.NodeKey == "planned-root" ? 1000d : 0d;
             return Enumerable.Range(0, 8).Select(index => Ranked(
                 state.NodeKey + "/child-" + index, bonus + 20d - index)).ToList();

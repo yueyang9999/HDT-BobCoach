@@ -5,9 +5,9 @@
 Implemented the season-independent expected-shop availability boundary and
 selective deterministic beam planner. Planning is requested only by the Task 9
 confidence gate, is bounded to Top-4 roots, width 6, depth 4, and a 25 ms
-monotonic budget, and remains diagnostic-only in production. The unified policy
-stays in Shadow; `legacy-v1.1.0` remains player visible and is the runtime
-fallback.
+monotonic budget checked at every interruptible synchronous-call boundary, and
+remains diagnostic-only in production. The unified policy stays in Shadow;
+`legacy-v1.1.0` remains player visible and is the runtime fallback.
 
 - Baseline commit: `a387f8e0fc8ac0a6754f47e5cc9330eb027fa984`
 - Final Task 10 commit: the commit containing this report; its SHA is recorded
@@ -25,14 +25,25 @@ fallback.
 - Added `BeamPlanner`, `PlanningResult`, transition and monotonic-clock
   contracts, and explicit completed, timed-out, unsupported, and not-requested
   outcomes.
-- Enforced deterministic ordinal ordering, Top-4 roots, beam width 6, depth 4,
-  detached simulation transitions, and timeout retention of the best observed
-  path.
+- Kept the original Task 8 score ordering only for Top-4 root selection. Child
+  traversal, beam pruning, and retained-path selection use deterministic ordinal
+  path ordering and never compose uncalibrated continuation scores.
+- Enforced beam width 6, depth 4, detached simulation transitions, and timeout
+  retention of the deepest ordinal successful deterministic path observed so
+  far.
 - Unsupported stochastic actions terminate. An unavailable refresh terminates
   without applying a transition, producing a concrete refreshed state, adding
-  expected value, or inheriting an invented continuation score.
+  expected value, inheriting an invented continuation score, or entering the
+  completed-path candidates. Null actions and null/terminal transitions also
+  fail closed without entering completed-path candidates.
 - Limited production continuation to deterministic buy, sell, and upgrade
-  actions. Production planning cannot replace the originally ranked root.
+  actions. Production planning cannot replace the originally ranked root, and
+  no public constructor exposes a root-replacement switch.
+- Checked the budget before and after each root transition, expected-shop
+  estimate, child ranking call, and child transition. These checks stop at all
+  interruptible boundaries; a single synchronous provider, `Rank`, or `Apply`
+  call cannot be preempted, so this implementation does not claim a strict wall
+  clock ceiling while one such call is executing.
 - Integrated planning only when `DecisionConfidenceEvaluator.ShouldPlan` is
   true and exposed the planning status as Shadow diagnostics.
 - Registered the new production sources and behavior harness, and updated the
@@ -59,15 +70,47 @@ After implementation, the focused GREEN output was:
 ```text
 PASS 45 named state-action features are deterministic and preference-free
 PASS confidence floors force explicit safe fallback
-LATENCY ranking P50=0.004ms P95=0.007ms P99=0.010ms
-LATENCY planning P50=0.093ms P95=0.148ms P99=0.254ms
+PASS linear ranker uses one deterministic score surface
+VALIDATION machine=Ningbing os=Microsoft Windows NT 6.2.9200.0 processors=32 framework=4.0.30319.42000
+LATENCY ranking P50=0.050ms P95=0.087ms P99=0.176ms
+LATENCY planning P50=0.106ms P95=0.233ms P99=0.297ms
 PASS beam planning is deterministic, bounded, and timeout-safe
 ```
 
 The tests cover unavailable estimates, exact identity matching, fractional
-coverage, stable traversal, hard bounds, timeout retention, detached states,
-fail-closed refresh behavior, selective invocation, and diagnostic-only root
-selection.
+coverage, score-independent continuation traversal, hard bounds, budget checks
+around each interruptible call boundary, timeout retention, detached states,
+fail-closed refresh/null/unsupported behavior, selective invocation,
+diagnostic-only root selection, and the absence of a public replacement switch.
+
+### Review Remediation TDD
+
+The review-fix RED wave first proved that
+`ExpectedShopEstimate.Unavailable("known-pool")` leaked the resolved identity:
+
+```text
+FAIL unavailable estimate never retains a resolved identity expected=unknown actual=known-pool
+```
+
+After the minimum identity fix, the next RED proved that continuation scores
+were still controlling traversal:
+
+```text
+FAIL continuation traversal uses ordinal keys rather than uncalibrated scores
+expected=root/child-a|...|root/child-f actual=root/child-h|...|root/child-c
+```
+
+The review RED outputs are retained outside the repository at
+`$env:TEMP\bobcoach-task10-review-red.txt` and
+`$env:TEMP\bobcoach-task10-review-red-planner.txt`. The final focused GREEN is
+retained at `$env:TEMP\bobcoach-task10-review-green-final.txt`.
+
+The ranking latency loop now executes the production `LinearPairwiseRanker`
+over 16 feature vectors for all 1,000 decisions rather than timing a LINQ sort
+over pre-scored `RankedAction` objects. It also prints the validation machine,
+OS, processor count, and framework before reporting percentiles. The machine
+name above is ASCII-normalized for the repository report; the harness prints
+the host-provided value directly.
 
 ## Files Changed
 
@@ -94,15 +137,15 @@ selection.
 
 - Focused feature, confidence, linear-ranker, and beam-planner behavior suites:
   PASS.
-- Fresh full `npm test`: PASS in 224.2 seconds with exit code `0`; contract,
+- Fresh full `npm test`: PASS in 225.6 seconds with exit code `0`; contract,
   behavior, release build, and offline package suites completed against the
   configured exact HDT `1.54.0.7376` baseline.
 - Release DLL reproducibility: three builds produced 760832 bytes and SHA-256
-  `5D5CE166B4726AAC6C5D9E03A91C2411C2A62E9047E13B1F641694BF534DDD39`.
+  `72B165A4C626E8811766353F572A11C4E59345E1A20E1C1804435615DF8D9F6C`.
 - Release compile contract: 193 items, SHA-256
   `4fc9305dc8783701d2334d0a6838762c7612e8b721cce5aa2dc901b9111bf807`.
 - `git diff --check`: PASS, with only Git LF-to-CRLF notices.
-- `tools/build/validate_repository.ps1`: scanned 426 Git tracked or untracked
+- `tools/build/validate_repository.ps1`: scanned 427 Git tracked or untracked
   non-ignored files and reported exactly one issue: the pre-existing personal
   absolute path in committed baseline file
   `.superpowers/sdd/algorithm-task-7-report.md`. Task 10 did not modify that
@@ -117,9 +160,10 @@ path limitation, not a production-code bypass.
 ## Next-Season Data Boundary
 
 1. **Independent of next-season data:** Yes. Availability contracts, explicit
-   identity checks, deterministic traversal, state detachment, bounds, timeout
-   handling, stable tie-breaking, selective invocation, and diagnostic-only
-   production integration use no next-season strategy facts.
+   identity checks, score-independent continuation traversal, state detachment,
+   bounds, interruptible-boundary timeout handling, stable tie-breaking,
+   selective invocation, and diagnostic-only production integration use no
+   next-season strategy facts.
 2. **Unsupported assumptions:** Next-season pool membership and copy counts,
    card power, refresh value, economy curves, continuation scoring, and a safe
    root-replacement margin lack trustworthy version-matched evidence. No such
