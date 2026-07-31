@@ -48,9 +48,13 @@ assert.ok(compileItems.includes("Core\\Decision\\ActionFeatureSchema.cs"),
     "versioned action feature schema must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\Decision\\ActionFeatureExtractor.cs"),
     "action feature extractor must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 188, "unexpected compile item count");
+assert.ok(compileItems.includes("Core\\Decision\\LinearPairwiseRanker.cs"),
+    "linear pairwise ranker must be compiled into BobCoach.dll");
+assert.ok(compileItems.includes("Core\\Decision\\UnifiedRankingPolicy.cs"),
+    "unified ranking policy must be compiled into BobCoach.dll");
+assert.strictEqual(compileItems.length, 190, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "0c87d352d926e3e715c0ad305a39a6424ab86c59c9dc3dad491778c82a5b3849",
+    "cd4c0fe24414d968df50fe8904ca2e3876ff22878fb0d381660b9c9f4eec848f",
     "compile set changed");
 
 for (const token of [
