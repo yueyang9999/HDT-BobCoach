@@ -10,6 +10,10 @@ function assertExternalDataRoot(root, repositoryRoot) {
   const relative = path.relative(repo, resolved);
   if (relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..'))
     throw new Error('data root must be outside the repository');
+  const repositoryRelative = path.relative(resolved, repo);
+  if (repositoryRelative !== '' &&
+      !repositoryRelative.startsWith('..' + path.sep) && repositoryRelative !== '..')
+    throw new Error('data root cannot contain repository');
   return resolved;
 }
 function actionKey(action) {
