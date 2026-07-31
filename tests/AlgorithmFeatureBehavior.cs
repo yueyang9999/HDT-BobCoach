@@ -11,6 +11,7 @@ internal static class AlgorithmFeatureBehavior
         try
         {
             VerifiesSchemaAndUnknownBoundary();
+            VerifiesUnverifiedFactsFailClosed();
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
@@ -43,19 +44,10 @@ internal static class AlgorithmFeatureBehavior
         AssertEqual(45, ActionFeatureSchema.Names.Distinct(StringComparer.Ordinal).Count(), "unique names");
         AssertEqual(string.Join("|", expectedNames), string.Join("|", ActionFeatureSchema.Names), "feature order");
 
-        var lowHealthState = State(6);
-        var healthyState = State(30);
-        var lowAction = Buy(lowHealthState);
-        var healthyAction = Buy(healthyState);
         var extractor = new ActionFeatureExtractor();
-        var lowHealth = extractor.Extract(lowHealthState, lowAction,
-            new Simulator().Simulate(lowHealthState, lowAction.Action));
-        var healthy = extractor.Extract(healthyState, healthyAction,
-            new Simulator().Simulate(healthyState, healthyAction.Action));
-
-        AssertTrue(lowHealth["low_health_x_immediate_power"] != healthy["low_health_x_immediate_power"],
-            "interaction");
-        AssertEqual(lowHealth.Values.Length, lowHealth.Coverage.Length, "coverage per feature");
+        var state = State(6);
+        var vector = extractor.Extract(state, Buy(state), new Simulator().Simulate(state, Buy(state).Action));
+        AssertEqual(vector.Values.Length, vector.Coverage.Length, "coverage per feature");
         AssertTrue(!ActionFeatureSchema.Names.Any(x => x.Contains("preference")), "no player preference");
 
         var unknownState = State(20);
@@ -76,6 +68,52 @@ internal static class AlgorithmFeatureBehavior
             new Simulator().Simulate(unknownEntityState, Buy(unknownEntityState).Action));
         AssertEqual(0d, unknownEntity.Coverage[ActionFeatureSchema.IndexOf("pair_count_delta")],
             "unknown entity pair coverage");
+    }
+
+    private static void VerifiesUnverifiedFactsFailClosed()
+    {
+        var state = State(6);
+        state.BoardMinions.Add(new MinionData { CardId = "CARD_A", Attack = 2, Health = 2, Tier = 2 });
+        state.BoardMinions.Add(new MinionData { CardId = "CARD_A", Attack = 2, Health = 2, Tier = 2 });
+        var action = Buy(state);
+        var next = new Simulator().Simulate(state, action.Action);
+        next.BoardMinions.Add(new MinionData
+        {
+            CardId = "CARD_A", Attack = 4, Health = 5, Tier = 2, Taunt = true,
+        });
+        var extractor = new ActionFeatureExtractor();
+        var normalLooking = extractor.Extract(state, action, next);
+
+        foreach (var feature in UnverifiedSemanticFeatures())
+            AssertUnavailable(normalLooking, feature, "unverified " + feature);
+
+        var unknownVersionState = State(6);
+        unknownVersionState.GameBuild = "unknown";
+        unknownVersionState.SeasonId = "unknown";
+        unknownVersionState.CardPoolIdentity = "unknown";
+        var unknownVersion = extractor.Extract(unknownVersionState, Buy(unknownVersionState),
+            new Simulator().Simulate(unknownVersionState, Buy(unknownVersionState).Action));
+        foreach (var feature in UnverifiedSemanticFeatures())
+            AssertUnavailable(unknownVersion, feature, "unknown version " + feature);
+
+        var unknownEntityState = State(6);
+        unknownEntityState.ShopMinions[0].CardId = "unknown";
+        unknownEntityState.ShopMinions[0].Taunt = true;
+        var unknownEntity = extractor.Extract(unknownEntityState, Buy(unknownEntityState),
+            new Simulator().Simulate(unknownEntityState, Buy(unknownEntityState).Action));
+        AssertUnavailable(unknownEntity, "immediate_keyword_delta", "unknown entity keyword delta");
+        AssertUnavailable(unknownEntity, "pair_x_matching_shop", "unknown entity pair matching");
+        AssertUnavailable(unknownEntity, "target_tier_delta", "unknown entity target tier");
+    }
+
+    private static IEnumerable<string> UnverifiedSemanticFeatures()
+    {
+        return new[]
+        {
+            "immediate_keyword_delta", "wasted_gold", "legal_follow_up_count", "playable_follow_up_count",
+            "unknown_effect_count", "simulator_coverage", "stochastic_range", "low_health_x_immediate_power",
+            "pair_x_matching_shop", "remaining_gold_x_follow_ups", "target_tier_delta",
+        };
     }
 
     private static void VerifiesDeterministicPreferenceFreeExtraction()
@@ -181,6 +219,12 @@ internal static class AlgorithmFeatureBehavior
     private static void AssertTrue(bool value, string label)
     {
         if (!value) throw new InvalidOperationException(label);
+    }
+
+    private static void AssertUnavailable(ActionFeatureVector vector, string feature, string label)
+    {
+        AssertEqual(0d, vector[feature], label + " value");
+        AssertEqual(0d, vector.Coverage[ActionFeatureSchema.IndexOf(feature)], label + " coverage");
     }
 
     private static void AssertEqual<T>(T expected, T actual, string label)

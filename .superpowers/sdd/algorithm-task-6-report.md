@@ -99,3 +99,86 @@ Result: `PASS 45 named state-action features are deterministic and preference-fr
 ## Required Conclusion
 
 新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+
+## Review Remediation: Version-Matched Fact Boundary
+
+The review found that `ActionFeatureExtractor` treated static `ActionType`
+defaults, default rule evaluation, raw keyword flags, raw card identifiers,
+and a target tier as verified semantic facts. None of those sources proves a
+build/season/card-pool matched effect, cost, entity identity, or mechanic.
+
+The correction is deliberately fail-closed. Until a trustworthy,
+version-matched fact provider is introduced, these features now return exactly
+`value=0` and `coverage=0`: `immediate_keyword_delta`, `wasted_gold`,
+`legal_follow_up_count`, `playable_follow_up_count`, `unknown_effect_count`,
+`simulator_coverage`, `stochastic_range`, `low_health_x_immediate_power`,
+`pair_x_matching_shop`, `remaining_gold_x_follow_ups`, and
+`target_tier_delta`. `remaining_gold_x_follow_ups` was also closed because it
+derives directly from the unavailable follow-up count.
+
+### TDD Evidence
+
+RED command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_features.ps1
+```
+
+Actual RED result: `FAIL unverified immediate_keyword_delta value expected=0
+actual=1`. The new regression constructs a normal-looking build/season/card
+pool with raw keyword, entity, target-tier, and follow-up inputs, then repeats
+the boundary for `unknown` build/season/card-pool and an `unknown` entity.
+
+GREEN command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_algorithm_features.ps1
+```
+
+Actual GREEN result: `PASS 45 named state-action features are deterministic
+and preference-free`.
+
+### Remediation Verification
+
+- `tests/test_algorithm_features.ps1`: PASS.
+- `tests/test_value_function_weight_contract.ps1`: PASS.
+- `node tests/test_release_build_contract.js`: PASS, compile set `187` and
+  SHA-256 `35be313ad1bd209dfb4838421ff69cd386124544b2776952dca508e3c6dbe29e`.
+- `tools/build/validate_repository.ps1`: PASS, 402 files scanned.
+- `git diff --check`: PASS before report/staging; rerun after report and
+  staging is required before commit.
+- `npm test` with the local HDT 1.54.0 baseline: contract suite, behavior
+  suite, three deterministic Release DLL builds, and deterministic offline ZIP
+  hashes passed. The final temporary AppData installer contract failed because
+  the running `HearthstoneDeckTracker` process (PID 81244) correctly prevented
+  the installer from writing. The process was not stopped.
+
+### Self-Review
+
+- The extractor no longer uses `SimulatorSupport`, default costs/rules, raw
+  keyword flags, target tiers, or raw shop matching to create semantic
+  coverage.
+- `unknown_effect_count` no longer counts unrelated `nextState` board items;
+  without a version-matched effect/affected-entity source it is unavailable.
+- Direct structural observations remain unchanged. No card, mechanic, cost, or
+  season facts were invented, and no dependency was added.
+
+### Next-Season Data Boundary (Remediation)
+
+1. **Independent of next-season data:** Yes. This change removes unverified
+   inference and requires a future fact source rather than adding data.
+2. **Unsupported assumptions:** Version-matched effect support, stochasticity,
+   costs, legal targets, affected entities, keyword mechanics, entity identity,
+   target tiers, and shop matching remain unverified.
+3. **Missing-data degradation:** Each affected feature is exactly `0/0`; the
+   decision path continues to use Shadow observation with `legacy-v1.1.0` as
+   the visible policy and fallback.
+4. **Engineering-only tests:** The regressions prove failure closure,
+   determinism, schema stability, and detached simulation behavior only. They
+   make no claim about decision quality, win rate, or placement.
+5. **Calibration after data:** Add a trustworthy version-matched fact provider,
+   validate every effect/entity/rule mapping, calibrate coverage and confidence
+   on real labeled scenarios, then retain the new policy in Shadow until effect
+   acceptance.
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
