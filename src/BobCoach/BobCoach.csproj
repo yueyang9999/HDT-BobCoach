@@ -139,6 +139,9 @@
     <Compile Include="Core\Decision\CandidateGenerator.cs" />
     <Compile Include="Core\Decision\HardConstraintFilter.cs" />
     <Compile Include="Core\Decision\LegacyDecisionPolicy.cs" />
+    <Compile Include="Core\Decision\DecisionEventRecord.cs" />
+    <Compile Include="Core\Decision\DecisionEventRecorder.cs" />
+    <Compile Include="Core\Decision\DecisionLifecycleTracker.cs" />
     <Compile Include="Core\HeroPowerDisplayTextResolver.cs" />
     <Compile Include="Core\CardNameService.cs" />
     <Compile Include="Core\HearthDbCardIdentitySource.cs" />
