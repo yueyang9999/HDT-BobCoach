@@ -52,6 +52,35 @@ Do not commit:
 - Prefer deterministic scripts with explicit inputs and outputs. Release packaging must enforce an exact file allowlist and publish a SHA-256 checksum.
 - Add or update tests for behavior changes. Do not bypass failures with suppression flags or commented-out code.
 
+## Next-Season Algorithm Data Boundary
+
+Until reliable, complete, version-matched next-season data is available, algorithm work must follow a conservative data-insufficiency policy:
+
+- Implement only season-independent infrastructure: stable candidates, hard constraints, versioned features, Shadow comparison, model validation, confidence, coverage, OOD detection, deterministic planning, explanations, and legacy fallback.
+- Do not invent or infer next-season cards, heroes, spells, trinkets, mechanics, card pools, balance values, composition strength, refresh value, economy curves, weights, or labeled scenarios.
+- Mark unknown build, season, card pool, entity, and mechanic inputs explicitly as `unknown`; reduce confidence and fall back to `legacy-v1.1.0` when the decision gate requires it.
+- Keep every uncalibrated new policy in `Shadow`. `legacy-v1.1.0` remains the player-visible policy and runtime fallback until effect acceptance passes.
+- Treat player actions as observation events only, never as correctness labels or training labels.
+- Synthetic and prior-season data may test interfaces, boundaries, determinism, performance, and regressions, but may not support claims about next-season decision quality.
+- Claims of improved accuracy, win rate, placement, or decision quality require real, trustworthy, version-matched labeled scenarios. Without sufficient evidence, report only engineering readiness or `blocked-by-season-data`.
+- Data-dependent work must implement its interfaces, gates, and fallback path, then remain `blocked-by-season-data`; do not fabricate substitute data.
+- Prefer low-cost, locally maintainable implementation. Do not add cloud inference, paid APIs, heavyweight model runtimes, or unnecessary dependencies.
+
+Each algorithm task report must answer:
+
+1. Is the change independent of next-season data?
+2. Which assumptions currently lack evidence?
+3. How does the system degrade when data is missing?
+4. Which tests prove engineering correctness only, not strategy superiority?
+5. What calibration remains after real next-season data becomes available?
+
+Algorithm acceptance has two separate gates:
+
+- Engineering acceptance: determinism, performance, compatibility, privacy, fallback, and Shadow recording.
+- Effect acceptance: at least 300 trustworthy, version-matched labeled scenarios, Shadow comparison, and human review.
+
+Before effect acceptance passes, the required conclusion is: `新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。`
+
 ## Validation
 
 Before considering a change complete, run the repository validation commands documented in `docs/maintainer/BUILD.md`. At minimum, validation must cover:
