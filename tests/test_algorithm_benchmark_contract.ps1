@@ -323,6 +323,7 @@ try {
         "candidateLatencyIncludesLegacyFallback", "missingCandidateDecisionRejected",
         "protocolUnderscoreFieldsChecksumBound",
         "protocolNumericCanonicalizationCrossLanguage",
+        "protocolUnsafeIntegerRejected",
         "productionSelectedActionDistinctFromPlannerDiagnostic",
         "modelUnavailableCandidateSourceRejected", "candidateProbeNoneSourceRejected",
         "orchestratedSafetyOutcomesObserved")) {

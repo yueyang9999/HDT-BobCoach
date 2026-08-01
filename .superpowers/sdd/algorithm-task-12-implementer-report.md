@@ -311,6 +311,55 @@ effect metric. The Task 12 result remains `blocked-by-season-data`; Unified
 ranking remains Shadow and `legacy-v1.1.0` remains player-visible and the
 fallback.
 
+## Unsafe-integer Fresh-review Repair (2026-08-01)
+
+The remaining Minor review finding was an evidence gap: the production C# and
+JavaScript protocol loaders rejected integers outside JavaScript's safe range,
+but the focused contracts did not dynamically prove both production paths.
+
+### RED
+
+- With the JavaScript production safe-integer guard temporarily removed, the
+  evaluator contract failed with `Missing expected exception: production
+  protocol loader must reject integers outside the JavaScript safe range`.
+- With the C# production safe-integer guard temporarily removed, the benchmark
+  contract failed with `self-test did not dynamically prove
+  protocolUnsafeIntegerRejected`.
+- Both mutations were restored before the GREEN and full-suite runs.
+
+### GREEN and final verification
+
+- `tests/test_algorithm_evaluation.js` now passes an unsafe integer through the
+  production `loadExternalProtocolContext` path and requires a fail-closed
+  `not safely representable` error.
+- `PolicyBenchmarkRunner --self-test` passes an unsafe integer through the
+  production `CanonicalJson` path and reports
+  `protocolUnsafeIntegerRejected: true`; the PowerShell benchmark contract
+  requires that field.
+- `node tests/test_algorithm_evaluation.js`, `node
+  tests/test_algorithm_workspace_contract.js`, `node
+  tests/test_offline_runtime_contract.js`, and
+  `tests/test_algorithm_benchmark_contract.ps1` passed.
+- `npm test`, with the external HDT 1.54.0.7376 reference supplied through the
+  process-local `BOBCOACH_HDT_DIR`, exited 0 in 240 seconds. Its 337-line stdout
+  log contains 138 `PASS` lines and no failure-pattern matches; stderr is empty.
+  The logs are
+  `E:\HDT-BobCoach-evidence\verification\task12-unsafe-integer-npm-test.stdout.log`
+  and
+  `E:\HDT-BobCoach-evidence\verification\task12-unsafe-integer-npm-test.stderr.log`.
+- An independent Release build in
+  `E:\HDT-BobCoach-evidence\builds\task12-unsafe-integer-20260801-1430`
+  produced `BobCoach.dll` at `784384` bytes with SHA-256
+  `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+- `tools/build/validate_repository.ps1` passed with 448 tracked or untracked,
+  non-ignored files scanned. `git diff --check` and
+  `git diff --cached --check` exited 0 before this report update.
+
+This test-only repair does not alter runtime policy or season-data status. No
+model was trained, generated, copied, embedded, or activated. Task 12 remains
+`blocked-by-season-data`; Unified ranking remains Shadow and
+`legacy-v1.1.0` remains player-visible and the fallback.
+
 ## Required Conclusion
 
 “新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”

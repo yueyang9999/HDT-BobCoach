@@ -294,6 +294,13 @@ internal static class PolicyBenchmarkRunner
                 StringComparison.Ordinal)
             && string.Equals(CanonicalJson(canonicalExponent), expectedNumericCanonical,
                 StringComparison.Ordinal);
+        var protocolUnsafeIntegerRejected = false;
+        try {
+            CanonicalJson(JObject.Parse("{\"threshold\":9007199254740992}"));
+        }
+        catch (InvalidDataException exception) {
+            protocolUnsafeIntegerRejected = exception.Message.Contains("not safely representable");
+        }
         if (!identityMismatchRejected || !unknownEnumRejected || !incompleteProbeSetRejected)
             throw new InvalidOperationException("self-test fail-closed contracts were not exercised");
         WriteJson(output, "self-test-contracts.json", new JObject {
@@ -311,6 +318,7 @@ internal static class PolicyBenchmarkRunner
             { "protocolUnderscoreFieldsChecksumBound", protocolUnderscoreFieldsChecksumBound },
             { "protocolNumericCanonicalizationCrossLanguage",
                 protocolNumericCanonicalizationCrossLanguage },
+            { "protocolUnsafeIntegerRejected", protocolUnsafeIntegerRejected },
             { "orchestratedSafetyOutcomesObserved",
                 safety["probes"].All(value => (bool)value["passed"]) }
         });

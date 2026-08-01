@@ -286,6 +286,11 @@ for (const numericSpelling of ['1.0', '1e0']) {
   assert(evaluate(protocolInput, numericProtocol).evaluationProtocol,
     `protocol numeric spelling ${numericSpelling} must use the cross-language canonical hash`);
 }
+assert.throws(() => protocolContextFor(protocolInput, () => {}, raw => raw.replace(
+  '"planningThreshold":0.5',
+  '"planningThreshold":9007199254740992')),
+/not safely representable/i,
+'production protocol loader must reject integers outside the JavaScript safe range');
 
 const trustedProtocolContext = protocolContextFor(protocolInput);
 assert(Object.isFrozen(trustedProtocolContext), 'loaded protocol context must be immutable');
