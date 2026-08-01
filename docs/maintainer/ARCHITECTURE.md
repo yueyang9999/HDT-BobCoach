@@ -15,6 +15,29 @@ HDT-BobCoach 是运行在用户已安装 Hearthstone Deck Tracker (HDT) 中的 x
 
 生产 DLL 只嵌入样式 XAML，不嵌入 JSON 数据资源。卡牌、英雄和规则事实由用户本机 HDT 提供的 HearthDb 在调用栈内解析；无法确认的事实应失败关闭。
 
+## 新算法策略边界
+
+新算法基础设施与玩家可见策略是两个独立边界。`DecisionPolicyFactory` 为每个组合只创建一个生产 `CandidateGenerator`，并将同一候选语义交给冻结的 `legacy-v1.1.0` 与 Unified 策略。`DecisionOrchestrator` 当前固定使用 `Shadow`：先计算 legacy，再计算 Unified 并记录版本化对比，最终仍返回 legacy。无录制场景使用 `NoOpShadowComparisonSink`；对局录制严格按开始、决策、观察动作、结束/中止的生命周期写入，不能由离线 benchmark 启用。
+
+```text
+GameStateExtractor
+    -> DecisionPolicyFactory
+        -> CandidateGenerator (唯一生产实例)
+        -> legacy-v1.1.0
+        -> UnifiedRankingPolicy
+    -> DecisionOrchestrator (Shadow)
+        -> ShadowComparison
+        -> legacy-v1.1.0 玩家可见推荐与回退
+```
+
+仓库当前没有 `Resources/DecisionModels`，也没有被接受或激活的候选模型。模型缺失、内容校验失败或预期的读取 `IOException` 只使 Unified 降级为 `ModelUnavailable`；其他程序错误继续抛出。效果验收工具不会训练、复制、嵌入或激活模型，也不返回激活决定。
+
+`ActionFeatureSchema` 拥有冻结的特征名称、顺序和版本；`ActionFeatureExtractor` 拥有基础特征语义，`ISeasonFeatureExtension` 只能在版本化扩展槽中补充赛季事实。`ProfileEngine` 是旧 UI/策略画像路径，不参与 Unified 质量排序。解释由入选动作中已知、有限的特征贡献生成，不公开模型权重，也不为缺失事实臆造理由。
+
+置信度门禁按以下顺序失败关闭：模型与校准不可用、关键状态缺失、机制覆盖不足、分布外、低置信度、无安全动作。规划超时不是 fallback reason；它保留已完成的最佳安全路径并报告 `PlannerStatus.TimedOut`。任何身份、schema、checksum 或证据不匹配都不能越过该顺序。
+
+离线效果证据流只读取仓库外、系统盘外的数据根目录：专家标签和同状态指纹进入 baseline/candidate runner，得到预测 JSONL、延迟 JSON 和安全探针 JSON，再由 evaluator 生成外部 acceptance report。合成数据只验证序列化、配对、延迟采样和失败关闭；至少 300 个真实、可信、版本匹配的专家标注场景、代表性 Shadow 对比和逐项人工严重错误复核全部具备前，`effectAcceptanceStatus` 固定为 `blocked-by-season-data`，效果指标保持 `null`。
+
 ## 数据与网络
 
 核心决策在本机运行。插件可读取本地 HDT/游戏状态、`Power.log`、`log.config` 和 `%APPDATA%\bob-coach` 的自身数据。写入 `log.config` 必须经过 HDT 内可见的变更预览和明确确认。
@@ -52,6 +75,7 @@ Karazhan Chess Set (`BG30_MagicItem_972`) 在随从与手牌开战效果完成�
 - `src/BobCoach/`: 生产插件和唯一嵌入资源。
 - `tests/`: 合同、行为、离线包与安装生命周期测试。
 - `tools/build/`: 构建和仓库验证工具。
+- `tools/model/`: 仓库外算法数据的合同、工程自测、benchmark 与效果验收入口；不存放模型或真实证据。
 - `tools/release/`: 离线包、安装、卸载与生命周期验证工具。
 - `docs/user/`: 用户生命周期文档。
 - `docs/maintainer/`: 维护与发布规则。

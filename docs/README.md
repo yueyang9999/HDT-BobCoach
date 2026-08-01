@@ -20,6 +20,7 @@
 ## 维护者
 
 - [架构说明](maintainer/ARCHITECTURE.md)
+- [新算法策略与证据边界](maintainer/ARCHITECTURE.md#新算法策略边界)
 - [构建说明](maintainer/BUILD.md)
 - [依赖说明](maintainer/DEPENDENCIES.md)
 - [发布流程](maintainer/RELEASE.md)
@@ -54,6 +55,8 @@
 - [双语 README 实施计划（2026-07-21）](superpowers/plans/2026-07-21-bilingual-readme.md)
 - [中文下载指引实施计划（2026-07-21）](superpowers/plans/2026-07-21-chinese-download-guidance.md)
 - [仓库文档与数据来源治理实施计划（2026-07-21）](superpowers/plans/2026-07-21-repository-documentation-and-data-source-governance.md)
+- [新赛季算法基础设施优化设计（2026-07-31）](superpowers/specs/2026-07-31-next-season-algorithm-optimization-design.md)
+- [新赛季算法基础设施优化实施计划（2026-07-31）](superpowers/plans/2026-07-31-next-season-algorithm-optimization.md)
 
 ## 包内文档模板
 

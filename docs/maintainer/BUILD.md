@@ -35,6 +35,85 @@ git diff --check
 
 日常更新应先按 [更新版本验证流程](UPDATE_VALIDATION.md) 判定变更等级：开发中可使用与风险匹配的快速反馈，合并前仍需执行本节完整门禁；只有最终候选版本才进入对应的 VM 验收矩阵。
 
+## 算法证据门禁
+
+算法数据、模型候选和验收报告必须位于仓库外且不能在系统盘。推荐布局如下；这些目录不进入构建输出、安装包或 Git：
+
+```text
+<BOBCOACH_DATA_ROOT>/
+  inputs/decision-events.jsonl
+  labels/scenarios-v1.jsonl
+  probes/fallback-scenarios-v1.jsonl
+  datasets/pairs-v1.jsonl
+  splits/train.jsonl
+  splits/validation.jsonl
+  splits/holdout.jsonl
+  models/candidates/
+  evidence/linear-v1/
+    baseline-predictions.jsonl
+    candidate-predictions.jsonl
+    latency.json
+    safety-probes.json
+  reports/linear-v1-acceptance.json
+```
+
+工程自测不需要真实数据，只验证生产组合面、确定性输出和 evaluator 的失败关闭：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\test_algorithm_benchmark_contract.ps1
+node .\tests\test_algorithm_evaluation.js
+```
+
+`-SelfTest` 使用 fake policy 和合成状态，不代表策略提升。当前 `train_pairwise.js` 的 CLI 只校验外部、版本匹配输入，随后以 `blocked-by-season-data` 退出；它不会生成候选模型。不得把其单元测试内存结果当作生产候选。
+
+以下真实证据命令仅在至少 300 个去重、真实、可信、版本匹配的专家标注高影响场景、代表性 Shadow 对比和人工 severe-error review 全部具备后运行。`labels/scenarios-v1.jsonl` 每行必须携带一致的 `benchmarkId`、schema、build/season/card-pool identity 及证据复核布尔字段；完整游戏不能跨 partition。阈值必须在打开 holdout 结果前由所有者批准并冻结。
+
+```powershell
+$dataRoot = [IO.Path]::GetFullPath($env:BOBCOACH_DATA_ROOT)
+
+# 生成训练 pair；当前训练 CLI 仍会失败关闭且不产出模型。
+node .\tools\model\build_pairs.js --data-root $dataRoot `
+  --scenarios "$dataRoot\labels\scenarios-v1.jsonl" `
+  --output "$dataRoot\datasets\pairs-v1.jsonl"
+node .\tools\model\train_pairwise.js --data-root $dataRoot `
+  --input "$dataRoot\datasets\pairs-v1.jsonl"
+
+# 只有另行批准并已存在的 checksum-valid 外部候选才可进入 benchmark。
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\model\run_policy_benchmark.ps1 `
+  -DataRoot $dataRoot `
+  -Scenarios "labels\scenarios-v1.jsonl" `
+  -SafetyProbes "probes\fallback-scenarios-v1.jsonl" `
+  -CandidateModel "models\candidates\linear-v1.json" `
+  -OutputDirectory "evidence\linear-v1" `
+  -HdtDirectory $env:BOBCOACH_HDT_DIR
+
+node .\tools\model\evaluate_policy.js `
+  --data-root $dataRoot `
+  --scenarios "labels\scenarios-v1.jsonl" `
+  --baseline-evidence "evidence\linear-v1\baseline-predictions.jsonl" `
+  --candidate-evidence "evidence\linear-v1\candidate-predictions.jsonl" `
+  --latency-evidence "evidence\linear-v1\latency.json" `
+  --safety-evidence "evidence\linear-v1\safety-probes.json" `
+  --output "reports\linear-v1-acceptance.json"
+```
+
+当前缺少合格真实证据，因此效果状态保持 `blocked-by-season-data`、`metrics: null`。evaluator 仅在至少 300 个真实、可信、版本匹配标注场景、代表性 Shadow 对比和人工 severe-error review 全部具备后计算指标；无论结果如何都不返回 activation decision。新策略继续保持 Shadow，`legacy-v1.1.0` 保持玩家可见推荐和回退。未来即使效果门禁通过，嵌入模型和切换玩家可见策略也分别需要新的所有者批准与发布变更。
+
+### 新赛季清单
+
+```text
+1. Update state extraction and season mechanic semantics.
+2. Mark unknown mechanics unsupported until tests define coverage.
+3. Keep unified ranking in shadow mode.
+4. Label current-season disagreements in high-impact categories.
+5. Freeze owner-approved effect thresholds before opening the current-season holdout, then run the effect-acceptance interface.
+6. Keep the candidate in Shadow regardless of effect status; embedding and visible takeover each require later, separately approved work.
+7. While data is incomplete or any review fails, retain blocked-by-season-data, keep the report external, commit only reusable tools/docs, and leave the model resource absent.
+8. Roll back by selecting LegacyOnly and retaining the last approved model.
+```
+
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+
 ## 离线包
 
 在干净输出目录中构建：

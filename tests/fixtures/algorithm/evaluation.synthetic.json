@@ -1,0 +1,101 @@
+{
+  "evidenceKind": "engineering-self-test",
+  "benchmarkId": "season-2026-next-v1",
+  "scenarioSchemaVersion": 1,
+  "buildIdentity": "synthetic-build",
+  "seasonIdentity": "synthetic-season",
+  "cardPoolIdentity": "synthetic-pool",
+  "realTrustworthyVersionMatchedExpertLabels": false,
+  "shadowComparisonsRepresentative": false,
+  "humanSevereErrorReviewComplete": false,
+  "scenarios": [
+    {
+      "scenarioId": "synthetic-scenario-0001",
+      "gameId": "synthetic-game-0001",
+      "category": "level",
+      "severity": "high-impact",
+      "capturedAtUtc": "2026-07-31T00:00:00Z",
+      "state": {"gameActive":true,"gameBuild":"synthetic-build","seasonId":"synthetic-season","cardPoolIdentity":"synthetic-pool"},
+      "candidates": [
+        {"type":"Upgrade","targetIndex":-1,"cardId":"","purchaseSource":""},
+        {"type":"Buy","targetIndex":0,"cardId":"CARD_001","purchaseSource":"shop"},
+        {"type":"Sell","targetIndex":0,"cardId":"CARD_002","purchaseSource":"board"}
+      ],
+      "stateFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidateFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actionLabels": [
+        {"actionKey":"Upgrade|-1||","grade":"preferred"},
+        {"actionKey":"Buy|0|CARD_001|shop","grade":"weak"},
+        {"actionKey":"Sell|0|CARD_002|board","grade":"severe-error"}
+      ],
+      "acceptedActionKeys": ["Upgrade|-1||"]
+    }
+  ],
+  "baselinePredictions": [
+    {
+      "evidenceSchemaVersion": 1,
+      "benchmarkId": "season-2026-next-v1",
+      "scenarioId": "synthetic-scenario-0001",
+      "gameId": "synthetic-game-0001",
+      "stateFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidateFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "policyId": "legacy-v1.1.0",
+      "modelId": "unknown",
+      "modelPayloadSha256": "unknown",
+      "selectedActionKey": "Upgrade|-1||",
+      "topActionKeys": ["Upgrade|-1||"],
+      "confidence": 1.0,
+      "plannerStatus": "NotRequested",
+      "fallbackReason": "None"
+    }
+  ],
+  "candidatePredictions": [
+    {
+      "evidenceSchemaVersion": 1,
+      "benchmarkId": "season-2026-next-v1",
+      "scenarioId": "synthetic-scenario-0001",
+      "gameId": "synthetic-game-0001",
+      "stateFingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
+      "candidateFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "policyId": "unified-linear-v1",
+      "modelId": "synthetic-model",
+      "modelPayloadSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "selectedActionKey": "Upgrade|-1||",
+      "topActionKeys": ["Upgrade|-1||"],
+      "confidence": 1.0,
+      "plannerStatus": "NotRequested",
+      "fallbackReason": "None"
+    }
+  ],
+  "latencyEvidence": {
+    "latencyEvidenceSchemaVersion": 1,
+    "benchmarkId": "season-2026-next-v1",
+    "measurementsPerPolicyPerScenario": 10,
+    "scenarios": [
+      {
+        "scenarioId": "synthetic-scenario-0001",
+        "baselineSamplesMilliseconds": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "candidateSamplesMilliseconds": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "baselineP50Milliseconds": 0,
+        "baselineP95Milliseconds": 0,
+        "baselineP99Milliseconds": 0,
+        "candidateP50Milliseconds": 0,
+        "candidateP95Milliseconds": 0,
+        "candidateP99Milliseconds": 0
+      }
+    ]
+  },
+  "safetyEvidence": {
+    "safetyEvidenceSchemaVersion": 1,
+    "benchmarkId": "season-2026-next-v1",
+    "probes": [
+      {"probeId":"model-unavailable","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"none","expectedFallbackReason":"ModelUnavailable","actualFallbackReason":"ModelUnavailable","expectedPlannerStatus":"NotRequested","actualPlannerStatus":"NotRequested","passed":true},
+      {"probeId":"critical-state-missing","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"candidate","expectedFallbackReason":"CriticalStateMissing","actualFallbackReason":"CriticalStateMissing","expectedPlannerStatus":"NotRequested","actualPlannerStatus":"NotRequested","passed":true},
+      {"probeId":"unsupported-mechanic","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"candidate","expectedFallbackReason":"UnsupportedMechanic","actualFallbackReason":"UnsupportedMechanic","expectedPlannerStatus":"NotRequested","actualPlannerStatus":"NotRequested","passed":true},
+      {"probeId":"out-of-distribution","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"candidate","expectedFallbackReason":"OutOfDistribution","actualFallbackReason":"OutOfDistribution","expectedPlannerStatus":"NotRequested","actualPlannerStatus":"NotRequested","passed":true},
+      {"probeId":"low-confidence","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"candidate","expectedFallbackReason":"LowConfidence","actualFallbackReason":"LowConfidence","expectedPlannerStatus":"NotRequested","actualPlannerStatus":"NotRequested","passed":true},
+      {"probeId":"no-safe-action","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"candidate","expectedFallbackReason":"NoSafeAction","actualFallbackReason":"NoSafeAction","expectedPlannerStatus":"NotRequested","actualPlannerStatus":"NotRequested","passed":true},
+      {"probeId":"planner-timeout","stateFingerprint":"1111111111111111111111111111111111111111111111111111111111111111","candidateFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","modelSource":"candidate","expectedFallbackReason":"None","actualFallbackReason":"None","expectedPlannerStatus":"TimedOut","actualPlannerStatus":"TimedOut","actualSelectedActionKey":"Upgrade|-1||","actualTopActionKeys":["Upgrade|-1||"],"passed":true}
+    ]
+  }
+}

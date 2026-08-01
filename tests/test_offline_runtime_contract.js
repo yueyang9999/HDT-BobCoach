@@ -15,6 +15,31 @@ const productionSeasonExtensionPath = path.join(root, "src", "BobCoach", "Core",
 const productionSeasonExtension = fs.existsSync(productionSeasonExtensionPath)
     ? fs.readFileSync(productionSeasonExtensionPath, "utf8")
     : "";
+const benchmarkRunnerPath = path.join(root, "tools", "model", "PolicyBenchmarkRunner.cs");
+const benchmarkWrapperPath = path.join(root, "tools", "model", "run_policy_benchmark.ps1");
+const evaluatorPath = path.join(root, "tools", "model", "evaluate_policy.js");
+for (const requiredPath of [benchmarkRunnerPath, benchmarkWrapperPath, evaluatorPath]) {
+    if (!fs.existsSync(requiredPath)) {
+        console.error(`FAIL Task 12 evidence tool is missing: ${path.basename(requiredPath)}`);
+        process.exit(1);
+    }
+}
+const benchmarkRunner = fs.readFileSync(benchmarkRunnerPath, "utf8");
+const benchmarkWrapper = fs.readFileSync(benchmarkWrapperPath, "utf8");
+const evaluator = fs.readFileSync(evaluatorPath, "utf8");
+if (!benchmarkRunner.includes("DecisionPolicyFactory.Create")
+    || !benchmarkRunner.includes("DecisionRuntimeMode.LegacyOnly")
+    || !benchmarkRunner.includes("DecisionRuntimeMode.Unified")
+    || benchmarkRunner.includes("DecisionEventRecorder")) {
+    console.error("FAIL benchmark must use production policy composition without gameplay recording");
+    process.exit(1);
+}
+if (!benchmarkWrapper.includes("assertExternalDataRoot")
+    || !evaluator.includes("blocked-by-season-data")
+    || evaluator.includes("activationDecision")) {
+    console.error("FAIL evidence tools must enforce external storage and blocked effect acceptance");
+    process.exit(1);
+}
 
 const forbiddenPluginPaths = [
     "new NodeEngineBridge(",

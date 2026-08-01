@@ -232,10 +232,10 @@ prefix and require the `synthetic artifact` rejection:
 - `CardPoolIdentity`: `synthetic-card-pool-v1`
 
 The following commands were run with process-level
-`BOBCOACH_HDT_DIR=C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1`:
+`BOBCOACH_HDT_DIR=<HDT_DIRECTORY>`:
 
 ```powershell
-$env:BOBCOACH_HDT_DIR='C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1'
+$env:BOBCOACH_HDT_DIR='<HDT_DIRECTORY>'
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\test_algorithm_model_contract.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run_behavior_tests.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run_contract_tests.ps1
@@ -347,7 +347,7 @@ Fresh verification against the final production and test changes produced:
 - `tests\test_algorithm_model_contract.ps1`: PASS with
   `PASS model loader rejects corruption, schema drift, and invalid numbers`.
 - Controller rerun of `tests\run_behavior_tests.ps1` with process-level
-  `BOBCOACH_HDT_DIR=C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1`:
+  `BOBCOACH_HDT_DIR=<HDT_DIRECTORY>`:
   PASS. The two existing `CardSemanticFactSource.CardId` CS0649 warnings and
   the existing UI lifecycle static warning were not suppressed.
 - `tests\run_contract_tests.ps1`: PASS, all 13 contracts.

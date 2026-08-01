@@ -25,9 +25,11 @@ foreach ($file in @(
     "test_feature_showcase_contract.js"
     ,"test_algorithm_workspace_contract.js"
     ,"test_pairwise_training.js"
+    ,"test_algorithm_evaluation.js"
 )) {
     Invoke-Checked $file "node"
 }
 Invoke-Checked "test_release_build_script.ps1" "powershell"
+Invoke-Checked "test_algorithm_benchmark_contract.ps1" "powershell"
 
 Write-Host "PASS contract suite"
