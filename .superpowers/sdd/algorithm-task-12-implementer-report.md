@@ -606,8 +606,11 @@ Verification logs are under
 the independent build is under
 `E:\HDT-BobCoach-evidence\builds\whole-final-07f9d23-20260801-185035`.
 The full test suite left one temporary directory on `C:` containing 1147 files,
-391 directories, and 88959304 bytes. It is recorded for owner-approved cleanup
-and was not deleted during this task.
+391 directories, and 88959304 bytes. The owner later authorized deletion of
+that exact directory. Immediately before cleanup it contained 887 files, 271
+directories, and 79065116 bytes; cleanup cleared the remaining read-only
+`log.config` files, deleted the directory, and verified that it no longer
+exists.
 
 No model was trained, generated, copied, embedded, or activated. Synthetic
 evidence produced no effect acceptance decision, improvement percentage, or
