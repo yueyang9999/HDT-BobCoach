@@ -270,6 +270,10 @@ foreach ($required in @(
     "RunSafetyProbes(probeBytes")) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing required evaluation surface: $required" }
 }
+foreach ($required in @('ParseStrictJsonLine(line, "scenario")',
+    'ParseStrictJsonLine(line, "safety probe")')) {
+    if (!$sourceText.Contains($required)) { throw "benchmark path missing strict JSONL parsing: $required" }
+}
 if ($sourceText.Contains('.Where(property => !property.Name.StartsWith("_"')) {
     throw "underscore-prefixed protocol fields must remain checksum-bound"
 }
@@ -376,6 +380,7 @@ try {
         "protocolUnsafeIntegerRejected",
         "productionSelectedActionDistinctFromPlannerDiagnostic",
         "modelUnavailableCandidateSourceRejected", "candidateProbeNoneSourceRejected",
+        "scenarioDuplicatePropertyRejected", "safetyProbeDuplicatePropertyRejected",
         "orchestratedSafetyOutcomesObserved", "safetyProbeFallbackUsesLegacySurface")) {
         if ($contracts.$name -ne $true) { throw "self-test did not dynamically prove $name" }
     }
