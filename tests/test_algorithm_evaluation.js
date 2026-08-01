@@ -650,72 +650,30 @@ const contractProtocolContext = protocolContextFor(contractInput);
 const contractKeys = crypto.generateKeyPairSync('ed25519');
 const contractEvidenceContext = approvedEvidenceContextFor(
   contractInput, contractProtocolContext, contractKeys.privateKey);
-const contractTrustRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_owner_trust_contract_'));
-const contractTrustFile = path.join(contractTrustRoot, 'owner-keys.json');
-fs.writeFileSync(contractTrustFile, `${JSON.stringify({
-  trustedKeySetSchemaVersion: 1,
-  keys: [{
-    keyId: 'owner-contract-key',
-    algorithm: 'ed25519',
-    publicKeySpkiPem: contractKeys.publicKey.export({ type: 'spki', format: 'pem' })
-  }]
-})}\n`, 'utf8');
-const originalSpawnSync = childProcess.spawnSync;
-childProcess.spawnSync = (command, args, options) => {
-  const manifest = options && typeof options.input === 'string'
-    ? JSON.parse(options.input) : null;
-  if (manifest && manifest.files && manifest.files.trustedOwnerKeys) {
-    return originalSpawnSync(command, args, {
-      ...options,
-      input: JSON.stringify({
-        dataRoot: contractTrustRoot,
-        files: { trustedOwnerKeys: contractTrustFile }
-      })
-    });
-  }
-  return originalSpawnSync(command, args, options);
-};
-try {
-  const contractReport = evaluate(
-    contractInput, contractProtocolContext, contractEvidenceContext);
-  assert.notStrictEqual(contractReport.effectAcceptanceStatus, 'blocked-by-season-data',
-    'a complete signed evidence chain must reach the evaluator decision path');
-  assert.strictEqual(contractReport.evaluationProtocol.ownerApprovalKeyId, 'owner-contract-key');
-  assert(!contractReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+const contractReport = evaluate(
+  contractInput, contractProtocolContext, contractEvidenceContext);
+assert.strictEqual(contractReport.effectAcceptanceStatus, 'blocked-by-season-data',
+  'synthetic contract evidence must remain blocked even when it forms a complete signed chain');
+assert.strictEqual(contractReport.metrics, null,
+  'synthetic contract evidence must not emit formal effect metrics');
+assert(contractReport.missingPrerequisites.includes(missingProvenanceTrustRoot),
+  'formal acceptance must require the checked-in owner provenance trust root');
 
-  const acceptedRiskInput = clone(contractInput);
-  const acceptedRiskScenario = acceptedRiskInput.scenarios[100];
-  const acceptedRiskBaseline = acceptedRiskInput.baselinePredictions[100];
-  const acceptedRiskCandidate = acceptedRiskInput.candidatePredictions[100];
-  acceptedRiskCandidate.selectedActionKey = severe;
-  acceptedRiskCandidate.topActionKeys = [severe];
-  const acceptedRiskProtocolContext = protocolContextFor(acceptedRiskInput, protocol => {
-    protocol.thresholds.minimumSevereErrorRelativeReduction = -1;
-    protocol.thresholds.minimumAcceptedTop1Improvement = -1;
-    protocol.thresholds.minimumAcceptedTop3Improvement = -1;
-    protocol.thresholds.minimumPerCategoryTop1Regression = -1;
-    protocol.thresholds.maximumNewSevereErrors = 1;
-  });
-  const acceptedRiskEvidenceContext = approvedEvidenceContextFor(
-    acceptedRiskInput, acceptedRiskProtocolContext, contractKeys.privateKey, [{
-      scenarioId: acceptedRiskScenario.scenarioId,
-      baselineActionKey: acceptedRiskBaseline.selectedActionKey,
-      candidateActionKey: acceptedRiskCandidate.selectedActionKey,
-      reviewAction: 'retain-shadow-only',
-      reviewerId: 'independent-reviewer-1',
-      reviewedAtUtc: '2026-08-01T02:30:00Z',
-      disposition: 'accepted-risk'
-    }]);
-  const acceptedRiskReport = evaluate(
-    acceptedRiskInput, acceptedRiskProtocolContext, acceptedRiskEvidenceContext);
-  assert.strictEqual(acceptedRiskReport.effectAcceptanceStatus, 'blocked-by-season-data',
-    'an owner-approved protocol must not accept any candidate-only severe error');
-  assert.strictEqual(acceptedRiskReport.metrics, null,
-    'a protocol that allows new severe errors must fail closed before reporting metrics');
-} finally {
-  childProcess.spawnSync = originalSpawnSync;
-  fs.rmSync(contractTrustRoot, { recursive: true, force: true });
-}
+const acceptedRiskInput = clone(contractInput);
+const acceptedRiskProtocolContext = protocolContextFor(acceptedRiskInput, protocol => {
+  protocol.thresholds.minimumSevereErrorRelativeReduction = -1;
+  protocol.thresholds.minimumAcceptedTop1Improvement = -1;
+  protocol.thresholds.minimumAcceptedTop3Improvement = -1;
+  protocol.thresholds.minimumPerCategoryTop1Regression = -1;
+  protocol.thresholds.maximumNewSevereErrors = 1;
+});
+const acceptedRiskReport = evaluate(acceptedRiskInput, acceptedRiskProtocolContext);
+assert.strictEqual(acceptedRiskReport.evaluationProtocol, null,
+  'a protocol that allows candidate-only severe errors must be rejected');
+assert.strictEqual(acceptedRiskReport.effectAcceptanceStatus, 'blocked-by-season-data',
+  'an invalid severe-error protocol must remain blocked');
+assert.strictEqual(acceptedRiskReport.metrics, null,
+  'a protocol that allows new severe errors must fail closed before reporting metrics');
 for (const checksumName of ['latencyEvidenceFileSha256', 'safetyEvidenceFileSha256']) {
   assert(source.includes(`${checksumName}: trusted.${checksumName}`),
     `owner approval must bind ${checksumName}`);
