@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { assertExternalDataRoot } = require('./contracts');
+const { assertExternalDataRoot, resolveDataPath } = require('./contracts');
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const REQUIRED_PROBES = [
@@ -34,10 +34,12 @@ const FALLBACK_REASONS = new Set(['None', 'ModelUnavailable', 'CriticalStateMiss
 const PLANNER_STATUSES = new Set(['NotRequested', 'Completed', 'TimedOut', 'Unsupported']);
 const MISSING_PROTOCOL = 'owner-approved-versioned-frozen-checksum-bound-evaluation-protocol';
 const MISSING_PROVENANCE = 'owner-approved-independent-provenance-trust-root';
-const APPROVAL_REGISTRY_FILE = path.join(__dirname, 'evaluation_protocol_approvals.json');
+const TRUSTED_OWNER_KEYS_FILE = path.join(__dirname, 'owner_approval_trusted_keys.json');
 const PROTOCOL_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/;
 const EXTERNAL_PROTOCOL_SOURCE = Symbol('external-evaluation-protocol');
+const TRUSTED_PROTOCOL_CONTEXTS = new WeakMap();
+const TRUSTED_EVIDENCE_CONTEXTS = new WeakMap();
 const EFFECT_THRESHOLD_BINDINGS = [
   ['minimumSevereErrorRelativeReduction', metrics => metrics.severeErrorRate.relativeReduction, 'minimum'],
   ['minimumAcceptedTop1Improvement', metrics => metrics.acceptedTop1Rate.improvement, 'minimum'],
@@ -101,7 +103,7 @@ function validatePrediction(row, expectedBenchmark, kind) {
   }
   const selected = requireString(row.selectedActionKey, `${kind}.selectedActionKey`);
   if (row.topActionKeys.length === 0 || row.topActionKeys.some(value => typeof value !== 'string' || value === '')
-      || new Set(row.topActionKeys).size !== row.topActionKeys.length || row.topActionKeys[0] !== selected) {
+      || new Set(row.topActionKeys).size !== row.topActionKeys.length) {
     fail(`${kind} selected action and Top-N evidence are inconsistent`);
   }
   if (!isFiniteInRange(row.confidence, 0, 1)) fail(`${kind} confidence is invalid`);
@@ -109,6 +111,19 @@ function validatePrediction(row, expectedBenchmark, kind) {
   const plannerStatus = requireString(row.plannerStatus, `${kind}.plannerStatus`);
   if (!FALLBACK_REASONS.has(fallbackReason)) fail(`${kind} fallback reason is invalid`);
   if (!PLANNER_STATUSES.has(plannerStatus)) fail(`${kind} planner status is invalid`);
+  if (!Array.isArray(row.bestCompletePath)
+      || row.bestCompletePath.some(value => typeof value !== 'string' || value === '')) {
+    fail(`${kind} planning path evidence is invalid`);
+  }
+  if (plannerStatus === 'NotRequested') {
+    if (row.bestCompletePath.length !== 0 || row.topActionKeys[0] !== selected) {
+      fail(`${kind} non-planner action evidence is inconsistent`);
+    }
+  } else if (plannerStatus === 'Completed' || plannerStatus === 'TimedOut') {
+    if (row.bestCompletePath.length === 0 || row.bestCompletePath[0] !== selected) {
+      fail(`${kind} planning path and selected action are inconsistent`);
+    }
+  }
 }
 
 function validateLatency(evidence, benchmarkId, scenarioIds, candidateIdentity) {
@@ -348,6 +363,12 @@ function sha256Hex(value) {
   return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
 function hasEngineeringOnlyIdentity(input, candidateIdentity) {
   const identities = [input.evidenceKind, input.buildIdentity, input.seasonIdentity,
     input.cardPoolIdentity, candidateIdentity.modelId];
@@ -386,10 +407,15 @@ function isResolvedProtocolIdentity(value) {
     && !/^synthetic(?:-|$)/i.test(value.trim());
 }
 
-function validateEvaluationProtocol(context, input, candidateIdentity) {
+function validateEvaluationProtocol(context, input, candidateIdentity, holdoutCanonicalSha256) {
   try {
-    if (!context || context.source !== EXTERNAL_PROTOCOL_SOURCE) return null;
-    const protocol = context.protocol;
+    const trustedContext = context && TRUSTED_PROTOCOL_CONTEXTS.get(context);
+    if (!trustedContext || context.source !== EXTERNAL_PROTOCOL_SOURCE) return null;
+    if (trustedContext.holdoutCanonicalSha256 !== holdoutCanonicalSha256) return null;
+    const protocol = trustedContext.protocol;
+    const canonicalPayload = { ...protocol };
+    delete canonicalPayload.protocolSha256;
+    if (sha256Hex(canonicalJson(canonicalPayload)) !== trustedContext.protocolCanonicalSha256) return null;
     if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) return null;
     if (protocol.protocolSchemaVersion !== 1
         || !isResolvedProtocolIdentity(protocol.protocolId)
@@ -413,7 +439,7 @@ function validateEvaluationProtocol(context, input, candidateIdentity) {
         || protocol.candidatePolicyId !== 'unified-linear-v1'
         || protocol.candidateModelId !== candidateIdentity.modelId
         || protocol.candidateModelPayloadSha256 !== candidateIdentity.modelPayloadSha256
-        || protocol.holdoutChecksumSha256 !== context.holdoutFileSha256
+        || protocol.holdoutChecksumSha256 !== trustedContext.holdoutFileSha256
         || !isResolvedProtocolIdentity(protocol.buildIdentity)
         || !isResolvedProtocolIdentity(protocol.seasonIdentity)
         || !isResolvedProtocolIdentity(protocol.cardPoolIdentity)
@@ -421,8 +447,8 @@ function validateEvaluationProtocol(context, input, candidateIdentity) {
         || !HEX64.test(protocol.candidateModelPayloadSha256)
         || !HEX64.test(protocol.holdoutChecksumSha256)
         || !HEX64.test(protocol.protocolSha256)
-        || !HEX64.test(context.protocolFileSha256)
-        || protocol.protocolSha256 !== context.protocolCanonicalSha256) return null;
+        || !HEX64.test(trustedContext.protocolFileSha256)
+        || protocol.protocolSha256 !== trustedContext.protocolCanonicalSha256) return null;
     if (!isResolvedProtocolIdentity(protocol.holdoutIdentity)
         || !isResolvedProtocolIdentity(protocol.trainingSetIdentity)
         || !isResolvedProtocolIdentity(protocol.seasonRange)) return null;
@@ -457,78 +483,142 @@ function validateEvaluationProtocol(context, input, candidateIdentity) {
         || !isResolvedProtocolIdentity(calibrationApproval.calibrationIdentity)
         || !isResolvedProtocolIdentity(calibrationApproval.modelId)) return null;
     const thresholds = validateThresholds(protocol.thresholds);
-    return thresholds ? { protocol, thresholds } : null;
+    return thresholds ? { protocol, thresholds, trustedContext } : null;
   } catch (_) {
     return null;
   }
 }
 
-function loadApprovalRegistry() {
-  const bytes = fs.readFileSync(APPROVAL_REGISTRY_FILE);
-  const text = bytes.toString('utf8');
-  rejectDuplicateJsonProperties(text);
-  const registry = JSON.parse(text);
-  if (!registry || registry.registrySchemaVersion !== 1
-      || !Array.isArray(registry.approvals)) {
-    fail('evaluation approval registry is invalid');
+function verifyDetachedOwnerApproval(artifact, trustedKeys) {
+  try {
+    if (!artifact || artifact.ownerApprovalSchemaVersion !== 1
+        || artifact.signatureAlgorithm !== 'ed25519'
+        || !isResolvedProtocolIdentity(artifact.keyId)
+        || !artifact.payload || typeof artifact.payload !== 'object'
+        || Array.isArray(artifact.payload)
+        || typeof artifact.signatureBase64 !== 'string') return false;
+    const key = Array.isArray(trustedKeys)
+      ? trustedKeys.find(value => value && value.keyId === artifact.keyId) : null;
+    if (!key || key.algorithm !== 'ed25519' || typeof key.publicKeySpkiPem !== 'string') return false;
+    const signature = Buffer.from(artifact.signatureBase64, 'base64');
+    if (signature.length !== 64 || signature.toString('base64') !== artifact.signatureBase64) return false;
+    return crypto.verify(null, Buffer.from(canonicalJson(artifact.payload), 'utf8'),
+      key.publicKeySpkiPem, signature);
+  } catch (_) {
+    return false;
   }
-  const identities = new Set();
-  for (const approval of registry.approvals) {
-    if (!approval || typeof approval !== 'object' || Array.isArray(approval)
-        || !isResolvedProtocolIdentity(approval.approvalId)
-        || typeof approval.approvalVersion !== 'string'
-        || !PROTOCOL_VERSION.test(approval.approvalVersion)
-        || approval.approvalStatus !== 'owner-approved'
-        || !isResolvedProtocolIdentity(approval.approvedBy)
-        || typeof approval.approvedAtUtc !== 'string'
-        || !UTC_TIMESTAMP.test(approval.approvedAtUtc)
-        || !Number.isFinite(Date.parse(approval.approvedAtUtc))) {
-      fail('evaluation approval registry entry is invalid');
-    }
-    for (const name of ['protocolId', 'protocolVersion', 'candidateModelId', 'benchmarkId',
-      'buildIdentity', 'seasonIdentity', 'cardPoolIdentity', 'trainingSetIdentity',
-      'holdoutIdentity', 'seasonRange', 'calibrationIdentity']) {
-      if (!isResolvedProtocolIdentity(approval[name])) {
-        fail(`evaluation approval registry ${name} is invalid`);
-      }
-    }
-    for (const name of ['protocolFileSha256', 'protocolCanonicalSha256',
-      'holdoutLabelsFileSha256', 'candidateModelPayloadSha256']) {
-      if (!HEX64.test(approval[name])) {
-        fail(`evaluation approval registry ${name} is invalid`);
-      }
-    }
-    const identity = `${approval.approvalId}:${approval.approvalVersion}`;
-    if (identities.has(identity)) fail('duplicate evaluation approval registry identity');
-    identities.add(identity);
-  }
-  return {
-    approvals: registry.approvals,
-    registrySha256: crypto.createHash('sha256').update(bytes).digest('hex')
-  };
 }
 
-function findApprovedProvenance(context, validatedProtocol, candidateIdentity) {
-  if (!context || !validatedProtocol) return null;
-  const protocol = validatedProtocol.protocol;
-  const registry = loadApprovalRegistry();
-  const approval = registry.approvals.find(entry =>
-    entry.protocolId === protocol.protocolId
-      && entry.protocolVersion === protocol.protocolVersion
-      && entry.protocolFileSha256 === context.protocolFileSha256
-      && entry.protocolCanonicalSha256 === context.protocolCanonicalSha256
-      && entry.holdoutLabelsFileSha256 === context.holdoutFileSha256
-      && entry.candidateModelId === candidateIdentity.modelId
-      && entry.candidateModelPayloadSha256 === candidateIdentity.modelPayloadSha256
-      && entry.benchmarkId === protocol.benchmarkId
-      && entry.buildIdentity === protocol.buildIdentity
-      && entry.seasonIdentity === protocol.seasonIdentity
-      && entry.cardPoolIdentity === protocol.cardPoolIdentity
-      && entry.trainingSetIdentity === protocol.trainingSetIdentity
-      && entry.holdoutIdentity === protocol.holdoutIdentity
-      && entry.seasonRange === protocol.seasonRange
-      && entry.calibrationIdentity === protocol.confidenceCalibration.calibrationIdentity);
-  return approval ? { approval, registrySha256: registry.registrySha256 } : null;
+function loadTrustedOwnerKeys() {
+  const keySet = readBoundJson(TRUSTED_OWNER_KEYS_FILE, 'trusted owner key set').value;
+  if (!keySet || keySet.trustedKeySetSchemaVersion !== 1 || !Array.isArray(keySet.keys)) {
+    fail('trusted owner key set is invalid');
+  }
+  const ids = new Set();
+  for (const key of keySet.keys) {
+    if (!key || !isResolvedProtocolIdentity(key.keyId) || key.algorithm !== 'ed25519'
+        || typeof key.publicKeySpkiPem !== 'string' || ids.has(key.keyId)) {
+      fail('trusted owner key entry is invalid');
+    }
+    ids.add(key.keyId);
+  }
+  return keySet.keys;
+}
+
+function exactStringSet(values, expected) {
+  return Array.isArray(values) && values.every(value => typeof value === 'string' && value !== '')
+    && values.length === new Set(values).size
+    && values.length === expected.size
+    && values.every(value => expected.has(value));
+}
+
+function validUtc(value) {
+  return typeof value === 'string' && UTC_TIMESTAMP.test(value)
+    && Number.isFinite(Date.parse(value));
+}
+
+function validateEvidenceManifests(context, input, scenarios, baseline, candidate,
+  candidateIdentity, validatedProtocol, preliminaryMetrics) {
+  const trusted = context && TRUSTED_EVIDENCE_CONTEXTS.get(context);
+  if (!trusted || !validatedProtocol || !preliminaryMetrics
+      || !isEvidenceContextBoundToInput(context, input)) return null;
+  const scenarioIds = new Set(scenarios.keys());
+  const commonIdentityMatches = manifest => manifest
+    && manifest.buildIdentity === input.buildIdentity
+    && manifest.seasonIdentity === input.seasonIdentity
+    && manifest.cardPoolIdentity === input.cardPoolIdentity;
+
+  const labels = trusted.labelProvenance;
+  const labelRecords = labels && Array.isArray(labels.labelRecords) ? labels.labelRecords : [];
+  if (!commonIdentityMatches(labels) || labels.labelProvenanceSchemaVersion !== 1
+      || labels.evidenceKind !== 'real-season-evaluation'
+      || labels.holdoutFileSha256 !== validatedProtocol.trustedContext.holdoutFileSha256
+      || labels.holdoutCanonicalSha256 !== trusted.holdoutCanonicalSha256
+      || !exactStringSet(labels.scenarioIds, scenarioIds)
+      || !exactStringSet(labelRecords.map(value => value && value.scenarioId), scenarioIds)
+      || labelRecords.some(value => !value || !isResolvedProtocolIdentity(value.labelerId)
+        || !isResolvedProtocolIdentity(value.sourceEvidenceId)
+        || !isResolvedProtocolIdentity(value.versionVerificationRecordId)
+        || !validUtc(value.labeledAtUtc))) return null;
+
+  const shadow = trusted.shadowComparisons;
+  const comparisonRecords = shadow && Array.isArray(shadow.comparisons) ? shadow.comparisons : [];
+  if (!commonIdentityMatches(shadow) || shadow.shadowComparisonSchemaVersion !== 1
+      || shadow.baselineEvidenceFileSha256 !== trusted.baselineEvidenceFileSha256
+      || shadow.candidateEvidenceFileSha256 !== trusted.candidateEvidenceFileSha256
+      || !isResolvedProtocolIdentity(shadow.representativeRationale)
+      || !exactStringSet(shadow.scenarioIds, scenarioIds)
+      || !exactStringSet(comparisonRecords.map(value => value && value.scenarioId), scenarioIds)
+      || comparisonRecords.some(value => {
+        const left = value && baseline.get(value.scenarioId);
+        const right = value && candidate.get(value.scenarioId);
+        return !left || !right || value.baselineActionKey !== left.selectedActionKey
+          || value.candidateActionKey !== right.selectedActionKey
+          || !isResolvedProtocolIdentity(value.reviewedBy) || !validUtc(value.reviewedAtUtc);
+      })) return null;
+
+  const reviews = trusted.severeErrorReviews;
+  const reviewRows = reviews && Array.isArray(reviews.reviews) ? reviews.reviews : [];
+  const severeById = new Map(preliminaryMetrics.newSevereErrors.map(value => [value.scenarioId, value]));
+  if (!commonIdentityMatches(reviews) || reviews.severeErrorReviewSchemaVersion !== 1
+      || !exactStringSet(reviews.scenarioIds, scenarioIds)
+      || !exactStringSet(reviewRows.map(value => value && value.scenarioId), new Set(severeById.keys()))
+      || reviewRows.some(value => {
+        const severe = value && severeById.get(value.scenarioId);
+        return !severe || value.baselineActionKey !== severe.baselineActionKey
+          || value.candidateActionKey !== severe.candidateActionKey
+          || !isResolvedProtocolIdentity(value.reviewAction)
+          || !isResolvedProtocolIdentity(value.reviewerId) || !validUtc(value.reviewedAtUtc)
+          || !['accepted-risk', 'remediated', 'false-positive'].includes(value.disposition);
+      })) return null;
+
+  const approval = trusted.ownerApproval;
+  const payload = approval && approval.payload;
+  const expected = {
+    approvalId: payload && payload.approvalId,
+    approvalVersion: payload && payload.approvalVersion,
+    approvedBy: payload && payload.approvedBy,
+    approvedAtUtc: payload && payload.approvedAtUtc,
+    protocolId: validatedProtocol.protocol.protocolId,
+    protocolVersion: validatedProtocol.protocol.protocolVersion,
+    protocolFileSha256: validatedProtocol.trustedContext.protocolFileSha256,
+    protocolCanonicalSha256: validatedProtocol.trustedContext.protocolCanonicalSha256,
+    holdoutFileSha256: validatedProtocol.trustedContext.holdoutFileSha256,
+    holdoutCanonicalSha256: trusted.holdoutCanonicalSha256,
+    candidateModelId: candidateIdentity.modelId,
+    candidateModelPayloadSha256: candidateIdentity.modelPayloadSha256,
+    labelProvenanceFileSha256: trusted.labelProvenanceFileSha256,
+    shadowComparisonsFileSha256: trusted.shadowComparisonsFileSha256,
+    severeErrorReviewsFileSha256: trusted.severeErrorReviewsFileSha256,
+    latencyEvidenceFileSha256: trusted.latencyEvidenceFileSha256,
+    safetyEvidenceFileSha256: trusted.safetyEvidenceFileSha256
+  };
+  if (!payload || !isResolvedProtocolIdentity(payload.approvalId)
+      || typeof payload.approvalVersion !== 'string' || !PROTOCOL_VERSION.test(payload.approvalVersion)
+      || !isResolvedProtocolIdentity(payload.approvedBy) || !validUtc(payload.approvedAtUtc)
+      || Object.keys(expected).some(name => payload[name] !== expected[name])
+      || !verifyDetachedOwnerApproval(approval, loadTrustedOwnerKeys())) return null;
+  return { approval, checksums: trusted };
 }
 
 function meetsFrozenProtocolThresholds(metrics, thresholds) {
@@ -538,12 +628,15 @@ function meetsFrozenProtocolThresholds(metrics, thresholds) {
   });
 }
 
-function evaluate(input, protocolContext = null) {
+function evaluate(input, protocolContext = null, evidenceContext = null) {
   if (!input || typeof input !== 'object') fail('root object is missing');
   const benchmarkId = requireString(input.benchmarkId, 'benchmarkId');
   if (input.scenarioSchemaVersion !== 1) fail('scenario schema version mismatch');
+  const holdoutCanonicalSha256 = Array.isArray(input.scenarios)
+    ? sha256Hex(canonicalJson(input.scenarios)) : null;
 
   const scenarios = uniqueBy(input.scenarios, 'scenarioId', 'scenario');
+  const validatedLabels = new Map();
   const gamePartitions = new Map();
   const fingerprintPairs = new Set();
   for (const row of scenarios.values()) {
@@ -560,7 +653,7 @@ function evaluate(input, protocolContext = null) {
     const pair = `${row.stateFingerprint}:${row.candidateFingerprint}`;
     if (fingerprintPairs.has(pair)) fail('duplicate scenario fingerprint pair');
     fingerprintPairs.add(pair);
-    row._validatedLabels = validateLabels(row);
+    validatedLabels.set(row.scenarioId, validateLabels(row));
   }
 
   const baseline = uniqueBy(input.baselinePredictions, 'scenarioId', 'baseline prediction');
@@ -581,8 +674,8 @@ function evaluate(input, protocolContext = null) {
         || right.candidateFingerprint !== scenario.candidateFingerprint) {
       fail(`paired evidence fingerprint or game mismatch for scenario ${id}`);
     }
-    selectedGrade(left, scenario._validatedLabels, 'baseline');
-    selectedGrade(right, scenario._validatedLabels, 'candidate');
+    selectedGrade(left, validatedLabels.get(id), 'baseline');
+    selectedGrade(right, validatedLabels.get(id), 'candidate');
   }
 
   const candidateModels = new Set([...candidate.values()].map(row => `${row.modelId}:${row.modelPayloadSha256}`));
@@ -596,34 +689,32 @@ function evaluate(input, protocolContext = null) {
   validateSafety(input.safetyEvidence, benchmarkId);
 
   const engineeringOnly = hasEngineeringOnlyIdentity(input, candidateIdentity);
-  const protocol = validateEvaluationProtocol(protocolContext, input, candidateIdentity);
-  const approvedProvenance = findApprovedProvenance(protocolContext, protocol, candidateIdentity);
-  const trustworthy = !engineeringOnly
-    && input.realTrustworthyVersionMatchedExpertLabels === true
-    && scenarios.size >= 300
-    && input.shadowComparisonsRepresentative === true
-    && input.humanSevereErrorReviewComplete === true
-    && protocol !== null
-    && approvedProvenance !== null
+  const protocol = validateEvaluationProtocol(
+    protocolContext, input, candidateIdentity, holdoutCanonicalSha256);
+  const preliminaryMetrics = !engineeringOnly && scenarios.size >= 300 && protocol
+    ? calculateMetrics(scenarios, baseline, candidate, input.safetyEvidence, input.latencyEvidence)
+    : null;
+  const approvedEvidence = validateEvidenceManifests(evidenceContext, input, scenarios,
+    baseline, candidate, candidateIdentity, protocol, preliminaryMetrics);
+  const trustworthy = !engineeringOnly && scenarios.size >= 300
+    && protocol !== null && approvedEvidence !== null
     && !['buildIdentity', 'seasonIdentity', 'cardPoolIdentity']
       .some(name => !input[name] || input[name] === 'unknown');
 
   const missingPrerequisites = [];
   if (input.evidenceKind !== 'real-season-evaluation') missingPrerequisites.push('real-season-evidence');
-  if (input.realTrustworthyVersionMatchedExpertLabels !== true || scenarios.size < 300) {
+  if (!approvedEvidence || scenarios.size < 300) {
     missingPrerequisites.push('300-real-trustworthy-version-matched-expert-labels');
   }
-  if (input.shadowComparisonsRepresentative !== true) missingPrerequisites.push('representative-shadow-comparisons');
-  if (input.humanSevereErrorReviewComplete !== true) missingPrerequisites.push('human-severe-error-review');
+  if (!approvedEvidence) missingPrerequisites.push('representative-shadow-comparisons');
+  if (!approvedEvidence) missingPrerequisites.push('human-severe-error-review');
   for (const name of ['buildIdentity', 'seasonIdentity', 'cardPoolIdentity']) {
     if (!input[name] || input[name] === 'unknown') missingPrerequisites.push(name);
   }
   if (!protocol) missingPrerequisites.push(MISSING_PROTOCOL);
-  if (!approvedProvenance) missingPrerequisites.push(MISSING_PROVENANCE);
+  if (!approvedEvidence) missingPrerequisites.push(MISSING_PROVENANCE);
 
-  const metrics = trustworthy
-    ? calculateMetrics(scenarios, baseline, candidate, input.safetyEvidence, input.latencyEvidence)
-    : null;
+  const metrics = trustworthy ? preliminaryMetrics : null;
   return {
     evidenceSchemaVersion: 1,
     evidenceKind: input.evidenceKind || 'unknown',
@@ -635,12 +726,21 @@ function evaluate(input, protocolContext = null) {
       protocolId: protocol.protocol.protocolId,
       protocolVersion: protocol.protocol.protocolVersion,
       protocolSha256: protocol.protocol.protocolSha256,
-      protocolFileSha256: protocolContext.protocolFileSha256,
+      protocolFileSha256: protocol.trustedContext.protocolFileSha256,
       holdoutChecksumSha256: protocol.protocol.holdoutChecksumSha256,
-      provenanceApprovalId: approvedProvenance
-        ? approvedProvenance.approval.approvalId : null,
-      approvalRegistrySha256: approvedProvenance
-        ? approvedProvenance.registrySha256 : null
+      provenanceApprovalId: approvedEvidence
+        ? approvedEvidence.approval.payload.approvalId : null,
+      ownerApprovalKeyId: approvedEvidence ? approvedEvidence.approval.keyId : null,
+      labelProvenanceFileSha256: approvedEvidence
+        ? approvedEvidence.checksums.labelProvenanceFileSha256 : null,
+      shadowComparisonsFileSha256: approvedEvidence
+        ? approvedEvidence.checksums.shadowComparisonsFileSha256 : null,
+      severeErrorReviewsFileSha256: approvedEvidence
+        ? approvedEvidence.checksums.severeErrorReviewsFileSha256 : null,
+      latencyEvidenceFileSha256: approvedEvidence
+        ? approvedEvidence.checksums.latencyEvidenceFileSha256 : null,
+      safetyEvidenceFileSha256: approvedEvidence
+        ? approvedEvidence.checksums.safetyEvidenceFileSha256 : null
     } : null,
     metrics,
     missingPrerequisites
@@ -649,8 +749,11 @@ function evaluate(input, protocolContext = null) {
 
 function parseArgs(argv) {
   const allowed = new Set(['--data-root', '--scenarios', '--baseline-evidence', '--candidate-evidence',
-    '--latency-evidence', '--safety-evidence', '--evaluation-protocol', '--output']);
-  const required = [...allowed].filter(key => key !== '--evaluation-protocol');
+    '--latency-evidence', '--safety-evidence', '--evaluation-protocol', '--owner-approval',
+    '--label-provenance', '--shadow-comparisons', '--severe-error-reviews', '--output']);
+  const optional = new Set(['--evaluation-protocol', '--owner-approval', '--label-provenance',
+    '--shadow-comparisons', '--severe-error-reviews']);
+  const required = [...allowed].filter(key => !optional.has(key));
   const result = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
@@ -659,18 +762,6 @@ function parseArgs(argv) {
   }
   for (const key of required) if (!result[key]) fail(`required command argument is missing: ${key}`);
   return result;
-}
-
-function resolveBelow(root, relativePath, name) {
-  if (path.isAbsolute(relativePath)) fail(`${name} must be relative to data root`);
-  const resolved = path.resolve(root, relativePath);
-  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
-  if (!resolved.startsWith(prefix)) fail(`${name} escapes data root`);
-  return resolved;
-}
-
-function readJsonLines(file) {
-  return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
 }
 
 function rejectDuplicateJsonProperties(text) {
@@ -759,28 +850,121 @@ function rejectDuplicateJsonProperties(text) {
   if (index !== text.length) fail('evaluation protocol JSON is invalid');
 }
 
-function loadExternalProtocolContext(protocolFile, scenariosFile) {
-  const protocolBytes = fs.readFileSync(protocolFile);
-  const protocolText = protocolBytes.toString('utf8');
-  rejectDuplicateJsonProperties(protocolText);
-  const protocol = JSON.parse(protocolText);
-  if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) {
-    fail('evaluation protocol root is invalid');
-  }
+function createExternalProtocolContext(protocolBound, holdoutBound) {
+  const protocol = protocolBound.value;
   const canonicalPayload = { ...protocol };
   delete canonicalPayload.protocolSha256;
-  return {
-    source: EXTERNAL_PROTOCOL_SOURCE,
+  const trustedContext = Object.freeze({
     protocol,
-    protocolFileSha256: crypto.createHash('sha256').update(protocolBytes).digest('hex'),
+    protocolFileSha256: protocolBound.sha256,
     protocolCanonicalSha256: sha256Hex(canonicalJson(canonicalPayload)),
-    holdoutFileSha256: crypto.createHash('sha256').update(fs.readFileSync(scenariosFile)).digest('hex')
-  };
+    holdoutFileSha256: holdoutBound.sha256,
+    holdoutCanonicalSha256: holdoutBound.canonicalSha256
+  });
+  const context = deepFreeze({
+    source: EXTERNAL_PROTOCOL_SOURCE,
+    protocol: trustedContext.protocol,
+    protocolFileSha256: trustedContext.protocolFileSha256,
+    protocolCanonicalSha256: trustedContext.protocolCanonicalSha256,
+    holdoutFileSha256: trustedContext.holdoutFileSha256
+  });
+  TRUSTED_PROTOCOL_CONTEXTS.set(context, trustedContext);
+  return context;
 }
 
-function readScenarioBundle(file, benchmarkId) {
-  const scenarios = readJsonLines(file);
-  if (scenarios.length === 0) fail('scenario evidence is empty');
+function readBoundJson(file, name) {
+  const bytes = fs.readFileSync(file);
+  const text = bytes.toString('utf8');
+  rejectDuplicateJsonProperties(text);
+  const value = JSON.parse(text);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${name} root is invalid`);
+  return Object.freeze({
+    value: deepFreeze(value),
+    sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+    canonicalSha256: sha256Hex(canonicalJson(value))
+  });
+}
+
+function readBoundJsonLines(file, name) {
+  const bytes = fs.readFileSync(file);
+  const rows = bytes.toString('utf8').split(/\r?\n/).filter(Boolean).map(line => {
+    rejectDuplicateJsonProperties(line);
+    return JSON.parse(line);
+  });
+  if (rows.length === 0) fail(`${name} evidence is empty`);
+  return Object.freeze({
+    value: deepFreeze(rows),
+    sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+    canonicalSha256: sha256Hex(canonicalJson(rows))
+  });
+}
+
+function loadExternalProtocolContext(protocolFile, scenariosFile) {
+  return createExternalProtocolContext(
+    readBoundJson(protocolFile, 'evaluation protocol'),
+    readBoundJsonLines(scenariosFile, 'scenario'));
+}
+
+function createExternalEvidenceContext(bound) {
+  const trusted = Object.freeze({
+    ownerApproval: bound.ownerApproval.value,
+    labelProvenance: bound.labelProvenance.value,
+    shadowComparisons: bound.shadowComparisons.value,
+    severeErrorReviews: bound.severeErrorReviews.value,
+    labelProvenanceFileSha256: bound.labelProvenance.sha256,
+    shadowComparisonsFileSha256: bound.shadowComparisons.sha256,
+    severeErrorReviewsFileSha256: bound.severeErrorReviews.sha256,
+    holdoutCanonicalSha256: bound.scenarios.canonicalSha256,
+    baselineEvidenceFileSha256: bound.baselineEvidence.sha256,
+    candidateEvidenceFileSha256: bound.candidateEvidence.sha256,
+    latencyEvidenceFileSha256: bound.latencyEvidence.sha256,
+    safetyEvidenceFileSha256: bound.safetyEvidence.sha256,
+    baselineEvidenceCanonicalSha256: bound.baselineEvidence.canonicalSha256,
+    candidateEvidenceCanonicalSha256: bound.candidateEvidence.canonicalSha256,
+    latencyEvidenceCanonicalSha256: bound.latencyEvidence.canonicalSha256,
+    safetyEvidenceCanonicalSha256: bound.safetyEvidence.canonicalSha256
+  });
+  const context = deepFreeze({
+    ownerApproval: trusted.ownerApproval,
+    labelProvenance: trusted.labelProvenance,
+    shadowComparisons: trusted.shadowComparisons,
+    severeErrorReviews: trusted.severeErrorReviews
+  });
+  TRUSTED_EVIDENCE_CONTEXTS.set(context, trusted);
+  return context;
+}
+
+function loadExternalEvidenceContext(files) {
+  return createExternalEvidenceContext({
+    ownerApproval: readBoundJson(files.ownerApproval, 'owner approval'),
+    labelProvenance: readBoundJson(files.labelProvenance, 'label provenance'),
+    shadowComparisons: readBoundJson(files.shadowComparisons, 'shadow comparisons'),
+    severeErrorReviews: readBoundJson(files.severeErrorReviews, 'severe error reviews'),
+    scenarios: readBoundJsonLines(files.scenarios, 'scenario'),
+    baselineEvidence: readBoundJsonLines(files.baselineEvidence, 'baseline'),
+    candidateEvidence: readBoundJsonLines(files.candidateEvidence, 'candidate'),
+    latencyEvidence: readBoundJson(files.latencyEvidence, 'latency'),
+    safetyEvidence: readBoundJson(files.safetyEvidence, 'safety')
+  });
+}
+
+function isEvidenceContextBoundToInput(context, input) {
+  try {
+    const trusted = context && TRUSTED_EVIDENCE_CONTEXTS.get(context);
+    return Boolean(trusted && input
+      && trusted.holdoutCanonicalSha256 === sha256Hex(canonicalJson(input.scenarios))
+      && trusted.baselineEvidenceCanonicalSha256
+        === sha256Hex(canonicalJson(input.baselinePredictions))
+      && trusted.candidateEvidenceCanonicalSha256
+        === sha256Hex(canonicalJson(input.candidatePredictions))
+      && trusted.latencyEvidenceCanonicalSha256 === sha256Hex(canonicalJson(input.latencyEvidence))
+      && trusted.safetyEvidenceCanonicalSha256 === sha256Hex(canonicalJson(input.safetyEvidence)));
+  } catch (_) {
+    return false;
+  }
+}
+
+function createScenarioBundle(scenarios, benchmarkId) {
   const first = scenarios[0];
   const contextNames = ['evidenceKind', 'buildIdentity', 'seasonIdentity', 'cardPoolIdentity'];
   for (const row of scenarios) {
@@ -791,10 +975,6 @@ function readScenarioBundle(file, benchmarkId) {
         fail(`mixed scenario ${name}`);
       }
     }
-    for (const name of ['realTrustworthyVersionMatchedExpertLabels', 'shadowComparisonsRepresentative',
-      'humanSevereErrorReviewComplete']) {
-      if (typeof row[name] !== 'boolean' || row[name] !== first[name]) fail(`mixed or missing scenario ${name}`);
-    }
   }
   return {
     evidenceKind: first.evidenceKind,
@@ -803,9 +983,6 @@ function readScenarioBundle(file, benchmarkId) {
     buildIdentity: first.buildIdentity,
     seasonIdentity: first.seasonIdentity,
     cardPoolIdentity: first.cardPoolIdentity,
-    realTrustworthyVersionMatchedExpertLabels: first.realTrustworthyVersionMatchedExpertLabels,
-    shadowComparisonsRepresentative: first.shadowComparisonsRepresentative,
-    humanSevereErrorReviewComplete: first.humanSevereErrorReviewComplete,
     scenarios
   };
 }
@@ -813,25 +990,61 @@ function readScenarioBundle(file, benchmarkId) {
 function main(argv) {
   const args = parseArgs(argv);
   const dataRoot = assertExternalDataRoot(args['--data-root'], path.resolve(__dirname, '..', '..'));
-  const scenariosFile = resolveBelow(dataRoot, args['--scenarios'], 'scenarios');
-  const baselinePredictions = readJsonLines(resolveBelow(dataRoot, args['--baseline-evidence'], 'baseline evidence'));
-  const benchmarkId = requireString(baselinePredictions[0] && baselinePredictions[0].benchmarkId,
+  const files = {
+    scenarios: resolveDataPath(dataRoot, args['--scenarios'], 'scenarios'),
+    baselineEvidence: resolveDataPath(dataRoot, args['--baseline-evidence'], 'baseline evidence'),
+    candidateEvidence: resolveDataPath(dataRoot, args['--candidate-evidence'], 'candidate evidence'),
+    latencyEvidence: resolveDataPath(dataRoot, args['--latency-evidence'], 'latency evidence'),
+    safetyEvidence: resolveDataPath(dataRoot, args['--safety-evidence'], 'safety evidence')
+  };
+  const bound = {
+    scenarios: readBoundJsonLines(files.scenarios, 'scenario'),
+    baselineEvidence: readBoundJsonLines(files.baselineEvidence, 'baseline'),
+    candidateEvidence: readBoundJsonLines(files.candidateEvidence, 'candidate'),
+    latencyEvidence: readBoundJson(files.latencyEvidence, 'latency'),
+    safetyEvidence: readBoundJson(files.safetyEvidence, 'safety')
+  };
+  const benchmarkId = requireString(
+    bound.baselineEvidence.value[0] && bound.baselineEvidence.value[0].benchmarkId,
     'baseline benchmarkId');
   const fixture = {
-    ...readScenarioBundle(scenariosFile, benchmarkId),
-    baselinePredictions,
-    candidatePredictions: readJsonLines(resolveBelow(dataRoot, args['--candidate-evidence'], 'candidate evidence')),
-    latencyEvidence: JSON.parse(fs.readFileSync(resolveBelow(dataRoot, args['--latency-evidence'], 'latency evidence'), 'utf8')),
-    safetyEvidence: JSON.parse(fs.readFileSync(resolveBelow(dataRoot, args['--safety-evidence'], 'safety evidence'), 'utf8'))
+    ...createScenarioBundle(bound.scenarios.value, benchmarkId),
+    baselinePredictions: bound.baselineEvidence.value,
+    candidatePredictions: bound.candidateEvidence.value,
+    latencyEvidence: bound.latencyEvidence.value,
+    safetyEvidence: bound.safetyEvidence.value
   };
   const protocolContext = args['--evaluation-protocol']
-    ? loadExternalProtocolContext(
-      resolveBelow(dataRoot, args['--evaluation-protocol'], 'evaluation protocol'), scenariosFile)
+    ? createExternalProtocolContext(
+      readBoundJson(resolveDataPath(dataRoot, args['--evaluation-protocol'],
+        'evaluation protocol'), 'evaluation protocol'), bound.scenarios)
     : null;
-  const output = resolveBelow(dataRoot, args['--output'], 'output');
+  const evidenceArgumentNames = ['--owner-approval', '--label-provenance',
+    '--shadow-comparisons', '--severe-error-reviews'];
+  const suppliedEvidenceArguments = evidenceArgumentNames.filter(name => args[name]);
+  if (suppliedEvidenceArguments.length !== 0
+      && suppliedEvidenceArguments.length !== evidenceArgumentNames.length) {
+    fail('all external approval and evidence manifest arguments are required together');
+  }
+  const evidenceContext = suppliedEvidenceArguments.length === evidenceArgumentNames.length
+    ? createExternalEvidenceContext({
+      ...bound,
+      ownerApproval: readBoundJson(resolveDataPath(dataRoot, args['--owner-approval'],
+        'owner approval'), 'owner approval'),
+      labelProvenance: readBoundJson(resolveDataPath(dataRoot, args['--label-provenance'],
+        'label provenance'), 'label provenance'),
+      shadowComparisons: readBoundJson(resolveDataPath(dataRoot, args['--shadow-comparisons'],
+        'shadow comparisons'), 'shadow comparisons'),
+      severeErrorReviews: readBoundJson(resolveDataPath(dataRoot, args['--severe-error-reviews'],
+        'severe error reviews'), 'severe error reviews')
+    }) : null;
+  const output = resolveDataPath(dataRoot, args['--output'], 'output', { allowMissing: true });
   fs.mkdirSync(path.dirname(output), { recursive: true });
-  fs.writeFileSync(output, `${JSON.stringify(evaluate(fixture, protocolContext), null, 2)}\n`, 'utf8');
+  resolveDataPath(dataRoot, args['--output'], 'output', { allowMissing: true });
+  fs.writeFileSync(output, `${JSON.stringify(evaluate(fixture, protocolContext, evidenceContext), null, 2)}\n`, 'utf8');
+  resolveDataPath(dataRoot, args['--output'], 'output');
 }
 
-module.exports = { evaluate, loadExternalProtocolContext };
+module.exports = { evaluate, loadExternalProtocolContext, loadExternalEvidenceContext,
+  isEvidenceContextBoundToInput, verifyDetachedOwnerApproval };
 if (require.main === module) main(process.argv.slice(2));

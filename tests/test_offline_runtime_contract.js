@@ -17,8 +17,9 @@ const productionSeasonExtension = fs.existsSync(productionSeasonExtensionPath)
     : "";
 const benchmarkRunnerPath = path.join(root, "tools", "model", "PolicyBenchmarkRunner.cs");
 const benchmarkWrapperPath = path.join(root, "tools", "model", "run_policy_benchmark.ps1");
+const pathContractsPath = path.join(root, "tools", "model", "path_contracts.psm1");
 const evaluatorPath = path.join(root, "tools", "model", "evaluate_policy.js");
-for (const requiredPath of [benchmarkRunnerPath, benchmarkWrapperPath, evaluatorPath]) {
+for (const requiredPath of [benchmarkRunnerPath, benchmarkWrapperPath, pathContractsPath, evaluatorPath]) {
     if (!fs.existsSync(requiredPath)) {
         console.error(`FAIL Task 12 evidence tool is missing: ${path.basename(requiredPath)}`);
         process.exit(1);
@@ -26,6 +27,7 @@ for (const requiredPath of [benchmarkRunnerPath, benchmarkWrapperPath, evaluator
 }
 const benchmarkRunner = fs.readFileSync(benchmarkRunnerPath, "utf8");
 const benchmarkWrapper = fs.readFileSync(benchmarkWrapperPath, "utf8");
+const pathContracts = fs.readFileSync(pathContractsPath, "utf8");
 const evaluator = fs.readFileSync(evaluatorPath, "utf8");
 if (!benchmarkRunner.includes("DecisionPolicyFactory.CreateForEffectEvaluation")
     || !benchmarkRunner.includes("bundle.Legacy.Decide")
@@ -37,7 +39,12 @@ if (!benchmarkRunner.includes("DecisionPolicyFactory.CreateForEffectEvaluation")
     console.error("FAIL benchmark must use direct evaluation policies without gameplay recording or Shadow relabeling");
     process.exit(1);
 }
-if (!benchmarkWrapper.includes("assertExternalDataRoot")
+if (!benchmarkWrapper.includes('Import-Module (Join-Path $PSScriptRoot "path_contracts.psm1")')
+    || !benchmarkWrapper.includes("Assert-ExternalDataRoot -Path $DataRoot -RepositoryRoot $repoRoot")
+    || !benchmarkWrapper.includes("Assert-ExternalOutputPath -Path $OutputDirectory -RepositoryRoot $repoRoot")
+    || !pathContracts.includes("function Assert-ExternalDataRoot")
+    || !pathContracts.includes("function Assert-ExternalOutputPath")
+    || !pathContracts.includes("Assert-NoReparsePointPath")
     || !evaluator.includes("blocked-by-season-data")
     || evaluator.includes("activationDecision")) {
     console.error("FAIL evidence tools must enforce external storage and blocked effect acceptance");

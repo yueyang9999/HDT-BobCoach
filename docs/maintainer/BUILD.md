@@ -67,9 +67,9 @@ node .\tests\test_algorithm_evaluation.js
 
 `-SelfTest` 使用 fake policy 和合成状态，不代表策略提升。当前 `train_pairwise.js` 的 CLI 只校验外部、版本匹配输入，随后以 `blocked-by-season-data` 退出；它不会生成候选模型。不得把其单元测试内存结果当作生产候选。
 
-仓库内 `tools/model/evaluation_protocol_approvals.json` 是独立 provenance 信任根，Task 12 保持默认空清单。外部 protocol、labels/holdout 和候选模型即使自声明为 `owner-approved`，只要其完整文件 checksum、canonical protocol checksum、labels/holdout checksum、模型 checksum 及全部版本 identity 没有匹配该清单中的精确 tuple，evaluator 就必须保持 `blocked-by-season-data`、`metrics: null`。清单条目只能由另一个单独的 owner-approved 变更加入；benchmark 或 evaluator 命令不能写入或绕过它。
+仓库内 `tools/model/owner_approval_trusted_keys.json` 是 owner approval 的固定公钥信任根，Task 12 保持空 keyset，因此当前任何证据都不能通过效果门禁。未来只有单独批准的变更才能加入 Ed25519 公钥；owner approval 本身必须是外部 detached-signature artifact，benchmark 和 evaluator 都不能生成它、替换生产信任根或由调用方注入公钥。签名 payload 必须精确绑定 protocol 文件及 canonical checksum、holdout 文件及 canonical checksum、候选模型 payload checksum，label provenance、Shadow comparison、severe-error review 三份 manifest 的完整文件 checksum，以及 latency、safety evidence 的完整文件 checksum。evaluator 还会将同一次读取所得 scenarios、baseline、candidate、latency、safety 内容的 canonical checksum 与评估输入逐项核对。任一签名、checksum、版本 identity 或场景集合不匹配时，evaluator 必须保持 `blocked-by-season-data`、`metrics: null`。
 
-以下真实证据命令仅在至少 300 个去重、真实、可信、版本匹配的专家标注高影响场景、代表性 Shadow 对比和人工 severe-error review 全部具备后运行。`labels/scenarios-v1.jsonl` 每行必须携带一致的 `benchmarkId`、schema、build/season/card-pool identity 及证据复核布尔字段；完整游戏不能跨 partition。阈值必须在打开 holdout 结果前由所有者批准并冻结。
+以下真实证据命令仅在至少 300 个去重、真实、可信、版本匹配的专家标注高影响场景、代表性 Shadow 对比和人工 severe-error review 全部具备后运行。`labels/scenarios-v1.jsonl` 每行必须携带一致的 `benchmarkId`、schema、build/season/card-pool identity；完整游戏不能跨 partition。真实性、版本匹配、Shadow 代表性和严重错误复核不得由场景文件内的布尔字段自证，必须分别来自外部 manifest，并与 holdout 精确场景集合及对应 baseline/candidate evidence checksum 对账。阈值必须在打开 holdout 结果前由所有者批准并冻结。
 
 ```powershell
 $dataRoot = [IO.Path]::GetFullPath($env:BOBCOACH_DATA_ROOT)
@@ -99,6 +99,10 @@ node .\tools\model\evaluate_policy.js `
   --latency-evidence "evidence\linear-v1\latency.json" `
   --safety-evidence "evidence\linear-v1\safety-probes.json" `
   --evaluation-protocol "protocols\season-2026-next-effect-v1.json" `
+  --owner-approval "approvals\season-2026-next-effect-v1.approval.json" `
+  --label-provenance "provenance\season-2026-next-labels-v1.json" `
+  --shadow-comparisons "provenance\season-2026-next-shadow-v1.json" `
+  --severe-error-reviews "provenance\season-2026-next-severe-errors-v1.json" `
   --output "reports\linear-v1-acceptance.json"
 ```
 

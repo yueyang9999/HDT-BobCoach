@@ -46,6 +46,7 @@
       "topActionKeys": ["Upgrade|-1||"],
       "confidence": 1.0,
       "plannerStatus": "NotRequested",
+      "bestCompletePath": [],
       "fallbackReason": "None"
     }
   ],
@@ -64,6 +65,7 @@
       "topActionKeys": ["Upgrade|-1||"],
       "confidence": 1.0,
       "plannerStatus": "NotRequested",
+      "bestCompletePath": [],
       "fallbackReason": "None"
     }
   ],

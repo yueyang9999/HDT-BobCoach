@@ -8,7 +8,9 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const fixture = JSON.parse(fs.readFileSync(
   path.join(__dirname, 'fixtures', 'algorithm', 'evaluation.synthetic.json'), 'utf8'));
-const { evaluate, loadExternalProtocolContext } = require('../tools/model/evaluate_policy');
+const { evaluate, loadExternalProtocolContext, loadExternalEvidenceContext,
+  isEvidenceContextBoundToInput, verifyDetachedOwnerApproval }
+  = require('../tools/model/evaluate_policy');
 const clone = value => JSON.parse(JSON.stringify(value));
 const categories = ['level', 'refresh', 'buy', 'sell', 'freeze', 'play', 'transition'];
 const preferred = 'Upgrade|-1||';
@@ -29,7 +31,8 @@ function protocolContextFor(input, mutate = () => {}, transformRaw = value => va
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_protocol_contract_'));
   const scenariosFile = path.join(temporaryRoot, 'holdout.jsonl');
   const protocolFile = path.join(temporaryRoot, 'protocol.json');
-  fs.writeFileSync(scenariosFile, `${JSON.stringify(input.scenarios[0])}\n`, 'utf8');
+  fs.writeFileSync(scenariosFile,
+    `${input.scenarios.map(scenario => JSON.stringify(scenario)).join('\n')}\n`, 'utf8');
   const candidate = input.candidatePredictions[0];
   const protocol = {
     protocolSchemaVersion: 1,
@@ -93,6 +96,39 @@ function protocolContextFor(input, mutate = () => {}, transformRaw = value => va
   }
 }
 
+function evidenceContextFor(input) {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_evidence_contract_'));
+  const files = {
+    ownerApproval: path.join(temporaryRoot, 'owner-approval.json'),
+    labelProvenance: path.join(temporaryRoot, 'label-provenance.json'),
+    shadowComparisons: path.join(temporaryRoot, 'shadow-comparisons.json'),
+    severeErrorReviews: path.join(temporaryRoot, 'severe-error-reviews.json'),
+    scenarios: path.join(temporaryRoot, 'holdout.jsonl'),
+    baselineEvidence: path.join(temporaryRoot, 'baseline.jsonl'),
+    candidateEvidence: path.join(temporaryRoot, 'candidate.jsonl'),
+    latencyEvidence: path.join(temporaryRoot, 'latency.json'),
+    safetyEvidence: path.join(temporaryRoot, 'safety.json')
+  };
+  for (const name of ['ownerApproval', 'labelProvenance', 'shadowComparisons',
+    'severeErrorReviews']) {
+    fs.writeFileSync(files[name], '{}\n', 'utf8');
+  }
+  for (const [name, rows] of [
+    ['scenarios', input.scenarios],
+    ['baselineEvidence', input.baselinePredictions],
+    ['candidateEvidence', input.candidatePredictions]
+  ]) {
+    fs.writeFileSync(files[name], `${rows.map(row => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+  }
+  fs.writeFileSync(files.latencyEvidence, `${JSON.stringify(input.latencyEvidence)}\n`, 'utf8');
+  fs.writeFileSync(files.safetyEvidence, `${JSON.stringify(input.safetyEvidence)}\n`, 'utf8');
+  try {
+    return loadExternalEvidenceContext(files);
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
 const report = evaluate(clone(fixture));
 assert.strictEqual(report.evidenceSchemaVersion, 1);
 assert.strictEqual(report.effectAcceptanceStatus, 'blocked-by-season-data');
@@ -102,6 +138,20 @@ assert.strictEqual(report.evaluationProtocol, null);
 assert(!Object.prototype.hasOwnProperty.call(report, 'activationDecision'));
 assert(Array.isArray(report.missingPrerequisites) && report.missingPrerequisites.length > 0);
 assert(!JSON.stringify(report).includes('improvementPercent'));
+
+const plannedPredictionInput = clone(fixture);
+plannedPredictionInput.candidatePredictions[0].plannerStatus = 'Completed';
+plannedPredictionInput.candidatePredictions[0].selectedActionKey = weak;
+plannedPredictionInput.candidatePredictions[0].topActionKeys = [preferred, weak];
+plannedPredictionInput.candidatePredictions[0].bestCompletePath = [weak, preferred];
+assert.doesNotThrow(() => evaluate(plannedPredictionInput),
+  'planner evidence must preserve an action that differs from ranked Top-1');
+const missingPlanningPath = clone(plannedPredictionInput);
+delete missingPlanningPath.candidatePredictions[0].bestCompletePath;
+assert.throws(() => evaluate(missingPlanningPath), /planning path/i);
+const mismatchedPlanningPath = clone(plannedPredictionInput);
+mismatchedPlanningPath.candidatePredictions[0].bestCompletePath = [preferred];
+assert.throws(() => evaluate(mismatchedPlanningPath), /planning path/i);
 
 function forgedSyntheticEvidence() {
   const value = clone(fixture);
@@ -206,6 +256,49 @@ assert(validProtocolReport.evaluationProtocol,
 assert.strictEqual(validProtocolReport.effectAcceptanceStatus, 'blocked-by-season-data');
 assert.strictEqual(validProtocolReport.metrics, null);
 assert(validProtocolReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+
+const trustedProtocolContext = protocolContextFor(protocolInput);
+assert(Object.isFrozen(trustedProtocolContext), 'loaded protocol context must be immutable');
+assert(Object.isFrozen(trustedProtocolContext.protocol), 'loaded protocol payload must be immutable');
+assert(Object.isFrozen(trustedProtocolContext.protocol.thresholds),
+  'nested protocol payload must be immutable');
+assert.throws(() => { trustedProtocolContext.protocol = {}; }, /read only|Cannot assign/i);
+assert.throws(() => { trustedProtocolContext.protocol.thresholds.maximumNewSevereErrors = 999; },
+  /read only|Cannot assign/i);
+assert.throws(() => { trustedProtocolContext.protocolCanonicalSha256 = 'f'.repeat(64); },
+  /read only|Cannot assign/i);
+
+const forgedProtocolContext = { ...trustedProtocolContext };
+const forgedContextReport = evaluate(protocolInput, forgedProtocolContext);
+assert.strictEqual(forgedContextReport.evaluationProtocol, null,
+  'a copied or manually constructed protocol context must not be trusted');
+
+const mismatchedHoldoutInput = clone(protocolInput);
+mismatchedHoldoutInput.scenarios[0].category = 'refresh';
+const mismatchedHoldoutReport = evaluate(mismatchedHoldoutInput, trustedProtocolContext);
+assert.strictEqual(mismatchedHoldoutReport.evaluationProtocol, null,
+  'loaded protocol context must be bound to the evaluated holdout scenarios');
+assert.strictEqual(mismatchedHoldoutReport.effectAcceptanceStatus, 'blocked-by-season-data');
+assert.strictEqual(mismatchedHoldoutReport.metrics, null);
+
+const trustedEvidenceContext = evidenceContextFor(protocolInput);
+assert(Object.isFrozen(trustedEvidenceContext), 'loaded evidence context must be immutable');
+assert.strictEqual(isEvidenceContextBoundToInput(trustedEvidenceContext, protocolInput), true,
+  'loaded evidence context must bind the exact evaluated evidence content');
+for (const mutate of [
+  value => { value.scenarios[0].category = 'refresh'; },
+  value => { value.baselinePredictions[0].selectedActionKey = weak; },
+  value => { value.candidatePredictions[0].selectedActionKey = weak; },
+  value => { value.latencyEvidence.scenarios[0].candidateSamplesMilliseconds[0] = 99; },
+  value => { value.safetyEvidence.probes[0].passed = false; }
+]) {
+  const changed = clone(protocolInput);
+  mutate(changed);
+  assert.strictEqual(isEvidenceContextBoundToInput(trustedEvidenceContext, changed), false,
+    'evidence context must reject reuse with changed evaluated content');
+}
+assert.strictEqual(isEvidenceContextBoundToInput({ ...trustedEvidenceContext }, protocolInput), false,
+  'a copied or manually constructed evidence context must not be trusted');
 
 const renamedSyntheticInput = JSON.parse(JSON.stringify(protocolInput), (_, value) =>
   typeof value === 'string'
@@ -334,13 +427,52 @@ for (const mutate of mutations) {
 }
 
 const source = fs.readFileSync(path.join(root, 'tools', 'model', 'evaluate_policy.js'), 'utf8');
-const approvalRegistry = JSON.parse(fs.readFileSync(
-  path.join(root, 'tools', 'model', 'evaluation_protocol_approvals.json'), 'utf8'));
-assert.strictEqual(approvalRegistry.registrySchemaVersion, 1);
-assert.deepStrictEqual(approvalRegistry.approvals, [],
-  'Task 12 must not ship an approval for synthetic or unavailable season evidence');
-assert(source.includes('evaluation_protocol_approvals.json'),
-  'evaluator does not use the repository-owned provenance trust root');
+const trustedOwnerKeys = JSON.parse(fs.readFileSync(
+  path.join(root, 'tools', 'model', 'owner_approval_trusted_keys.json'), 'utf8'));
+assert.strictEqual(trustedOwnerKeys.trustedKeySetSchemaVersion, 1);
+assert.deepStrictEqual(trustedOwnerKeys.keys, [],
+  'Task 12 must not trust an owner key before real season evidence is available');
+assert(!source.includes('evaluation_protocol_approvals.json'),
+  'a repository-owned approval registry must not be an approval trust root');
+assert(!source.includes('realTrustworthyVersionMatchedExpertLabels')
+  && !source.includes('shadowComparisonsRepresentative')
+  && !source.includes('humanSevereErrorReviewComplete'),
+  'readiness must not depend on caller-controlled booleans');
+for (const option of ['--owner-approval', '--label-provenance', '--shadow-comparisons',
+  '--severe-error-reviews']) {
+  assert(source.includes(option), `evaluator CLI is missing ${option}`);
+}
+const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+const approvalPayload = {
+  approvalId: 'owner-approval-test',
+  protocolCanonicalSha256: 'a'.repeat(64),
+  labelProvenanceFileSha256: 'b'.repeat(64),
+  shadowComparisonsFileSha256: 'c'.repeat(64),
+  severeErrorReviewsFileSha256: 'd'.repeat(64),
+  latencyEvidenceFileSha256: 'e'.repeat(64),
+  safetyEvidenceFileSha256: 'f'.repeat(64)
+};
+const signedApproval = {
+  ownerApprovalSchemaVersion: 1,
+  keyId: 'owner-test-key',
+  signatureAlgorithm: 'ed25519',
+  payload: approvalPayload,
+  signatureBase64: crypto.sign(null, Buffer.from(canonicalJson(approvalPayload), 'utf8'), privateKey)
+    .toString('base64')
+};
+const testKeys = [{ keyId: 'owner-test-key', algorithm: 'ed25519',
+  publicKeySpkiPem: publicKey.export({ type: 'spki', format: 'pem' }) }];
+assert.strictEqual(verifyDetachedOwnerApproval(signedApproval, testKeys), true,
+  'valid detached owner signature should verify against an explicitly supplied test key');
+signedApproval.payload.protocolCanonicalSha256 = 'e'.repeat(64);
+assert.strictEqual(verifyDetachedOwnerApproval(signedApproval, testKeys), false,
+  'owner signature must bind the complete canonical approval payload');
+for (const checksumName of ['latencyEvidenceFileSha256', 'safetyEvidenceFileSha256']) {
+  assert(source.includes(`${checksumName}: trusted.${checksumName}`),
+    `owner approval must bind ${checksumName}`);
+  assert(source.includes(`approvedEvidence.checksums.${checksumName}`),
+    `acceptance report must record ${checksumName}`);
+}
 assert(source.includes('protocolSha256: protocol.protocol.protocolSha256'),
   'acceptance report does not record the validated protocol checksum');
 for (const forbidden of ['train(', 'activationDecision', 'Resources/DecisionModels']) {

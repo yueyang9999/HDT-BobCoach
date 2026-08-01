@@ -14,6 +14,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = [IO.Path]::GetFullPath((Split-Path -Parent (Split-Path -Parent $PSScriptRoot))).TrimEnd('\')
 $sourcePath = Join-Path $PSScriptRoot "PolicyBenchmarkRunner.cs"
 $temporaryRoot = Join-Path $env:TEMP ("bobcoach-policy-benchmark-" + [Guid]::NewGuid().ToString("N"))
+Import-Module (Join-Path $PSScriptRoot "path_contracts.psm1") -Force
 
 function Resolve-HdtDirectory([string]$ConfiguredPath) {
     if (![string]::IsNullOrWhiteSpace($ConfiguredPath)) {
@@ -63,38 +64,6 @@ function Resolve-CSharpCompiler {
     throw "Roslyn csc.exe was not found; set BOBCOACH_CSC or install Visual Studio Build Tools"
 }
 
-function assertExternalDataRoot([string]$Path) {
-    if ([string]::IsNullOrWhiteSpace($Path)) { throw "DataRoot is required in normal mode" }
-    $resolved = [IO.Path]::GetFullPath($Path).TrimEnd('\')
-    $repoPrefix = $repoRoot + [IO.Path]::DirectorySeparatorChar
-    if ($resolved.Equals($repoRoot, [StringComparison]::OrdinalIgnoreCase) -or
-        $resolved.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "DataRoot must be outside the repository"
-    }
-    $systemRoot = [IO.Path]::GetPathRoot($env:SystemDrive + [IO.Path]::DirectorySeparatorChar)
-    if ([IO.Path]::GetPathRoot($resolved).Equals($systemRoot, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "DataRoot must not be on the system drive"
-    }
-    if (!(Test-Path -LiteralPath $resolved -PathType Container)) {
-        throw "DataRoot does not exist: $resolved"
-    }
-    return $resolved
-}
-
-function Resolve-DataPath([string]$Root, [string]$RelativePath, [string]$Name, [switch]$AllowMissing) {
-    if ([string]::IsNullOrWhiteSpace($RelativePath)) { throw "$Name is required in normal mode" }
-    if ([IO.Path]::IsPathRooted($RelativePath)) { throw "$Name must be relative to DataRoot" }
-    $rootPrefix = $Root.TrimEnd('\') + [IO.Path]::DirectorySeparatorChar
-    $resolved = [IO.Path]::GetFullPath((Join-Path $Root $RelativePath))
-    if (!$resolved.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "$Name escapes DataRoot"
-    }
-    if (!$AllowMissing -and !(Test-Path -LiteralPath $resolved -PathType Leaf)) {
-        throw "$Name does not exist: $resolved"
-    }
-    return $resolved
-}
-
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) { throw "OutputDirectory is required" }
 if (!(Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Benchmark source is missing: $sourcePath" }
 
@@ -114,14 +83,18 @@ $resolvedProbes = $null
 $resolvedModel = $null
 $resolvedEvaluationProtocol = $null
 if ($SelfTest) {
-    $resolvedOutput = [IO.Path]::GetFullPath($OutputDirectory)
+    $resolvedOutput = Assert-ExternalOutputPath -Path $OutputDirectory -RepositoryRoot $repoRoot
 } else {
-    $resolvedDataRoot = assertExternalDataRoot $DataRoot
+    $resolvedDataRoot = Assert-ExternalDataRoot -Path $DataRoot -RepositoryRoot $repoRoot
     $resolvedScenarios = Resolve-DataPath $resolvedDataRoot $Scenarios "Scenarios"
     $resolvedProbes = Resolve-DataPath $resolvedDataRoot $SafetyProbes "SafetyProbes"
     $resolvedModel = Resolve-DataPath $resolvedDataRoot $CandidateModel "CandidateModel"
     $resolvedEvaluationProtocol = Resolve-DataPath $resolvedDataRoot $EvaluationProtocol "EvaluationProtocol"
-    $resolvedOutput = Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" -AllowMissing
+    $resolvedOutput = Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" `
+        -AllowMissing -ExpectedType Container
+    New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
+    Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" `
+        -ExpectedType Container | Out-Null
 }
 
 $buildDirectory = Join-Path $temporaryRoot "build"
@@ -163,6 +136,10 @@ try {
     }
     & $runnerPath @arguments
     $runnerExitCode = $LASTEXITCODE
+    if (!$SelfTest -and $runnerExitCode -eq 0) {
+        Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" `
+            -ExpectedType Container | Out-Null
+    }
 } finally {
     if (Test-Path -LiteralPath $temporaryRoot) {
         $resolvedTemporary = [IO.Path]::GetFullPath($temporaryRoot)

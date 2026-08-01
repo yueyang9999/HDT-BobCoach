@@ -2,10 +2,65 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $root "tools\model\run_policy_benchmark.ps1"
+$pathContracts = Join-Path $root "tools\model\path_contracts.psm1"
 $source = Join-Path $root "tools\model\PolicyBenchmarkRunner.cs"
 $factorySource = Join-Path $root "src\BobCoach\Core\Decision\DecisionPolicyFactory.cs"
 if (!(Test-Path -LiteralPath $runner -PathType Leaf)) { throw "benchmark runner wrapper is missing" }
+if (!(Test-Path -LiteralPath $pathContracts -PathType Leaf)) { throw "benchmark path contracts are missing" }
 if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "benchmark runner source is missing" }
+
+Import-Module $pathContracts -Force
+try {
+    Assert-ExternalOutputPath -Path (Join-Path $root "forbidden-self-test-output") `
+        -RepositoryRoot $root | Out-Null
+    throw "repository self-test output was accepted"
+} catch {
+    if ($_.Exception.Message -notmatch "outside the repository") { throw }
+}
+$pathContractRoot = Join-Path (Split-Path -Qualifier $root) `
+    ("HDT-BobCoach-path-contract-" + [Guid]::NewGuid().ToString("N"))
+$pathContractData = Join-Path $pathContractRoot "data"
+$rootJunction = Join-Path $pathContractRoot "root-junction"
+$childJunction = Join-Path $pathContractData "child-junction"
+try {
+    New-Item -ItemType Directory -Path $pathContractData -Force | Out-Null
+    New-Item -ItemType Junction -Path $rootJunction -Target $root | Out-Null
+    try {
+        Assert-ExternalDataRoot -Path $rootJunction -RepositoryRoot $root | Out-Null
+        throw "DataRoot junction was accepted"
+    } catch {
+        if ($_.Exception.Message -notmatch "reparse point|outside the repository") { throw }
+    }
+    try {
+        Assert-ExternalOutputPath -Path (Join-Path $rootJunction "self-test-output") `
+            -RepositoryRoot $root | Out-Null
+        throw "self-test output parent junction was accepted"
+    } catch {
+        if ($_.Exception.Message -notmatch "reparse point|outside the repository") { throw }
+    }
+
+    New-Item -ItemType Junction -Path $childJunction -Target $root | Out-Null
+    $resolvedDataRoot = Assert-ExternalDataRoot -Path $pathContractData -RepositoryRoot $root
+    foreach ($case in @(
+        @{ Relative = "child-junction\AGENTS.md"; Name = "InputEvidence"; AllowMissing = $false; Type = "Leaf" },
+        @{ Relative = "child-junction\new-output"; Name = "OutputEvidence"; AllowMissing = $true; Type = "Container" }
+    )) {
+        try {
+            Resolve-DataPath -Root $resolvedDataRoot -RelativePath $case.Relative `
+                -Name $case.Name -AllowMissing:$case.AllowMissing -ExpectedType $case.Type | Out-Null
+            throw "$($case.Name) reparse path was accepted"
+        } catch {
+            if ($_.Exception.Message -notmatch "reparse point|escapes DataRoot") { throw }
+        }
+    }
+} finally {
+    foreach ($junction in @($childJunction, $rootJunction)) {
+        if (Test-Path -LiteralPath $junction) { [IO.Directory]::Delete($junction) }
+    }
+    if (Test-Path -LiteralPath $pathContractRoot) {
+        Remove-Item -LiteralPath $pathContractRoot -Recurse -Force
+    }
+}
 
 $sourceText = [System.IO.File]::ReadAllText($source)
 foreach ($required in @(
@@ -13,7 +68,7 @@ foreach ($required in @(
     "bundle.Legacy.Decide", "bundle.Unified.Decide", "DecideWithDiagnostics", "LoadEvaluationContext",
     "BestCompletePath", "legacy-v1.1.0", "CandidateEvidenceSurface",
     "ValidateDeclaredCandidates", "self-test must reject a mismatched candidate declaration",
-    "CandidateBenchmarkAdapter")) {
+    "CandidateBenchmarkAdapter", "ValidateProbeModelSource")) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing required evaluation surface: $required" }
 }
 if ($sourceText.Contains('.Where(property => !property.Name.StartsWith("_"')) {
@@ -68,6 +123,12 @@ try {
         throw "baseline and candidate evidence are not paired"
     }
     if (@($candidate.topActionKeys).Count -gt 3) { throw "candidate Top-N exceeds three actions" }
+    if ($candidate.plannerStatus -eq "NotRequested" -or
+        $candidate.selectedActionKey -eq $candidate.topActionKeys[0] -or
+        @($candidate.bestCompletePath).Count -eq 0 -or
+        $candidate.bestCompletePath[0] -ne $candidate.selectedActionKey) {
+        throw "candidate evidence did not preserve the actual planner action and path"
+    }
 
     $latency = Get-Content -Raw (Join-Path $first "latency.json") | ConvertFrom-Json
     if ($latency.latencyEvidenceSchemaVersion -ne 1 -or $latency.measurementsPerPolicyPerScenario -ne 10) {
@@ -103,6 +164,8 @@ try {
         "explicitFallbackUsesLegacySurface",
         "candidateLatencyIncludesLegacyFallback", "missingCandidateDecisionRejected",
         "protocolUnderscoreFieldsChecksumBound",
+        "plannerActionDistinctFromRankedTopOne",
+        "modelUnavailableCandidateSourceRejected", "candidateProbeNoneSourceRejected",
         "orchestratedSafetyOutcomesObserved")) {
         if ($contracts.$name -ne $true) { throw "self-test did not dynamically prove $name" }
     }
