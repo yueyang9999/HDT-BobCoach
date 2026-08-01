@@ -2,12 +2,14 @@
 
 ## Status
 
-Implementation and implementer self-review are complete. Focused contracts, the
-full npm suite, an explicit Release build, repository validation, and whitespace
-validation pass. The first fresh review returned three Critical and two
-Important findings; all five were repaired. A fresh re-review against the final
-frozen Task 12 bundle is still required; this report does not claim reviewer
-approval.
+Implementation and implementer self-review are complete. Earlier full-suite,
+Release-build, repository-validation, and whitespace evidence remains recorded
+below. The original frozen review reported two Critical/four Important/one
+Minor findings. Three subsequent fresh review waves reported, respectively, one
+Critical/two Important/one Minor, zero Critical/two Important/zero Minor, and
+zero Critical/two Important/zero Minor findings. Every reported finding has now
+been repaired, but a new fresh review against the final frozen Task 12 bundle
+is still required; this report does not claim reviewer approval.
 
 Effect acceptance remains exactly `blocked-by-season-data`. No model was
 trained, generated, copied, embedded, or activated. Unified ranking remains in
@@ -171,16 +173,17 @@ Focused verification with `BOBCOACH_HDT_DIR` set to the HDT 1.54.0 reference:
 
 ## Fresh-review Repair Wave (2026-08-01)
 
-The first fresh Task 12 review reported three Critical and two Important
-findings. The repair wave now:
+The original frozen Task 12 review reported two Critical, four Important, and
+one Minor finding. The repair wave now:
 
 - records the planner's real selected action key, ordered Top-N actions,
   best-complete path, and planner status in benchmark evidence;
 - maps `model-unavailable` probes to `modelSource: none` and all other probes
   to `modelSource: candidate`;
-- centralizes external-root/output validation in `path_contracts.psm1`, rejects
-  repository/system-drive destinations in normal and self-test modes, and
-  rejects reparse-point or junction escapes;
+- centralizes external-root/output validation in `path_contracts.psm1`; normal
+  mode rejects repository/system-drive data roots, self-test output must remain
+  outside the repository, and both modes reject reparse-point or junction
+  escapes;
 - replaces repository-local owner approval with an externally supplied,
   detached Ed25519 signature verified against the checked-in empty trust-root
   file; and
@@ -206,6 +209,62 @@ external HDT 1.54.0 reference directory:
 The readiness result remains `effectAcceptanceStatus:
 blocked-by-season-data` with `metrics: null`. The repair wave did not add a
 training, generation, copy, embedding, activation, or visible-policy path.
+
+## Final Fresh-review Repair Wave (2026-08-01)
+
+The latest fresh review found zero Critical and two Important issues: effect
+metrics used the planner diagnostic first step instead of the production
+`DecisionResult.SelectedAction`, and evidence writers reopened a checked output
+directory by string path, leaving a junction/reparse replacement window.
+
+### RED
+
+- `node tests/test_algorithm_evaluation.js` failed with `invalid evidence:
+  candidate planning path and selected action are inconsistent` when the
+  planner diagnostic first step intentionally differed from production Top-1.
+- `tests/test_algorithm_benchmark_contract.ps1` failed its secure-output
+  contract before the runner used a locked evidence directory. The added
+  concurrent rename/junction case demonstrated that a path-based writer could
+  be redirected after validation.
+
+### GREEN
+
+- Benchmark prediction and safety evidence now always use
+  `DecisionResult.SelectedAction`; `topActionKeys[0]` must equal that production
+  action. `bestCompletePath` remains non-metric planner diagnostic evidence and
+  may begin with a different action.
+- Both the benchmark runner and evaluator route output through
+  `SecureEvidenceDirectory`. It opens and rejects reparse points along the
+  output chain, creates missing segments relative to retained parent handles,
+  and retains every directory handle without delete sharing. It creates and
+  flushes a unique staging file relative to the retained output-directory
+  handle, then publishes relative to that same handle without replacing an
+  existing target. Dynamic contracts cover hierarchy creation, rejected rename,
+  first publication, rejected overwrite, and staging cleanup.
+- Protocol-only numeric canonicalization now gives C# and JavaScript the same
+  17-significant-digit scientific representation. The focused contracts prove
+  equivalent `1`, `1.0`, and `1e0` spellings produce one checksum and reject
+  integers outside JavaScript's safe range. Other evidence and signature
+  canonicalization is unchanged.
+- The path-boundary report now states the actual contract: normal mode rejects
+  repository/system-drive data roots, while self-test output is required only
+  to remain outside the repository; both reject reparse-point escapes.
+- `node tests/test_algorithm_evaluation.js`: pass.
+- Three consecutive `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests/test_algorithm_benchmark_contract.ps1` invocations passed; each pair of
+  Release builds produced identical `BobCoach.dll` files (`784384` bytes,
+  SHA-256 `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`).
+- `node tests/test_algorithm_workspace_contract.js`: pass.
+- `node tests/test_offline_runtime_contract.js`: all four contracts pass.
+- `git diff --check`: exit code 0 before this report update.
+
+Full-suite, explicit Release-build, and repository-validation evidence must be
+refreshed after the final Task 12 and whole-branch reviews; this section does
+not reuse the earlier repair wave's results for the current implementation.
+
+The result remains `blocked-by-season-data` with no accepted/rejected effect
+decision or formal improvement metric. Unified ranking remains Shadow and
+`legacy-v1.1.0` remains player-visible and the fallback.
 
 ## Required Conclusion
 

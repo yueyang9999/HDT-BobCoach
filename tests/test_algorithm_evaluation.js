@@ -27,7 +27,25 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function protocolContextFor(input, mutate = () => {}, transformRaw = value => value) {
+function canonicalProtocolJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalProtocolJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort()
+      .map(key => `${JSON.stringify(key)}:${canonicalProtocolJson(value[key])}`).join(',')}}`;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value))) {
+      throw new Error('protocol number is not safely representable');
+    }
+    const [mantissa, rawExponent] = (Object.is(value, -0) ? 0 : value).toExponential(16).split('e');
+    const exponent = Number(rawExponent);
+    return `${mantissa}e${exponent >= 0 ? '+' : ''}${exponent}`;
+  }
+  return JSON.stringify(value);
+}
+
+function protocolContextFor(input, mutate = () => {}, transformRaw = value => value,
+  canonicalize = canonicalProtocolJson) {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_protocol_contract_'));
   const scenariosFile = path.join(temporaryRoot, 'holdout.jsonl');
   const protocolFile = path.join(temporaryRoot, 'protocol.json');
@@ -87,7 +105,7 @@ function protocolContextFor(input, mutate = () => {}, transformRaw = value => va
   };
   mutate(protocol);
   protocol.protocolSha256 = crypto.createHash('sha256')
-    .update(canonicalJson(protocol), 'utf8').digest('hex');
+    .update(canonicalize(protocol), 'utf8').digest('hex');
   fs.writeFileSync(protocolFile, transformRaw(JSON.stringify(protocol)), 'utf8');
   try {
     return loadExternalProtocolContext(protocolFile, scenariosFile);
@@ -141,16 +159,20 @@ assert(!JSON.stringify(report).includes('improvementPercent'));
 
 const plannedPredictionInput = clone(fixture);
 plannedPredictionInput.candidatePredictions[0].plannerStatus = 'Completed';
-plannedPredictionInput.candidatePredictions[0].selectedActionKey = weak;
+plannedPredictionInput.candidatePredictions[0].selectedActionKey = preferred;
 plannedPredictionInput.candidatePredictions[0].topActionKeys = [preferred, weak];
 plannedPredictionInput.candidatePredictions[0].bestCompletePath = [weak, preferred];
 assert.doesNotThrow(() => evaluate(plannedPredictionInput),
-  'planner evidence must preserve an action that differs from ranked Top-1');
+  'planner diagnostics must not replace the production SelectedAction used by effect metrics');
+const plannerActionSubstitutedForProduction = clone(plannedPredictionInput);
+plannerActionSubstitutedForProduction.candidatePredictions[0].selectedActionKey = weak;
+assert.throws(() => evaluate(plannerActionSubstitutedForProduction), /selected action/i,
+  'effect evidence must reject a planner action substituted for production SelectedAction');
 const missingPlanningPath = clone(plannedPredictionInput);
 delete missingPlanningPath.candidatePredictions[0].bestCompletePath;
 assert.throws(() => evaluate(missingPlanningPath), /planning path/i);
 const mismatchedPlanningPath = clone(plannedPredictionInput);
-mismatchedPlanningPath.candidatePredictions[0].bestCompletePath = [preferred];
+mismatchedPlanningPath.candidatePredictions[0].bestCompletePath = [];
 assert.throws(() => evaluate(mismatchedPlanningPath), /planning path/i);
 
 function forgedSyntheticEvidence() {
@@ -256,6 +278,14 @@ assert(validProtocolReport.evaluationProtocol,
 assert.strictEqual(validProtocolReport.effectAcceptanceStatus, 'blocked-by-season-data');
 assert.strictEqual(validProtocolReport.metrics, null);
 assert(validProtocolReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+
+for (const numericSpelling of ['1.0', '1e0']) {
+  const numericProtocol = protocolContextFor(protocolInput, () => {},
+    raw => raw.replace('"marginScale":1', `"marginScale":${numericSpelling}`),
+    canonicalProtocolJson);
+  assert(evaluate(protocolInput, numericProtocol).evaluationProtocol,
+    `protocol numeric spelling ${numericSpelling} must use the cross-language canonical hash`);
+}
 
 const trustedProtocolContext = protocolContextFor(protocolInput);
 assert(Object.isFrozen(trustedProtocolContext), 'loaded protocol context must be immutable');
@@ -409,10 +439,6 @@ const mutations = [
     const timeout = value.safetyEvidence.probes.find(probe => probe.probeId === 'planner-timeout');
     timeout.actualBestCompletePath = [];
   },
-  value => {
-    const timeout = value.safetyEvidence.probes.find(probe => probe.probeId === 'planner-timeout');
-    timeout.actualBestCompletePath = [weak];
-  },
   value => { value.safetyEvidence.probes[0].actualBestCompletePath = [preferred]; },
   value => { value.baselinePredictions[0].evidenceSchemaVersion = 2; },
   value => { value.scenarios[0].gameId = ''; },
@@ -427,6 +453,9 @@ for (const mutate of mutations) {
 }
 
 const source = fs.readFileSync(path.join(root, 'tools', 'model', 'evaluate_policy.js'), 'utf8');
+assert(source.includes('secure_write_evidence.ps1')
+  && !source.includes('fs.writeFileSync(output'),
+  'evaluator output must be written through the locked secure evidence writer');
 const trustedOwnerKeys = JSON.parse(fs.readFileSync(
   path.join(root, 'tools', 'model', 'owner_approval_trusted_keys.json'), 'utf8'));
 assert.strictEqual(trustedOwnerKeys.trustedKeySetSchemaVersion, 1);

@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BobCoach.Engine;
 using BobCoach.Engine.Decision;
+using BobCoach.ModelTools;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -139,9 +140,15 @@ internal static class PolicyBenchmarkRunner
             string output;
             if (!values.TryGetValue("--output", out output) || string.IsNullOrWhiteSpace(output))
                 throw new ArgumentException("--output is required");
-            Directory.CreateDirectory(output);
-            if (values.ContainsKey("--self-test")) RunSelfTest(output);
-            else RunProduction(values, output);
+            string outputRoot;
+            if (!values.TryGetValue("--output-root", out outputRoot)
+                || string.IsNullOrWhiteSpace(outputRoot))
+                throw new ArgumentException("--output-root is required");
+            using (var secureOutput = SecureEvidenceDirectory.Acquire(outputRoot, output))
+            {
+                if (values.ContainsKey("--self-test")) RunSelfTest(secureOutput);
+                else RunProduction(values, secureOutput);
+            }
             return 0;
         }
         catch (Exception ex)
@@ -154,7 +161,7 @@ internal static class PolicyBenchmarkRunner
     private static Dictionary<string, string> ParseArgs(string[] args)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        var allowed = new HashSet<string>(new[] { "--output", "--self-test", "--scenarios",
+        var allowed = new HashSet<string>(new[] { "--output", "--output-root", "--self-test", "--scenarios",
             "--probes", "--model", "--evaluation-protocol" },
             StringComparer.Ordinal);
         for (var index = 0; index < args.Length; index++)
@@ -168,7 +175,7 @@ internal static class PolicyBenchmarkRunner
         return result;
     }
 
-    private static void RunSelfTest(string output)
+    private static void RunSelfTest(SecureEvidenceDirectory output)
     {
         var state = new GameState
         {
@@ -211,11 +218,11 @@ internal static class PolicyBenchmarkRunner
             throw new InvalidOperationException("self-test candidate must not reuse legacy output");
         var candidatePrediction = Prediction(record, candidate, "synthetic-model",
             new string('b', 64));
-        var plannerActionDistinctFromRankedTopOne =
+        var productionSelectedActionDistinctFromPlannerDiagnostic =
             (string)candidatePrediction["selectedActionKey"]
-                != (string)((JArray)candidatePrediction["topActionKeys"])[0]
+                == (string)((JArray)candidatePrediction["topActionKeys"])[0]
             && (string)((JArray)candidatePrediction["bestCompletePath"])[0]
-                == (string)candidatePrediction["selectedActionKey"];
+                != (string)candidatePrediction["selectedActionKey"];
         var fallbackUnified = new FakePolicy("unified-linear-v1", FallbackReason.LowConfidence,
             PlannerStatus.NotRequested, ActionType.Refresh);
         var fallbackCandidate = new CandidateBenchmarkAdapter(fallbackState =>
@@ -226,17 +233,17 @@ internal static class PolicyBenchmarkRunner
             && ActionDescriptor.CreateKey(fallbackCandidate.SelectedAction)
                 == ActionDescriptor.CreateKey(baseline.SelectedAction);
 
-        WriteLines(Path.Combine(output, "baseline-predictions.jsonl"), new[] {
+        WriteLines(output, "baseline-predictions.jsonl", new[] {
             Prediction(record, baseline, "unknown", "unknown")
         });
-        WriteLines(Path.Combine(output, "candidate-predictions.jsonl"), new[] {
+        WriteLines(output, "candidate-predictions.jsonl", new[] {
             candidatePrediction
         });
-        WriteJson(Path.Combine(output, "latency.json"), LatencyEvidence(
+        WriteJson(output, "latency.json", LatencyEvidence(
             new[] { new Scenario { ScenarioId = record.DecisionId, State = state } },
             legacy, candidateAdapter, "synthetic-model", new string('b', 64)));
         var safety = SyntheticSafety(record, state, legacy);
-        WriteJson(Path.Combine(output, "safety-probes.json"), safety);
+        WriteJson(output, "safety-probes.json", safety);
 
         var identityMismatchRejected = RejectsInvalidData(delegate {
             ValidateStateIdentity(state, "different-build", state.SeasonId, state.CardPoolIdentity);
@@ -275,9 +282,21 @@ internal static class PolicyBenchmarkRunner
         var protocolUnderscoreFieldsChecksumBound = Sha256Hex(CanonicalJson(canonical))
                 != Sha256Hex(CanonicalJson(topLevelTamper))
             && Sha256Hex(CanonicalJson(canonical)) != Sha256Hex(CanonicalJson(nestedTamper));
+        var canonicalInteger = JObject.Parse("{\"marginScale\":1,\"threshold\":0.5}");
+        var canonicalDecimal = JObject.Parse("{\"marginScale\":1.0,\"threshold\":5.0e-1}");
+        var canonicalExponent = JObject.Parse("{\"marginScale\":1e0,\"threshold\":5E-1}");
+        const string expectedNumericCanonical =
+            "{\"marginScale\":1.0000000000000000e+0,\"threshold\":5.0000000000000000e-1}";
+        var protocolNumericCanonicalizationCrossLanguage =
+            string.Equals(CanonicalJson(canonicalInteger), expectedNumericCanonical,
+                StringComparison.Ordinal)
+            && string.Equals(CanonicalJson(canonicalDecimal), expectedNumericCanonical,
+                StringComparison.Ordinal)
+            && string.Equals(CanonicalJson(canonicalExponent), expectedNumericCanonical,
+                StringComparison.Ordinal);
         if (!identityMismatchRejected || !unknownEnumRejected || !incompleteProbeSetRejected)
             throw new InvalidOperationException("self-test fail-closed contracts were not exercised");
-        WriteJson(Path.Combine(output, "self-test-contracts.json"), new JObject {
+        WriteJson(output, "self-test-contracts.json", new JObject {
             { "scenarioStateIdentityMismatchRejected", identityMismatchRejected },
             { "unknownSafetyEnumRejected", unknownEnumRejected },
             { "incompleteSafetyProbeSetRejected", incompleteProbeSetRejected },
@@ -285,16 +304,19 @@ internal static class PolicyBenchmarkRunner
             { "explicitFallbackUsesLegacySurface", explicitFallbackUsesLegacySurface },
             { "candidateLatencyIncludesLegacyFallback", candidateLatencyIncludesLegacyFallback },
             { "missingCandidateDecisionRejected", missingCandidateDecisionRejected },
-            { "plannerActionDistinctFromRankedTopOne", plannerActionDistinctFromRankedTopOne },
+            { "productionSelectedActionDistinctFromPlannerDiagnostic",
+                productionSelectedActionDistinctFromPlannerDiagnostic },
             { "modelUnavailableCandidateSourceRejected", modelUnavailableCandidateSourceRejected },
             { "candidateProbeNoneSourceRejected", candidateProbeNoneSourceRejected },
             { "protocolUnderscoreFieldsChecksumBound", protocolUnderscoreFieldsChecksumBound },
+            { "protocolNumericCanonicalizationCrossLanguage",
+                protocolNumericCanonicalizationCrossLanguage },
             { "orchestratedSafetyOutcomesObserved",
                 safety["probes"].All(value => (bool)value["passed"]) }
         });
     }
 
-    private static void RunProduction(IDictionary<string, string> args, string output)
+    private static void RunProduction(IDictionary<string, string> args, SecureEvidenceDirectory output)
     {
         foreach (var required in new[] { "--scenarios", "--probes", "--model",
             "--evaluation-protocol" })
@@ -335,11 +357,11 @@ internal static class PolicyBenchmarkRunner
                 bundle.ModelId, bundle.ModelPayloadSha256));
         }
 
-        WriteLines(Path.Combine(output, "baseline-predictions.jsonl"), baselineRows);
-        WriteLines(Path.Combine(output, "candidate-predictions.jsonl"), candidateRows);
-        WriteJson(Path.Combine(output, "latency.json"), LatencyEvidence(scenarios,
+        WriteLines(output, "baseline-predictions.jsonl", baselineRows);
+        WriteLines(output, "candidate-predictions.jsonl", candidateRows);
+        WriteJson(output, "latency.json", LatencyEvidence(scenarios,
             bundle.Legacy, candidateAdapter, bundle.ModelId, bundle.ModelPayloadSha256));
-        WriteJson(Path.Combine(output, "safety-probes.json"), RunSafetyProbes(
+        WriteJson(output, "safety-probes.json", RunSafetyProbes(
             args["--probes"], bundle));
     }
 
@@ -481,6 +503,22 @@ internal static class PolicyBenchmarkRunner
         var arrayValue = token as JArray;
         if (arrayValue != null)
             return "[" + string.Join(",", arrayValue.Select(CanonicalJson)) + "]";
+        if (token.Type == JTokenType.Integer || token.Type == JTokenType.Float)
+        {
+            var number = token.Value<double>();
+            if (double.IsNaN(number) || double.IsInfinity(number)
+                || (Math.Truncate(number) == number && Math.Abs(number) > 9007199254740991d))
+                throw new InvalidDataException(
+                    "evaluation protocol number is not safely representable");
+            if (number == 0d) number = 0d;
+            var formatted = number.ToString("E16", CultureInfo.InvariantCulture);
+            var exponentIndex = formatted.IndexOf('E');
+            var exponent = int.Parse(formatted.Substring(exponentIndex + 1),
+                NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            return formatted.Substring(0, exponentIndex) + "e"
+                + (exponent >= 0 ? "+" : "")
+                + exponent.ToString(CultureInfo.InvariantCulture);
+        }
         return token.ToString(Formatting.None);
     }
 
@@ -527,9 +565,8 @@ internal static class PolicyBenchmarkRunner
         var planning = diagnostics.PlanningResult;
         var top = new JArray((result.RankedActions ?? new List<RankedAction>())
             .Where(value => value != null).Take(3).Select(value => value.ActionKey ?? ""));
-        var selected = planning.Status == PlannerStatus.NotRequested
-            ? (result.SelectedAction == null ? "" : ActionDescriptor.CreateKey(result.SelectedAction))
-            : planning.ActionKey;
+        var selected = result.SelectedAction == null
+            ? "" : ActionDescriptor.CreateKey(result.SelectedAction);
         return new JObject {
             { "evidenceSchemaVersion", 1 }, { "benchmarkId", BenchmarkId },
             { "scenarioId", record.DecisionId }, { "gameId", record.GameId },
@@ -626,8 +663,12 @@ internal static class PolicyBenchmarkRunner
                 expectedPlanner, ActionType.Refresh);
             var decision = unified.Decide(Clone(state));
             var selected = ActionDescriptor.CreateKey(decision.SelectedAction);
+            var diagnosticPathAction = ActionDescriptor.CreateKey(new GameAction {
+                Type = ActionType.Upgrade, TargetIndex = -1
+            });
             var planning = id == "planner-timeout"
-                ? PlanningResult.TimedOut(selected, new List<string> { selected }, 1, 1, 1)
+                ? PlanningResult.TimedOut(diagnosticPathAction,
+                    new List<string> { diagnosticPathAction }, 1, 1, 1)
                 : PlanningResult.NotRequested();
             AddProbe(rows, id, record, id == "model-unavailable" ? "none" : "candidate",
                 expectedFallback, expectedPlanner, decision, planning);
@@ -760,9 +801,8 @@ internal static class PolicyBenchmarkRunner
         if (decision == null || planning == null)
             throw new InvalidDataException("safety probe diagnostics are missing");
         ValidateProbeModelSource(id, source);
-        var selected = planning.Status == PlannerStatus.NotRequested
-            ? (decision.SelectedAction == null ? "" : ActionDescriptor.CreateKey(decision.SelectedAction))
-            : planning.ActionKey;
+        var selected = decision.SelectedAction == null
+            ? "" : ActionDescriptor.CreateKey(decision.SelectedAction);
         var path = planning.BestCompletePath ?? new List<string>();
         rows.Add(new JObject {
             { "probeId", id }, { "stateFingerprint", record.StateFingerprint },
@@ -778,8 +818,7 @@ internal static class PolicyBenchmarkRunner
                 && expectedPlanner == planning.Status
                 && string.Equals(source, ExpectedProbeModelSource(id), StringComparison.Ordinal)
                 && (id != "planner-timeout" || (!string.IsNullOrWhiteSpace(selected)
-                    && path.Count > 0
-                    && string.Equals(path[0], selected, StringComparison.Ordinal))) }
+                    && path.Count > 0)) }
         });
     }
 
@@ -869,14 +908,15 @@ internal static class PolicyBenchmarkRunner
         return clone;
     }
 
-    private static void WriteLines(string path, IEnumerable<JObject> rows)
+    private static void WriteLines(SecureEvidenceDirectory output, string fileName,
+        IEnumerable<JObject> rows)
     {
         var content = string.Join("\n", rows.Select(value => value.ToString(Formatting.None))) + "\n";
-        File.WriteAllText(path, content, Utf8NoBom);
+        output.WriteAllText(fileName, content);
     }
 
-    private static void WriteJson(string path, JObject value)
+    private static void WriteJson(SecureEvidenceDirectory output, string fileName, JObject value)
     {
-        File.WriteAllText(path, value.ToString(Formatting.None) + "\n", Utf8NoBom);
+        output.WriteAllText(fileName, value.ToString(Formatting.None) + "\n");
     }
 }

@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const childProcess = require('child_process');
 const { assertExternalDataRoot, resolveDataPath } = require('./contracts');
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -106,6 +107,9 @@ function validatePrediction(row, expectedBenchmark, kind) {
       || new Set(row.topActionKeys).size !== row.topActionKeys.length) {
     fail(`${kind} selected action and Top-N evidence are inconsistent`);
   }
+  if (row.topActionKeys[0] !== selected) {
+    fail(`${kind} selected action does not match the production Top-1 action`);
+  }
   if (!isFiniteInRange(row.confidence, 0, 1)) fail(`${kind} confidence is invalid`);
   const fallbackReason = requireString(row.fallbackReason, `${kind}.fallbackReason`);
   const plannerStatus = requireString(row.plannerStatus, `${kind}.plannerStatus`);
@@ -116,12 +120,12 @@ function validatePrediction(row, expectedBenchmark, kind) {
     fail(`${kind} planning path evidence is invalid`);
   }
   if (plannerStatus === 'NotRequested') {
-    if (row.bestCompletePath.length !== 0 || row.topActionKeys[0] !== selected) {
+    if (row.bestCompletePath.length !== 0) {
       fail(`${kind} non-planner action evidence is inconsistent`);
     }
   } else if (plannerStatus === 'Completed' || plannerStatus === 'TimedOut') {
-    if (row.bestCompletePath.length === 0 || row.bestCompletePath[0] !== selected) {
-      fail(`${kind} planning path and selected action are inconsistent`);
+    if (row.bestCompletePath.length === 0) {
+      fail(`${kind} planning path evidence is missing`);
     }
   }
 }
@@ -181,8 +185,7 @@ function validateSafety(evidence, benchmarkId) {
         && Array.isArray(probe.actualTopActionKeys)
         && probe.actualTopActionKeys.length > 0
         && probe.actualTopActionKeys[0] === probe.actualSelectedActionKey
-        && probe.actualBestCompletePath.length > 0
-        && probe.actualBestCompletePath[0] === probe.actualSelectedActionKey;
+        && probe.actualBestCompletePath.length > 0;
     } else {
       semanticsPass = semanticsPass && probe.actualBestCompletePath.length === 0;
     }
@@ -359,6 +362,23 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+function canonicalProtocolJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalProtocolJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort()
+      .map(key => `${JSON.stringify(key)}:${canonicalProtocolJson(value[key])}`).join(',')}}`;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value))) {
+      fail('evaluation protocol number is not safely representable');
+    }
+    const [mantissa, rawExponent] = (Object.is(value, -0) ? 0 : value).toExponential(16).split('e');
+    const exponent = Number(rawExponent);
+    return `${mantissa}e${exponent >= 0 ? '+' : ''}${exponent}`;
+  }
+  return JSON.stringify(value);
+}
+
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
 }
@@ -415,7 +435,8 @@ function validateEvaluationProtocol(context, input, candidateIdentity, holdoutCa
     const protocol = trustedContext.protocol;
     const canonicalPayload = { ...protocol };
     delete canonicalPayload.protocolSha256;
-    if (sha256Hex(canonicalJson(canonicalPayload)) !== trustedContext.protocolCanonicalSha256) return null;
+    if (sha256Hex(canonicalProtocolJson(canonicalPayload))
+        !== trustedContext.protocolCanonicalSha256) return null;
     if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) return null;
     if (protocol.protocolSchemaVersion !== 1
         || !isResolvedProtocolIdentity(protocol.protocolId)
@@ -857,7 +878,7 @@ function createExternalProtocolContext(protocolBound, holdoutBound) {
   const trustedContext = Object.freeze({
     protocol,
     protocolFileSha256: protocolBound.sha256,
-    protocolCanonicalSha256: sha256Hex(canonicalJson(canonicalPayload)),
+    protocolCanonicalSha256: sha256Hex(canonicalProtocolJson(canonicalPayload)),
     holdoutFileSha256: holdoutBound.sha256,
     holdoutCanonicalSha256: holdoutBound.canonicalSha256
   });
@@ -1039,9 +1060,16 @@ function main(argv) {
         'severe error reviews'), 'severe error reviews')
     }) : null;
   const output = resolveDataPath(dataRoot, args['--output'], 'output', { allowMissing: true });
-  fs.mkdirSync(path.dirname(output), { recursive: true });
-  resolveDataPath(dataRoot, args['--output'], 'output', { allowMissing: true });
-  fs.writeFileSync(output, `${JSON.stringify(evaluate(fixture, protocolContext, evidenceContext), null, 2)}\n`, 'utf8');
+  const writer = path.join(__dirname, 'secure_write_evidence.ps1');
+  const write = childProcess.spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy',
+    'Bypass', '-File', writer, '-DataRoot', dataRoot, '-OutputPath', output], {
+    input: `${JSON.stringify(evaluate(fixture, protocolContext, evidenceContext), null, 2)}\n`,
+    encoding: 'utf8',
+    windowsHide: true
+  });
+  if (write.error || write.status !== 0) {
+    fail(`secure evidence write failed: ${write.error ? write.error.message : write.stderr.trim()}`);
+  }
   resolveDataPath(dataRoot, args['--output'], 'output');
 }
 

@@ -4,10 +4,46 @@ $root = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $root "tools\model\run_policy_benchmark.ps1"
 $pathContracts = Join-Path $root "tools\model\path_contracts.psm1"
 $source = Join-Path $root "tools\model\PolicyBenchmarkRunner.cs"
+$secureIoSource = Join-Path $root "tools\model\SecureEvidenceIo.cs"
+$secureWriter = Join-Path $root "tools\model\secure_write_evidence.ps1"
 $factorySource = Join-Path $root "src\BobCoach\Core\Decision\DecisionPolicyFactory.cs"
 if (!(Test-Path -LiteralPath $runner -PathType Leaf)) { throw "benchmark runner wrapper is missing" }
 if (!(Test-Path -LiteralPath $pathContracts -PathType Leaf)) { throw "benchmark path contracts are missing" }
 if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw "benchmark runner source is missing" }
+if (!(Test-Path -LiteralPath $secureIoSource -PathType Leaf)) { throw "secure evidence I/O source is missing" }
+if (!(Test-Path -LiteralPath $secureWriter -PathType Leaf)) { throw "secure evidence writer is missing" }
+
+function Invoke-SecureEvidenceWriter(
+    [string]$Content,
+    [string]$DataRoot,
+    [string]$OutputPath
+) {
+    $startInfo = New-Object Diagnostics.ProcessStartInfo
+    $startInfo.FileName = "powershell.exe"
+    $startInfo.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -DataRoot "{1}" -OutputPath "{2}"' -f `
+        $secureWriter.Replace('"', '\"'), $DataRoot.Replace('"', '\"'), $OutputPath.Replace('"', '\"')
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = New-Object Diagnostics.Process
+    $process.StartInfo = $startInfo
+    if (!$process.Start()) { throw "secure evidence writer process did not start" }
+    $inputBytes = (New-Object Text.UTF8Encoding($false)).GetBytes($Content)
+    $process.StandardInput.BaseStream.Write($inputBytes, 0, $inputBytes.Length)
+    $process.StandardInput.BaseStream.Flush()
+    $process.StandardInput.Close()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    [PSCustomObject]@{
+        ExitCode = $process.ExitCode
+        Stdout = $stdout
+        Stderr = $stderr
+    }
+}
 
 Import-Module $pathContracts -Force
 try {
@@ -62,13 +98,108 @@ try {
     }
 }
 
+$secureContractRoot = Join-Path $env:TEMP `
+    ("bobcoach_secure_evidence_" + [Guid]::NewGuid().ToString("N"))
+$secureAttackRoot = Join-Path $env:TEMP `
+    ("bobcoach_secure_evidence_attack_" + [Guid]::NewGuid().ToString("N"))
+$secureParent = Join-Path $secureContractRoot "nested"
+$secureOutput = Join-Path $secureParent "output"
+$renamedOutput = Join-Path $secureParent "locked-output"
+$replacementJunctionCreated = $false
+try {
+    New-Item -ItemType Directory -Path $secureContractRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $secureAttackRoot -Force | Out-Null
+    Add-Type -Path $secureIoSource
+    $scope = [BobCoach.ModelTools.SecureEvidenceDirectory]::Acquire(
+        $secureContractRoot, $secureOutput)
+    try {
+        if (!(Test-Path -LiteralPath $secureOutput -PathType Container)) {
+            throw "secure evidence acquisition did not create the output hierarchy"
+        }
+        $directoryReplacementRejected = $false
+        try {
+            Rename-Item -LiteralPath $secureOutput -NewName (Split-Path -Leaf $renamedOutput) `
+                -ErrorAction Stop
+            New-Item -ItemType Junction -Path $secureOutput -Target $secureAttackRoot | Out-Null
+            $replacementJunctionCreated = $true
+        } catch {
+            $directoryReplacementRejected = $true
+        }
+        if (!$directoryReplacementRejected) {
+            throw "secure evidence directory allowed a concurrent rename"
+        }
+        $scope.WriteAllText("locked.json", "trusted")
+        $trustedResult = if ($directoryReplacementRejected) {
+            Join-Path $secureOutput "locked.json"
+        } else {
+            Join-Path $renamedOutput "locked.json"
+        }
+        if (!(Test-Path -LiteralPath $trustedResult -PathType Leaf) -or
+            (Test-Path -LiteralPath (Join-Path $secureAttackRoot "locked.json") -PathType Leaf)) {
+            throw "secure evidence write followed a concurrently replaced junction"
+        }
+    } finally {
+        $scope.Dispose()
+    }
+
+    if ($replacementJunctionCreated -and (Test-Path -LiteralPath $secureOutput)) {
+        [IO.Directory]::Delete($secureOutput)
+        $replacementJunctionCreated = $false
+    }
+    $existingDirectory = if (Test-Path -LiteralPath $renamedOutput -PathType Container) {
+        $renamedOutput
+    } else {
+        $secureOutput
+    }
+    $existingOutput = Join-Path $existingDirectory "existing.json"
+    $originalContent = "original-" + [char]0x4E2D
+    $firstWrite = Invoke-SecureEvidenceWriter -Content $originalContent `
+        -DataRoot $secureContractRoot -OutputPath $existingOutput
+    if ($firstWrite.ExitCode -ne 0) {
+        throw "secure evidence writer failed its first publish: $($firstWrite.Stderr)"
+    }
+    if (!(Test-Path -LiteralPath $existingOutput -PathType Leaf) -or
+        [IO.File]::ReadAllText($existingOutput).TrimEnd() -ne $originalContent) {
+        $actualContent = if (Test-Path -LiteralPath $existingOutput -PathType Leaf) {
+            [IO.File]::ReadAllText($existingOutput)
+        } else {
+            $null
+        }
+        $actualCodes = if ($null -eq $actualContent) {
+            "missing"
+        } else {
+            (@($actualContent.ToCharArray() | ForEach-Object { [int]$_ }) -join ",")
+        }
+        throw "secure evidence writer did not publish its first output: path=$existingOutput; actualCodes=$actualCodes"
+    }
+    $secondWrite = Invoke-SecureEvidenceWriter -Content "replacement" `
+        -DataRoot $secureContractRoot -OutputPath $existingOutput
+    if ($secondWrite.ExitCode -eq 0 -or
+        [IO.File]::ReadAllText($existingOutput).TrimEnd() -ne $originalContent) {
+        throw "secure evidence writer overwrote an existing evidence file"
+    }
+    if (@(Get-ChildItem -LiteralPath $existingDirectory -Filter ".bobcoach-staging-*" -Force).Count -ne 0) {
+        throw "secure evidence writer left a staging file after rejected overwrite"
+    }
+} finally {
+    if ($replacementJunctionCreated -and (Test-Path -LiteralPath $secureOutput)) {
+        [IO.Directory]::Delete($secureOutput)
+    }
+    if (Test-Path -LiteralPath $secureContractRoot) {
+        Remove-Item -LiteralPath $secureContractRoot -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $secureAttackRoot) {
+        Remove-Item -LiteralPath $secureAttackRoot -Recurse -Force
+    }
+}
+
 $sourceText = [System.IO.File]::ReadAllText($source)
 foreach ($required in @(
     "DecisionPolicyFactory.CreateForEffectEvaluation", "CandidateGenerator", "DecisionEventRecord.Create",
     "bundle.Legacy.Decide", "bundle.Unified.Decide", "DecideWithDiagnostics", "LoadEvaluationContext",
     "BestCompletePath", "legacy-v1.1.0", "CandidateEvidenceSurface",
     "ValidateDeclaredCandidates", "self-test must reject a mismatched candidate declaration",
-    "CandidateBenchmarkAdapter", "ValidateProbeModelSource")) {
+    "CandidateBenchmarkAdapter", "ValidateProbeModelSource", "SecureEvidenceDirectory")) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing required evaluation surface: $required" }
 }
 if ($sourceText.Contains('.Where(property => !property.Name.StartsWith("_"')) {
@@ -124,10 +255,10 @@ try {
     }
     if (@($candidate.topActionKeys).Count -gt 3) { throw "candidate Top-N exceeds three actions" }
     if ($candidate.plannerStatus -eq "NotRequested" -or
-        $candidate.selectedActionKey -eq $candidate.topActionKeys[0] -or
+        $candidate.selectedActionKey -ne $candidate.topActionKeys[0] -or
         @($candidate.bestCompletePath).Count -eq 0 -or
-        $candidate.bestCompletePath[0] -ne $candidate.selectedActionKey) {
-        throw "candidate evidence did not preserve the actual planner action and path"
+        $candidate.bestCompletePath[0] -eq $candidate.selectedActionKey) {
+        throw "candidate evidence did not preserve production SelectedAction and planner diagnostics separately"
     }
 
     $latency = Get-Content -Raw (Join-Path $first "latency.json") | ConvertFrom-Json
@@ -153,8 +284,10 @@ try {
     $timeout = @($safety.probes | Where-Object { $_.probeId -eq "planner-timeout" })[0]
     if ($timeout.actualFallbackReason -ne "None" -or $timeout.actualPlannerStatus -ne "TimedOut" -or
         [string]::IsNullOrWhiteSpace($timeout.actualSelectedActionKey) -or
+        @($timeout.actualTopActionKeys).Count -eq 0 -or
+        $timeout.actualTopActionKeys[0] -ne $timeout.actualSelectedActionKey -or
         @($timeout.actualBestCompletePath).Count -eq 0 -or
-        $timeout.actualBestCompletePath[0] -ne $timeout.actualSelectedActionKey) {
+        $timeout.actualBestCompletePath[0] -eq $timeout.actualSelectedActionKey) {
         throw "planner timeout is not a safe completed path"
     }
 
@@ -164,7 +297,8 @@ try {
         "explicitFallbackUsesLegacySurface",
         "candidateLatencyIncludesLegacyFallback", "missingCandidateDecisionRejected",
         "protocolUnderscoreFieldsChecksumBound",
-        "plannerActionDistinctFromRankedTopOne",
+        "protocolNumericCanonicalizationCrossLanguage",
+        "productionSelectedActionDistinctFromPlannerDiagnostic",
         "modelUnavailableCandidateSourceRejected", "candidateProbeNoneSourceRejected",
         "orchestratedSafetyOutcomesObserved")) {
         if ($contracts.$name -ne $true) { throw "self-test did not dynamically prove $name" }

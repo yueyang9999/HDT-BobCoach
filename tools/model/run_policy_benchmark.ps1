@@ -13,6 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = [IO.Path]::GetFullPath((Split-Path -Parent (Split-Path -Parent $PSScriptRoot))).TrimEnd('\')
 $sourcePath = Join-Path $PSScriptRoot "PolicyBenchmarkRunner.cs"
+$secureIoSourcePath = Join-Path $PSScriptRoot "SecureEvidenceIo.cs"
 $temporaryRoot = Join-Path $env:TEMP ("bobcoach-policy-benchmark-" + [Guid]::NewGuid().ToString("N"))
 Import-Module (Join-Path $PSScriptRoot "path_contracts.psm1") -Force
 
@@ -82,8 +83,13 @@ $resolvedScenarios = $null
 $resolvedProbes = $null
 $resolvedModel = $null
 $resolvedEvaluationProtocol = $null
+$resolvedOutputRoot = $null
 if ($SelfTest) {
     $resolvedOutput = Assert-ExternalOutputPath -Path $OutputDirectory -RepositoryRoot $repoRoot
+    $resolvedOutputRoot = Split-Path -Parent $resolvedOutput
+    while (!(Test-Path -LiteralPath $resolvedOutputRoot -PathType Container)) {
+        $resolvedOutputRoot = Split-Path -Parent $resolvedOutputRoot
+    }
 } else {
     $resolvedDataRoot = Assert-ExternalDataRoot -Path $DataRoot -RepositoryRoot $repoRoot
     $resolvedScenarios = Resolve-DataPath $resolvedDataRoot $Scenarios "Scenarios"
@@ -92,9 +98,7 @@ if ($SelfTest) {
     $resolvedEvaluationProtocol = Resolve-DataPath $resolvedDataRoot $EvaluationProtocol "EvaluationProtocol"
     $resolvedOutput = Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" `
         -AllowMissing -ExpectedType Container
-    New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
-    Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" `
-        -ExpectedType Container | Out-Null
+    $resolvedOutputRoot = $resolvedDataRoot
 }
 
 $buildDirectory = Join-Path $temporaryRoot "build"
@@ -119,7 +123,7 @@ try {
     )
     $referenceArguments = @($references | ForEach-Object { "/reference:$($_)" })
     & $compiler /nologo /target:exe /platform:x64 /optimize+ /langversion:7.3 `
-        "/out:$runnerPath" @referenceArguments $sourcePath
+        "/out:$runnerPath" @referenceArguments $secureIoSourcePath $sourcePath
     if ($LASTEXITCODE -ne 0) { throw "Benchmark runner compilation failed with exit code $LASTEXITCODE" }
 
     Copy-Item -LiteralPath $bobCoachAssembly -Destination $runtimeDirectory
@@ -127,7 +131,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $resolvedHdt $name) -Destination $runtimeDirectory
     }
 
-    $arguments = @("--output", $resolvedOutput)
+    $arguments = @("--output", $resolvedOutput, "--output-root", $resolvedOutputRoot)
     if ($SelfTest) {
         $arguments += "--self-test"
     } else {
