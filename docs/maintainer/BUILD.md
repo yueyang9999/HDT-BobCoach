@@ -69,17 +69,17 @@ node .\tests\test_algorithm_evaluation.js
 
 仓库内 `tools/model/owner_approval_trusted_keys.json` 是 owner approval 的固定公钥信任根，Task 12 保持空 keyset，因此当前任何证据都不能通过效果门禁。未来只有单独批准的变更才能加入 Ed25519 公钥；owner approval 本身必须是外部 detached-signature artifact，benchmark 和 evaluator 都不能生成它、替换生产信任根或由调用方注入公钥。签名 payload 必须精确绑定 protocol 文件及 canonical checksum、holdout 文件及 canonical checksum、候选模型 payload checksum，label provenance、Shadow comparison、severe-error review 三份 manifest 的完整文件 checksum，以及 latency、safety evidence 的完整文件 checksum。evaluator 还会将同一次读取所得 scenarios、baseline、candidate、latency、safety 内容的 canonical checksum 与评估输入逐项核对。任一签名、checksum、版本 identity 或场景集合不匹配时，evaluator 必须保持 `blocked-by-season-data`、`metrics: null`。
 
-以下真实证据命令仅在至少 300 个去重、真实、可信、版本匹配的专家标注高影响场景、代表性 Shadow 对比和人工 severe-error review 全部具备后运行。`labels/scenarios-v1.jsonl` 每行必须携带一致的 `benchmarkId`、schema、build/season/card-pool identity；完整游戏不能跨 partition。真实性、版本匹配、Shadow 代表性和严重错误复核不得由场景文件内的布尔字段自证，必须分别来自外部 manifest，并与 holdout 精确场景集合及对应 baseline/candidate evidence checksum 对账。阈值必须在打开 holdout 结果前由所有者批准并冻结。
+以下真实证据命令仅在至少 300 个去重、真实、可信、版本匹配的专家标注高影响场景、代表性 Shadow 对比和人工 severe-error review 全部具备后运行。`labels/scenarios-v1.jsonl` 每行必须携带一致的 `benchmarkId`、schema、build/season/card-pool identity；完整游戏不能跨 partition。真实性、版本匹配、Shadow 代表性和严重错误复核不得由场景文件内的布尔字段自证，必须分别来自外部 manifest，并与 holdout 精确场景集合及对应 baseline/candidate evidence checksum 对账。阈值必须在打开 holdout 结果前由所有者批准并冻结。所有 CLI 数据路径参数均相对于 `DataRoot`，不得传绝对路径或经过 junction/symlink。
 
 ```powershell
 $dataRoot = [IO.Path]::GetFullPath($env:BOBCOACH_DATA_ROOT)
 
 # 生成训练 pair；当前训练 CLI 仍会失败关闭且不产出模型。
 node .\tools\model\build_pairs.js --data-root $dataRoot `
-  --scenarios "$dataRoot\labels\scenarios-v1.jsonl" `
-  --output "$dataRoot\datasets\pairs-v1.jsonl"
+  --scenarios "labels\scenarios-v1.jsonl" `
+  --output "datasets\pairs-v1.jsonl"
 node .\tools\model\train_pairwise.js --data-root $dataRoot `
-  --input "$dataRoot\datasets\pairs-v1.jsonl"
+  --input "datasets\pairs-v1.jsonl"
 
 # 只有另行批准并已存在的 checksum-valid 外部候选才可进入 benchmark。
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\model\run_policy_benchmark.ps1 `

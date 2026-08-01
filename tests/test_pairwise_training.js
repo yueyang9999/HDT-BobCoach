@@ -1,5 +1,6 @@
 'use strict';
 const assert = require('assert');
+const childProcess = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -41,6 +42,56 @@ assert.strictEqual(labeledPairs.length, 1);
 assert.strictEqual(labeledPairs[0].preferred.actionKey, labeledScenario.acceptedActionKeys[0]);
 assert(!JSON.stringify(labeledPairs).includes('observedPlayerActionKey'));
 assert(!JSON.stringify(labeledPairs).includes('synthetic-candidate-007'));
+
+const repo = path.resolve(__dirname, '..');
+const cliContractRoot = path.join(path.dirname(repo),
+  `HDT-BobCoach-pair-cli-${process.pid}-${Date.now()}`);
+const cliDataRoot = path.join(cliContractRoot, 'data');
+const cliAttackRoot = path.join(cliContractRoot, 'attack');
+const cliEscape = path.join(cliDataRoot, 'escape');
+const runCli = (script, args) => childProcess.spawnSync(process.execPath,
+  [path.join(repo, 'tools', 'model', script), '--data-root', cliDataRoot].concat(args),
+  { cwd: cliDataRoot, encoding: 'utf8' });
+const assertReparseRejected = (result, name) => {
+  if (result.error) throw result.error;
+  assert.notStrictEqual(result.status, 0, `${name} must reject a child junction`);
+  assert.match(result.stderr, /reparse point|escapes data root/i,
+    `${name} must reject the physical path before processing data`);
+};
+try {
+  fs.mkdirSync(cliDataRoot, { recursive: true });
+  fs.mkdirSync(cliAttackRoot, { recursive: true });
+  fs.symlinkSync(cliAttackRoot, cliEscape, 'junction');
+  fs.writeFileSync(path.join(cliAttackRoot, 'scenarios.jsonl'),
+    JSON.stringify(labeledScenario) + '\n', 'utf8');
+  fs.writeFileSync(path.join(cliDataRoot, 'scenarios.jsonl'),
+    JSON.stringify(labeledScenario) + '\n', 'utf8');
+  fs.writeFileSync(path.join(cliAttackRoot, 'pairs.jsonl'),
+    loadSyntheticPairs().map(row => JSON.stringify(row)).join('\n') + '\n', 'utf8');
+
+  const normalBuild = runCli('build_pairs.js',
+    ['--scenarios', 'scenarios.jsonl', '--output', 'pairs.jsonl']);
+  if (normalBuild.error) throw normalBuild.error;
+  assert.strictEqual(normalBuild.status, 0, normalBuild.stderr);
+  assert.strictEqual(fs.readFileSync(path.join(cliDataRoot, 'pairs.jsonl'), 'utf8').trim().split(/\r?\n/).length, 1,
+    'build_pairs accepts DataRoot-relative input and output paths');
+
+  assertReparseRejected(runCli('build_pairs.js',
+    ['--scenarios', 'escape\\scenarios.jsonl', '--output', 'pairs.jsonl']),
+  'build_pairs input');
+
+  const sentinel = fs.readFileSync(path.join(cliAttackRoot, 'pairs.jsonl'), 'utf8');
+  assertReparseRejected(runCli('build_pairs.js',
+    ['--scenarios', 'scenarios.jsonl', '--output', 'escape\\pairs.jsonl']),
+  'build_pairs output');
+  assert.strictEqual(fs.readFileSync(path.join(cliAttackRoot, 'pairs.jsonl'), 'utf8'), sentinel,
+    'build_pairs must not overwrite a file outside DataRoot through a junction');
+
+  assertReparseRejected(runCli('train_pairwise.js', ['--input', 'escape\\pairs.jsonl']),
+    'train_pairwise input');
+} finally {
+  fs.rmSync(cliContractRoot, { recursive: true, force: true });
+}
 
 const unacceptedHigherGrade = JSON.parse(JSON.stringify(labeledScenario));
 unacceptedHigherGrade.acceptedActionKeys = ['Refresh|-1||'];

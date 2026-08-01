@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { assertExternalDataRoot } = require('./contracts');
+const { assertExternalDataRoot, resolveDataPath } = require('./contracts');
 
 const actionTypes = Object.freeze([
   'BuyMinion', 'BuySpell', 'Refresh', 'Upgrade', 'SellMinion', 'FreezeShop',
@@ -97,8 +97,7 @@ function main(args) {
   const options = parseArguments(args);
   const repositoryRoot = path.resolve(__dirname, '..', '..');
   const dataRoot = assertExternalDataRoot(options['data-root'], repositoryRoot);
-  const input = path.resolve(options.input);
-  if (!inside(dataRoot, input)) throw new Error('input must be inside --data-root');
+  const input = resolveDataPath(dataRoot, options.input, 'input');
   const rows = fs.readFileSync(input, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(JSON.parse);
   if (rows.some(row => !versionMatched(row))) throw new Error('blocked-by-season-data: version-matched expert labels are required');
   train(rows, options);
@@ -116,10 +115,5 @@ function versionMatched(row) {
   return row && ['gameBuild', 'seasonId', 'cardPoolIdentity'].every(key =>
     typeof row[key] === 'string' && row[key].trim() && row[key].trim().toLowerCase() !== 'unknown');
 }
-function inside(root, target) {
-  const relative = path.relative(root, target);
-  return relative && !relative.startsWith('..' + path.sep) && relative !== '..';
-}
-
 if (require.main === module) main(process.argv.slice(2));
 module.exports = { train, pairLossGradient, oneHotDelta };

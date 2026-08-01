@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { assertExternalDataRoot } = require('./contracts');
+const { assertExternalDataRoot, resolveDataPath } = require('./contracts');
 
 const gradeOrder = Object.freeze({ preferred: 3, acceptable: 2, weak: 1, 'severe-error': 0 });
 const knownGrades = new Set(Object.keys(gradeOrder).concat('not-evaluable'));
@@ -131,10 +131,8 @@ function main(args) {
   const options = parseArguments(args);
   const repositoryRoot = path.resolve(__dirname, '..', '..');
   const dataRoot = assertExternalDataRoot(options['data-root'], repositoryRoot);
-  const scenarioPath = path.resolve(options.scenarios);
-  const outputPath = path.resolve(options.output);
-  if (!isInside(dataRoot, scenarioPath) || !isInside(dataRoot, outputPath))
-    throw new Error('scenarios and output must be inside --data-root');
+  const scenarioPath = resolveDataPath(dataRoot, options.scenarios, 'scenarios');
+  const outputPath = resolveDataPath(dataRoot, options.output, 'output', { allowMissing: true });
   const scenarios = fs.readFileSync(scenarioPath, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(JSON.parse);
   const pairs = scenarios.flatMap(buildPairs);
   fs.writeFileSync(outputPath, pairs.map(pair => JSON.stringify(pair)).join('\n') + (pairs.length ? '\n' : ''), 'utf8');
@@ -145,10 +143,5 @@ function requireResolved(value, name) {
   requireText(value, name);
   if (value.trim().toLowerCase() === 'unknown') throw new Error(name + ' must be version-matched');
 }
-function isInside(root, target) {
-  const relative = path.relative(root, target);
-  return relative && !relative.startsWith('..' + path.sep) && relative !== '..';
-}
-
 if (require.main === module) main(process.argv.slice(2));
 module.exports = { buildPairs, main };
