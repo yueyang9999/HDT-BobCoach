@@ -148,7 +148,7 @@ function evidenceContextFor(input) {
   }
 }
 
-function approvedEvidenceContextFor(input, protocolContext, privateKey) {
+function approvedEvidenceContextFor(input, protocolContext, privateKey, severeReviews = []) {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_approval_contract_'));
   const files = {
     ownerApproval: path.join(temporaryRoot, 'owner-approval.json'),
@@ -215,7 +215,7 @@ function approvedEvidenceContextFor(input, protocolContext, privateKey) {
     severeErrorReviewSchemaVersion: 1,
     ...common,
     scenarioIds,
-    reviews: []
+    reviews: severeReviews
   };
   writeJson(files.labelProvenance, labelProvenance);
   writeJson(files.shadowComparisons, shadowComparisons);
@@ -682,6 +682,36 @@ try {
     'a complete signed evidence chain must reach the evaluator decision path');
   assert.strictEqual(contractReport.evaluationProtocol.ownerApprovalKeyId, 'owner-contract-key');
   assert(!contractReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+
+  const acceptedRiskInput = clone(contractInput);
+  const acceptedRiskScenario = acceptedRiskInput.scenarios[100];
+  const acceptedRiskBaseline = acceptedRiskInput.baselinePredictions[100];
+  const acceptedRiskCandidate = acceptedRiskInput.candidatePredictions[100];
+  acceptedRiskCandidate.selectedActionKey = severe;
+  acceptedRiskCandidate.topActionKeys = [severe];
+  const acceptedRiskProtocolContext = protocolContextFor(acceptedRiskInput, protocol => {
+    protocol.thresholds.minimumSevereErrorRelativeReduction = -1;
+    protocol.thresholds.minimumAcceptedTop1Improvement = -1;
+    protocol.thresholds.minimumAcceptedTop3Improvement = -1;
+    protocol.thresholds.minimumPerCategoryTop1Regression = -1;
+    protocol.thresholds.maximumNewSevereErrors = 1;
+  });
+  const acceptedRiskEvidenceContext = approvedEvidenceContextFor(
+    acceptedRiskInput, acceptedRiskProtocolContext, contractKeys.privateKey, [{
+      scenarioId: acceptedRiskScenario.scenarioId,
+      baselineActionKey: acceptedRiskBaseline.selectedActionKey,
+      candidateActionKey: acceptedRiskCandidate.selectedActionKey,
+      reviewAction: 'retain-shadow-only',
+      reviewerId: 'independent-reviewer-1',
+      reviewedAtUtc: '2026-08-01T02:30:00Z',
+      disposition: 'accepted-risk'
+    }]);
+  const acceptedRiskReport = evaluate(
+    acceptedRiskInput, acceptedRiskProtocolContext, acceptedRiskEvidenceContext);
+  assert.strictEqual(acceptedRiskReport.effectAcceptanceStatus, 'blocked-by-season-data',
+    'an owner-approved protocol must not accept any candidate-only severe error');
+  assert.strictEqual(acceptedRiskReport.metrics, null,
+    'a protocol that allows new severe errors must fail closed before reporting metrics');
 } finally {
   childProcess.spawnSync = originalSpawnSync;
   fs.rmSync(contractTrustRoot, { recursive: true, force: true });

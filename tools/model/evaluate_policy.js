@@ -430,7 +430,7 @@ function validateThresholds(thresholds) {
     if (!isFiniteInRange(thresholds[name], minimum, maximum)) return null;
   }
   if (!Number.isInteger(thresholds.maximumNewSevereErrors)
-      || thresholds.maximumNewSevereErrors < 0) return null;
+      || thresholds.maximumNewSevereErrors !== 0) return null;
   return thresholds;
 }
 
