@@ -27,7 +27,7 @@ Data boundary approved 2026-07-31: season-independent engineering may proceed, b
 - Algorithm Task 9: complete (commits 4583189..89429b9, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 90785E8492BE6236BEF7454FF4305E389A01EA4EE26373A9E51281C6EABD51E9, 67769 bytes; calibration and approval are bound to exact model identity, and malformed feature vectors fail closed)
 - Algorithm Task 10: complete (commits a387f8e..21f47bd, final fresh re-review approved; Critical/Important/Minor all zero; fixed package SHA-256 A5430A11D5237C9286C9F4829B9D536E1315AE076162B7F5D93C5B71B79FFAE7, 76990 bytes; beam planning remains deterministic, bounded, score-independent beyond ranked roots, diagnostic-only, and fails closed for unavailable or malformed continuations)
 - Algorithm Task 11: complete (commits 3282c33..4f3f638, third fresh review approved; Critical/Important/Minor all zero; fixed package SHA-256 B0A98ACB9DC898A81AA3B1FD40F1C7E67C0AD7EE6DE4A13A6FDBC0A20D8B00B3, 143857 bytes; production approval fails closed, unified remains Shadow-only, and legacy-v1.1.0 remains player-visible and fallback)
-- Algorithm Task 12: pending
+- Algorithm Task 12: complete (commits cc3dc48..f0b9f88, final fresh review approved; Critical/Important/Minor all zero; fixed package SHA-256 A57A3C4BF7C71D8C8F6C871D51047DDA7A6F47F9471DB0D4FEAFFBBACAD50C00, 325815 bytes; effect acceptance remains `blocked-by-season-data`, Unified ranking remains Shadow, and `legacy-v1.1.0` remains player-visible and the fallback)
 - Final whole-branch review: pending
 - Final validation and branch handoff: pending
 
