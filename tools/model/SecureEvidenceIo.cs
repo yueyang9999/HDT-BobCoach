@@ -409,14 +409,23 @@ namespace BobCoach.ModelTools
         private static string Normalize(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("path is required");
-            return Path.GetFullPath(value).TrimEnd(Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(value);
+            var root = Path.GetPathRoot(fullPath);
+            return fullPath.Equals(root, StringComparison.OrdinalIgnoreCase)
+                ? root
+                : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
         private static bool PathContained(string parent, string candidate)
         {
+            var prefix = parent.EndsWith(Path.DirectorySeparatorChar.ToString(),
+                    StringComparison.Ordinal)
+                || parent.EndsWith(Path.AltDirectorySeparatorChar.ToString(),
+                    StringComparison.Ordinal)
+                ? parent
+                : parent + Path.DirectorySeparatorChar;
             return candidate.Equals(parent, StringComparison.OrdinalIgnoreCase)
-                || candidate.StartsWith(parent + Path.DirectorySeparatorChar,
-                    StringComparison.OrdinalIgnoreCase);
+                || candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }
     }
 

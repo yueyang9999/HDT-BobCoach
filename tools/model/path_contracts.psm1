@@ -1,18 +1,36 @@
 Set-StrictMode -Version Latest
 
+function ConvertTo-NormalizedPath([string]$Path) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $root = [IO.Path]::GetPathRoot($resolved)
+    if ($resolved.Equals($root, [StringComparison]::OrdinalIgnoreCase)) {
+        return $root
+    }
+    return $resolved.TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar)
+}
+
 function Test-PathContained([string]$Parent, [string]$Candidate) {
-    $resolvedParent = [IO.Path]::GetFullPath($Parent).TrimEnd('\')
-    $resolvedCandidate = [IO.Path]::GetFullPath($Candidate).TrimEnd('\')
+    $resolvedParent = ConvertTo-NormalizedPath $Parent
+    $resolvedCandidate = ConvertTo-NormalizedPath $Candidate
+    $separator = [IO.Path]::DirectorySeparatorChar
+    $prefix = if ($resolvedParent.EndsWith($separator.ToString(), [StringComparison]::Ordinal) -or
+            $resolvedParent.EndsWith(
+                [IO.Path]::AltDirectorySeparatorChar.ToString(),
+                [StringComparison]::Ordinal)) {
+        $resolvedParent
+    } else {
+        $resolvedParent + $separator
+    }
     return $resolvedCandidate.Equals($resolvedParent, [StringComparison]::OrdinalIgnoreCase) -or
-        $resolvedCandidate.StartsWith(
-            $resolvedParent + [IO.Path]::DirectorySeparatorChar,
-            [StringComparison]::OrdinalIgnoreCase)
+        $resolvedCandidate.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Assert-NoReparsePointPath([string]$Path, [string]$Name) {
     $resolved = [IO.Path]::GetFullPath($Path)
     $pathRoot = [IO.Path]::GetPathRoot($resolved)
-    $current = $pathRoot.TrimEnd('\')
+    $current = ConvertTo-NormalizedPath $pathRoot
     $relative = $resolved.Substring($pathRoot.Length)
     foreach ($segment in @($relative.Split([IO.Path]::DirectorySeparatorChar) |
             Where-Object { ![string]::IsNullOrWhiteSpace($_) })) {
@@ -30,8 +48,8 @@ function Assert-NoReparsePointPath([string]$Path, [string]$Name) {
 
 function Assert-ExternalDataRoot([string]$Path, [string]$RepositoryRoot) {
     if ([string]::IsNullOrWhiteSpace($Path)) { throw "DataRoot is required in normal mode" }
-    $resolved = [IO.Path]::GetFullPath($Path).TrimEnd('\')
-    $repoRoot = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\')
+    $resolved = ConvertTo-NormalizedPath $Path
+    $repoRoot = ConvertTo-NormalizedPath $RepositoryRoot
     if (Test-PathContained $repoRoot $resolved -or Test-PathContained $resolved $repoRoot) {
         throw "DataRoot must be outside the repository"
     }
@@ -51,8 +69,8 @@ function Assert-ExternalDataRoot([string]$Path, [string]$RepositoryRoot) {
 
 function Assert-ExternalOutputPath([string]$Path, [string]$RepositoryRoot) {
     if ([string]::IsNullOrWhiteSpace($Path)) { throw "OutputDirectory is required" }
-    $resolved = [IO.Path]::GetFullPath($Path).TrimEnd('\')
-    $repoRoot = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\')
+    $resolved = ConvertTo-NormalizedPath $Path
+    $repoRoot = ConvertTo-NormalizedPath $RepositoryRoot
     if (Test-PathContained $repoRoot $resolved) {
         throw "OutputDirectory must be outside the repository"
     }
@@ -67,10 +85,10 @@ function Assert-ExternalOutputPath([string]$Path, [string]$RepositoryRoot) {
         }
         $existing = $parent
     }
-    $physicalRepo = [IO.Path]::GetFullPath(
-        (Get-Item -LiteralPath $repoRoot -Force -ErrorAction Stop).FullName).TrimEnd('\')
-    $physicalParent = [IO.Path]::GetFullPath(
-        (Get-Item -LiteralPath $existing -Force -ErrorAction Stop).FullName).TrimEnd('\')
+    $physicalRepo = ConvertTo-NormalizedPath `
+        (Get-Item -LiteralPath $repoRoot -Force -ErrorAction Stop).FullName
+    $physicalParent = ConvertTo-NormalizedPath `
+        (Get-Item -LiteralPath $existing -Force -ErrorAction Stop).FullName
     if ((Test-PathContained $physicalRepo $physicalParent) -or
         (Test-PathContained $physicalParent $physicalRepo)) {
         throw "OutputDirectory must be outside the repository"
@@ -87,7 +105,7 @@ function Resolve-DataPath(
     [string]$ExpectedType = "Leaf") {
     if ([string]::IsNullOrWhiteSpace($RelativePath)) { throw "$Name is required in normal mode" }
     if ([IO.Path]::IsPathRooted($RelativePath)) { throw "$Name must be relative to DataRoot" }
-    $resolvedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $resolvedRoot = ConvertTo-NormalizedPath $Root
     $resolved = [IO.Path]::GetFullPath((Join-Path $resolvedRoot $RelativePath))
     if (!(Test-PathContained $resolvedRoot $resolved) -or
         $resolved.Equals($resolvedRoot, [StringComparison]::OrdinalIgnoreCase)) {

@@ -105,6 +105,10 @@ $secureAttackRoot = Join-Path $env:TEMP `
 $secureParent = Join-Path $secureContractRoot "nested"
 $secureOutput = Join-Path $secureParent "output"
 $renamedOutput = Join-Path $secureParent "locked-output"
+$nonSystemDriveRoot = [IO.Path]::GetPathRoot($root)
+$driveRootOutputName = "bobcoach_secure_drive_root_" + [Guid]::NewGuid().ToString("N")
+$driveRootOutput = Join-Path $nonSystemDriveRoot $driveRootOutputName
+$misdirectedDriveRootOutput = Join-Path $root $driveRootOutputName
 $replacementJunctionCreated = $false
 try {
     New-Item -ItemType Directory -Path $secureContractRoot -Force | Out-Null
@@ -181,6 +185,21 @@ try {
     if (@(Get-ChildItem -LiteralPath $existingDirectory -Filter ".bobcoach-staging-*" -Force).Count -ne 0) {
         throw "secure evidence writer left a staging file after rejected overwrite"
     }
+
+    if (![IO.Path]::GetPathRoot($env:SystemDrive + [IO.Path]::DirectorySeparatorChar).Equals(
+            $nonSystemDriveRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        $driveRootScope = [BobCoach.ModelTools.SecureEvidenceDirectory]::Acquire(
+            $nonSystemDriveRoot, $driveRootOutput)
+        try {
+            $driveRootScope.WriteAllText("root.json", "declared-root")
+        } finally {
+            $driveRootScope.Dispose()
+        }
+        if (!(Test-Path -LiteralPath (Join-Path $driveRootOutput "root.json") -PathType Leaf) -or
+            (Test-Path -LiteralPath $misdirectedDriveRootOutput)) {
+            throw "secure evidence drive-root DataRoot did not preserve its declared absolute path"
+        }
+    }
 } finally {
     if ($replacementJunctionCreated -and (Test-Path -LiteralPath $secureOutput)) {
         [IO.Directory]::Delete($secureOutput)
@@ -190,6 +209,12 @@ try {
     }
     if (Test-Path -LiteralPath $secureAttackRoot) {
         Remove-Item -LiteralPath $secureAttackRoot -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $driveRootOutput) {
+        Remove-Item -LiteralPath $driveRootOutput -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $misdirectedDriveRootOutput) {
+        Remove-Item -LiteralPath $misdirectedDriveRootOutput -Recurse -Force
     }
 }
 

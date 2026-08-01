@@ -272,6 +272,45 @@ The result remains `blocked-by-season-data` with no accepted/rejected effect
 decision or formal improvement metric. Unified ranking remains Shadow and
 `legacy-v1.1.0` remains player-visible and the fallback.
 
+## Drive-root Fresh-review Repair (2026-08-01)
+
+The next fresh review reported zero Critical, one Important, and zero Minor
+findings. `SecureEvidenceIo.Normalize` removed the trailing separator from a
+volume root, converting an absolute root such as `E:\` into the drive-relative
+path `E:`. A caller that declared `E:\` as its trusted root could therefore
+publish into the drive's current working directory instead of the declared
+absolute output hierarchy.
+
+### RED
+
+- `tests/test_algorithm_benchmark_contract.ps1` acquired a secure evidence
+  directory beneath the repository's non-system volume root and failed with
+  `secure evidence drive-root DataRoot did not preserve its declared absolute
+  path`. The failing implementation created the uniquely named directory under
+  the repository instead of at the declared volume-root location.
+
+### GREEN
+
+- `SecureEvidenceIo` now preserves a full path when it is exactly the volume
+  root and builds containment prefixes without appending a duplicate separator.
+- `path_contracts.psm1` uses the same root-preserving normalization for data,
+  output, physical-parent, reparse traversal, and resolved-data paths. Its
+  existing policy still rejects a `DataRoot` that contains the repository.
+- Three consecutive benchmark contract invocations passed. Each invocation
+  produced two identical Release `BobCoach.dll` files (`784384` bytes,
+  SHA-256 `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`).
+- `node tests/test_algorithm_evaluation.js`, `node
+  tests/test_algorithm_workspace_contract.js`, and `node
+  tests/test_offline_runtime_contract.js` passed.
+- `git diff --check` passed before this report-only update.
+
+The repair changes only absolute-path handling and engineering contracts. It
+does not train, generate, copy, embed, or activate a model, and it does not
+produce an accepted/rejected effect result, improvement percentage, or formal
+effect metric. The Task 12 result remains `blocked-by-season-data`; Unified
+ranking remains Shadow and `legacy-v1.1.0` remains player-visible and the
+fallback.
+
 ## Required Conclusion
 
 “新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”
