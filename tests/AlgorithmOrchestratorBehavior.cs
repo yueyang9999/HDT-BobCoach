@@ -118,6 +118,7 @@ internal static class AlgorithmOrchestratorBehavior
             InvalidRuntimeModeDegradesToLegacyOnly();
             UnifiedModeRemainsShadowUntilActivationApproved();
             UnifiedFailureFallsBackToLegacy();
+            LegacyFailureReturnsConservativeUnavailableResult();
             NullPolicyResultsAreContainedAndFallback();
             MalformedRankedActionsAreContainedInShadowModes();
             RecorderAndDiagnosticFailuresAreContained();
@@ -183,6 +184,20 @@ internal static class AlgorithmOrchestratorBehavior
         AssertEqual("legacy-v1.1.0", safe.PolicyId, "exception fallback policy");
         AssertEqual(FallbackReason.None, safe.FallbackReason,
             "unified failure preserves the legacy fallback reason");
+    }
+
+    private static void LegacyFailureReturnsConservativeUnavailableResult()
+    {
+        var diagnostics = new CollectingDecisionDiagnostics();
+        var safe = new DecisionOrchestrator(new ThrowingPolicy("legacy-v1.1.0"),
+            new ThrowingPolicy("unified-linear-v1"), new CollectingShadowComparisonSink(),
+            DecisionRuntimeMode.Shadow, diagnostics).Decide(State(), "legacy-failure");
+
+        AssertEqual("unavailable", safe.PolicyId, "legacy exception fallback policy");
+        AssertEqual(FallbackReason.NoSafeAction, safe.FallbackReason,
+            "legacy exception uses the conservative no-safe-action fallback");
+        AssertEqual(2, diagnostics.Entries.Count,
+            "legacy and unified failures are both contained as diagnostics");
     }
 
     private static void UnifiedModeRemainsShadowUntilActivationApproved()

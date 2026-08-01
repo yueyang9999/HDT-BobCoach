@@ -312,6 +312,14 @@ if (!evaluationBody.includes("NoOpShadowComparisonSink.Instance")
     console.error("FAIL inactive recording must use the no-op sink and ID-free orchestrator call");
     process.exit(1);
 }
+const guardedDecisionCalls = evaluationBody.match(
+    /SafeCall\s*\(\s*\(\)\s*=>\s*_decisionOrchestrator\.Decide\s*\([^;]*?\)\s*,\s*"GetBestAction"\s*\)/gs) || [];
+const allDecisionCalls = evaluationBody.match(/_decisionOrchestrator\.Decide\s*\(/g) || [];
+if (guardedDecisionCalls.length !== 3 || allDecisionCalls.length !== 3
+    || !evaluationBody.includes("UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state)")) {
+    console.error("FAIL all ranking calls must preserve an outer SafeCall boundary and conservative fallback");
+    process.exit(1);
+}
 if (!plugin.includes('"unknown"')
     || !plugin.includes("_currentGameRecord.Timestamp")
     || !plugin.includes("Guid.NewGuid()")) {

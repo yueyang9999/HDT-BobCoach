@@ -1466,7 +1466,9 @@ namespace BobCoach
                         DateTime.UtcNow.ToString("o"));
                     var candidates = _decisionPolicies.Candidates.Generate(state);
                     var context = _decisionLifecycle.BeginOrReuse(state, candidates);
-                    rankingDecision = _decisionOrchestrator.Decide(state, context.DecisionId);
+                    rankingDecision = SafeCall(
+                        () => _decisionOrchestrator.Decide(state, context.DecisionId), "GetBestAction")
+                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
                     _decisionEventRecorder.AttachRecommendation(context.DecisionId,
                         rankingDecision, DateTime.UtcNow.ToString("o"));
                 }
@@ -1474,7 +1476,9 @@ namespace BobCoach
                 {
                     Log("Decision recording error: " + ex.Message);
                     ResetDecisionRecording();
-                    rankingDecision = _decisionOrchestrator.Decide(state);
+                    rankingDecision = SafeCall(
+                        () => _decisionOrchestrator.Decide(state), "GetBestAction")
+                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
                 }
             }
             else
@@ -1483,7 +1487,9 @@ namespace BobCoach
                     _decisionOrchestrator = new DecisionOrchestrator(
                         _decisionPolicies.Legacy, _decisionPolicies.Unified,
                         NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
-                rankingDecision = _decisionOrchestrator.Decide(state);
+                rankingDecision = SafeCall(
+                    () => _decisionOrchestrator.Decide(state), "GetBestAction")
+                    ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
             }
             var bestAction = rankingDecision.SelectedAction;
             var t0 = DateTime.UtcNow;
