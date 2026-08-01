@@ -279,6 +279,14 @@ internal static class PolicyBenchmarkRunner
         var candidateProbeNoneSourceRejected = RejectsInvalidData(delegate {
             ValidateProbeModelSource("low-confidence", "none");
         });
+        var scenarioDuplicatePropertyRejected = RejectsInvalidData(delegate {
+            LoadScenarios(Utf8NoBom.GetBytes(
+                "{\"scenarioSchemaVersion\":1,\"scenarioSchemaVersion\":1}"));
+        });
+        var safetyProbeDuplicatePropertyRejected = RejectsInvalidData(delegate {
+            RunSafetyProbes(Utf8NoBom.GetBytes(
+                "{\"probeSchemaVersion\":1,\"probeSchemaVersion\":1}"), null);
+        });
         var canonical = new JObject { { "value", 1 },
             { "nested", new JObject { { "value", 2 } } } };
         var topLevelTamper = (JObject)canonical.DeepClone();
@@ -321,6 +329,8 @@ internal static class PolicyBenchmarkRunner
                 productionSelectedActionDistinctFromPlannerDiagnostic },
             { "modelUnavailableCandidateSourceRejected", modelUnavailableCandidateSourceRejected },
             { "candidateProbeNoneSourceRejected", candidateProbeNoneSourceRejected },
+            { "scenarioDuplicatePropertyRejected", scenarioDuplicatePropertyRejected },
+            { "safetyProbeDuplicatePropertyRejected", safetyProbeDuplicatePropertyRejected },
             { "protocolUnderscoreFieldsChecksumBound", protocolUnderscoreFieldsChecksumBound },
             { "protocolNumericCanonicalizationCrossLanguage",
                 protocolNumericCanonicalizationCrossLanguage },
@@ -399,7 +409,7 @@ internal static class PolicyBenchmarkRunner
         string build = null, season = null, pool = null;
         foreach (var line in ReadNonBlankLines(bytes))
         {
-            var row = JObject.Parse(line);
+            var row = ParseStrictJsonLine(line, "scenario");
             if ((int)row["scenarioSchemaVersion"] != 1) throw new InvalidDataException("scenario schema mismatch");
             var scenario = new Scenario
             {
@@ -725,7 +735,7 @@ internal static class PolicyBenchmarkRunner
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var line in ReadNonBlankLines(bytes))
         {
-            var probe = JObject.Parse(line);
+            var probe = ParseStrictJsonLine(line, "safety probe");
             if ((int)probe["probeSchemaVersion"] != 1) throw new InvalidDataException("probe schema mismatch");
             var id = Required(probe, "probeId");
             if (!ids.Add(id)) throw new InvalidDataException("duplicate probe id");
@@ -891,6 +901,29 @@ internal static class PolicyBenchmarkRunner
     {
         if (!string.Equals(source, ExpectedProbeModelSource(id), StringComparison.Ordinal))
             throw new InvalidDataException("probe model source does not match required probe ID: " + id);
+    }
+
+    private static JObject ParseStrictJsonLine(string line, string name)
+    {
+        try
+        {
+            using (var textReader = new StringReader(line))
+            using (var jsonReader = new JsonTextReader(textReader) {
+                DateParseHandling = DateParseHandling.None
+            })
+            {
+                var value = JObject.Load(jsonReader, new JsonLoadSettings {
+                    DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error
+                });
+                if (jsonReader.Read())
+                    throw new InvalidDataException(name + " has trailing content");
+                return value;
+            }
+        }
+        catch (JsonReaderException exception)
+        {
+            throw new InvalidDataException(name + " is invalid JSON", exception);
+        }
     }
 
     private static JObject SafetyObject(JArray rows)
