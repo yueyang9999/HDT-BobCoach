@@ -406,6 +406,75 @@ produce an accepted/rejected effect result, improvement percentage, or formal
 effect metric. Task 12 remains `blocked-by-season-data`; Unified ranking remains
 Shadow and `legacy-v1.1.0` remains player-visible and the fallback.
 
+### Fresh verification on `9359722`
+
+- `tests/test_algorithm_benchmark_contract.ps1`,
+  `tests/test_algorithm_evaluation.js`,
+  `tests/test_algorithm_workspace_contract.js`, and
+  `tests/test_offline_runtime_contract.js` all exited 0. Their stdout and stderr
+  logs are under
+  `E:\HDT-BobCoach-evidence\verification\task12-secure-snapshot-20260801-1445`;
+  every stderr log is empty.
+- Full `npm test` exited 0 in 239.3 seconds with 142 `PASS` lines and empty
+  stderr. The only broad failure-pattern match was the successful summary
+  `passed: 7 failed: 0`.
+- The independent Release build at
+  `E:\HDT-BobCoach-evidence\builds\task12-secure-snapshot-20260801-1450`
+  produced `BobCoach.dll` at 784384 bytes with SHA-256
+  `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+- `tools/build/validate_repository.ps1`, `git diff --check`, and
+  `git diff --cached --check` all exited 0.
+- Self-review found no Critical, Important, or Minor issue in the secure-input
+  repair. Production benchmark inputs are captured once beneath the validated
+  data root and all downstream parsers consume those captured bytes; the change
+  does not modify production recommendation routing, effect acceptance, or
+  model activation.
+
+## Evaluator Secure-input Fresh-review Repair (2026-08-01)
+
+The fresh review of `review-cc3dc48..9359722d.diff` (SHA-256
+`1D89DA19E61C749C35801A99CEAAA3E43C3A78D80AC0CAA7F3A4FB5AB6DBEB41`)
+reported zero Critical, one Important, and zero Minor findings. The JavaScript
+evaluator validated scenarios, prediction evidence, latency/safety evidence,
+protocol, approval, and provenance paths before reopening them with
+`fs.readFileSync`. That left a reparse/directory-replacement window between
+validation and consumption even though the C# benchmark runner already used a
+retained-handle snapshot.
+
+### RED
+
+- `node tests/test_algorithm_evaluation.js` failed with `evaluator inputs must
+  come from one retained-handle secure snapshot` before the evaluator had a
+  secure read bridge or byte-backed input path.
+
+### GREEN
+
+- `secure_read_evidence.ps1` loads the existing `SecureEvidenceIo.cs` primitive,
+  captures all named inputs through `SecureInputSnapshot.Capture`, and returns
+  only the captured bytes as base64 JSON while the retained handles remain
+  open.
+- The evaluator now invokes that bridge once for the complete CLI input set.
+  JSON/JSONL parsing, raw file SHA-256, canonical SHA-256, protocol binding, and
+  evidence binding consume only the captured bytes. The exported protocol and
+  evidence context loaders use the same secure snapshot boundary.
+- The focused evaluator test executes the real bridge and requires the Node
+  source to have no `fs.readFileSync(file)` external-input path. The benchmark
+  contract continues to dynamically prove that the retained handles reject a
+  concurrent directory rename/junction replacement.
+- `node tests/test_algorithm_evaluation.js`,
+  `tests/test_algorithm_benchmark_contract.ps1`,
+  `node tests/test_algorithm_workspace_contract.js`, and
+  `node tests/test_offline_runtime_contract.js` exited 0. The focused benchmark
+  build produced `BobCoach.dll` at 784384 bytes with SHA-256
+  `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+- `git diff --check` exited 0 before this report update.
+
+This repair changes only evaluator input integrity and engineering contracts.
+It does not train, generate, copy, embed, or activate a model and does not emit
+accepted/rejected effect results, improvement percentages, or formal effect
+metrics. Task 12 remains `blocked-by-season-data`; Unified ranking remains
+Shadow and `legacy-v1.1.0` remains player-visible and the fallback.
+
 ## Required Conclusion
 
 “新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”

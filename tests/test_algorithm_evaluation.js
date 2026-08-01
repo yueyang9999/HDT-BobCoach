@@ -1,5 +1,6 @@
 'use strict';
 const assert = require('assert');
+const childProcess = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -108,7 +109,7 @@ function protocolContextFor(input, mutate = () => {}, transformRaw = value => va
     .update(canonicalize(protocol), 'utf8').digest('hex');
   fs.writeFileSync(protocolFile, transformRaw(JSON.stringify(protocol)), 'utf8');
   try {
-    return loadExternalProtocolContext(protocolFile, scenariosFile);
+    return loadExternalProtocolContext(temporaryRoot, protocolFile, scenariosFile);
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
@@ -141,7 +142,7 @@ function evidenceContextFor(input) {
   fs.writeFileSync(files.latencyEvidence, `${JSON.stringify(input.latencyEvidence)}\n`, 'utf8');
   fs.writeFileSync(files.safetyEvidence, `${JSON.stringify(input.safetyEvidence)}\n`, 'utf8');
   try {
-    return loadExternalEvidenceContext(files);
+    return loadExternalEvidenceContext(temporaryRoot, files);
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
@@ -458,6 +459,35 @@ for (const mutate of mutations) {
 }
 
 const source = fs.readFileSync(path.join(root, 'tools', 'model', 'evaluate_policy.js'), 'utf8');
+const secureReader = path.join(root, 'tools', 'model', 'secure_read_evidence.ps1');
+assert(source.includes('secure_read_evidence.ps1')
+  && source.includes('captureExternalInputs')
+  && !source.includes('fs.readFileSync(file)'),
+  'evaluator inputs must come from one retained-handle secure snapshot');
+assert(fs.existsSync(secureReader), 'secure evaluator input reader is missing');
+const secureReaderSource = fs.readFileSync(secureReader, 'utf8');
+assert(secureReaderSource.includes('SecureInputSnapshot]::Capture')
+  && secureReaderSource.includes('.GetBytes('),
+  'secure evaluator input reader must consume the retained-handle snapshot bytes');
+const secureReaderRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_evaluator_snapshot_'));
+try {
+  const inputDirectory = path.join(secureReaderRoot, 'nested');
+  const inputFile = path.join(inputDirectory, 'input.json');
+  fs.mkdirSync(inputDirectory);
+  fs.writeFileSync(inputFile, '{"trusted":true}\n', 'utf8');
+  const read = childProcess.spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy',
+    'Bypass', '-File', secureReader], {
+    input: JSON.stringify({ dataRoot: secureReaderRoot, files: { input: inputFile } }),
+    encoding: 'utf8',
+    windowsHide: true
+  });
+  assert.strictEqual(read.status, 0, read.stderr);
+  const captured = JSON.parse(read.stdout);
+  assert.strictEqual(Buffer.from(captured.input, 'base64').toString('utf8'),
+    '{"trusted":true}\n');
+} finally {
+  fs.rmSync(secureReaderRoot, { recursive: true, force: true });
+}
 assert(source.includes('secure_write_evidence.ps1')
   && !source.includes('fs.writeFileSync(output'),
   'evaluator output must be written through the locked secure evidence writer');

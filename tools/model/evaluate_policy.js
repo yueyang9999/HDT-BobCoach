@@ -893,8 +893,40 @@ function createExternalProtocolContext(protocolBound, holdoutBound) {
   return context;
 }
 
-function readBoundJson(file, name) {
-  const bytes = fs.readFileSync(file);
+function captureExternalInputs(dataRoot, files) {
+  const reader = path.join(__dirname, 'secure_read_evidence.ps1');
+  const read = childProcess.spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy',
+    'Bypass', '-File', reader], {
+    input: JSON.stringify({ dataRoot, files }),
+    encoding: 'utf8',
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024
+  });
+  if (read.error || read.status !== 0) {
+    fail(`secure evidence read failed: ${read.error ? read.error.message : read.stderr.trim()}`);
+  }
+  let encoded;
+  try {
+    encoded = JSON.parse(read.stdout);
+  } catch (_) {
+    fail('secure evidence reader returned invalid JSON');
+  }
+  const names = Object.keys(files);
+  if (!encoded || typeof encoded !== 'object' || Array.isArray(encoded)
+      || Object.keys(encoded).length !== names.length) {
+    fail('secure evidence reader returned an invalid snapshot');
+  }
+  const captured = {};
+  for (const name of names) {
+    if (typeof encoded[name] !== 'string') {
+      fail(`secure evidence reader omitted ${name}`);
+    }
+    captured[name] = Buffer.from(encoded[name], 'base64');
+  }
+  return Object.freeze(captured);
+}
+
+function readBoundJson(bytes, name) {
   const text = bytes.toString('utf8');
   rejectDuplicateJsonProperties(text);
   const value = JSON.parse(text);
@@ -906,8 +938,7 @@ function readBoundJson(file, name) {
   });
 }
 
-function readBoundJsonLines(file, name) {
-  const bytes = fs.readFileSync(file);
+function readBoundJsonLines(bytes, name) {
   const rows = bytes.toString('utf8').split(/\r?\n/).filter(Boolean).map(line => {
     rejectDuplicateJsonProperties(line);
     return JSON.parse(line);
@@ -920,10 +951,11 @@ function readBoundJsonLines(file, name) {
   });
 }
 
-function loadExternalProtocolContext(protocolFile, scenariosFile) {
+function loadExternalProtocolContext(dataRoot, protocolFile, scenariosFile) {
+  const captured = captureExternalInputs(dataRoot, { protocolFile, scenariosFile });
   return createExternalProtocolContext(
-    readBoundJson(protocolFile, 'evaluation protocol'),
-    readBoundJsonLines(scenariosFile, 'scenario'));
+    readBoundJson(captured.protocolFile, 'evaluation protocol'),
+    readBoundJsonLines(captured.scenariosFile, 'scenario'));
 }
 
 function createExternalEvidenceContext(bound) {
@@ -955,17 +987,18 @@ function createExternalEvidenceContext(bound) {
   return context;
 }
 
-function loadExternalEvidenceContext(files) {
+function loadExternalEvidenceContext(dataRoot, files) {
+  const captured = captureExternalInputs(dataRoot, files);
   return createExternalEvidenceContext({
-    ownerApproval: readBoundJson(files.ownerApproval, 'owner approval'),
-    labelProvenance: readBoundJson(files.labelProvenance, 'label provenance'),
-    shadowComparisons: readBoundJson(files.shadowComparisons, 'shadow comparisons'),
-    severeErrorReviews: readBoundJson(files.severeErrorReviews, 'severe error reviews'),
-    scenarios: readBoundJsonLines(files.scenarios, 'scenario'),
-    baselineEvidence: readBoundJsonLines(files.baselineEvidence, 'baseline'),
-    candidateEvidence: readBoundJsonLines(files.candidateEvidence, 'candidate'),
-    latencyEvidence: readBoundJson(files.latencyEvidence, 'latency'),
-    safetyEvidence: readBoundJson(files.safetyEvidence, 'safety')
+    ownerApproval: readBoundJson(captured.ownerApproval, 'owner approval'),
+    labelProvenance: readBoundJson(captured.labelProvenance, 'label provenance'),
+    shadowComparisons: readBoundJson(captured.shadowComparisons, 'shadow comparisons'),
+    severeErrorReviews: readBoundJson(captured.severeErrorReviews, 'severe error reviews'),
+    scenarios: readBoundJsonLines(captured.scenarios, 'scenario'),
+    baselineEvidence: readBoundJsonLines(captured.baselineEvidence, 'baseline'),
+    candidateEvidence: readBoundJsonLines(captured.candidateEvidence, 'candidate'),
+    latencyEvidence: readBoundJson(captured.latencyEvidence, 'latency'),
+    safetyEvidence: readBoundJson(captured.safetyEvidence, 'safety')
   });
 }
 
@@ -1018,12 +1051,33 @@ function main(argv) {
     latencyEvidence: resolveDataPath(dataRoot, args['--latency-evidence'], 'latency evidence'),
     safetyEvidence: resolveDataPath(dataRoot, args['--safety-evidence'], 'safety evidence')
   };
+  const evidenceArgumentNames = ['--owner-approval', '--label-provenance',
+    '--shadow-comparisons', '--severe-error-reviews'];
+  const suppliedEvidenceArguments = evidenceArgumentNames.filter(name => args[name]);
+  if (suppliedEvidenceArguments.length !== 0
+      && suppliedEvidenceArguments.length !== evidenceArgumentNames.length) {
+    fail('all external approval and evidence manifest arguments are required together');
+  }
+  if (args['--evaluation-protocol']) {
+    files.evaluationProtocol = resolveDataPath(dataRoot, args['--evaluation-protocol'],
+      'evaluation protocol');
+  }
+  if (suppliedEvidenceArguments.length === evidenceArgumentNames.length) {
+    files.ownerApproval = resolveDataPath(dataRoot, args['--owner-approval'], 'owner approval');
+    files.labelProvenance = resolveDataPath(dataRoot, args['--label-provenance'],
+      'label provenance');
+    files.shadowComparisons = resolveDataPath(dataRoot, args['--shadow-comparisons'],
+      'shadow comparisons');
+    files.severeErrorReviews = resolveDataPath(dataRoot, args['--severe-error-reviews'],
+      'severe error reviews');
+  }
+  const captured = captureExternalInputs(dataRoot, files);
   const bound = {
-    scenarios: readBoundJsonLines(files.scenarios, 'scenario'),
-    baselineEvidence: readBoundJsonLines(files.baselineEvidence, 'baseline'),
-    candidateEvidence: readBoundJsonLines(files.candidateEvidence, 'candidate'),
-    latencyEvidence: readBoundJson(files.latencyEvidence, 'latency'),
-    safetyEvidence: readBoundJson(files.safetyEvidence, 'safety')
+    scenarios: readBoundJsonLines(captured.scenarios, 'scenario'),
+    baselineEvidence: readBoundJsonLines(captured.baselineEvidence, 'baseline'),
+    candidateEvidence: readBoundJsonLines(captured.candidateEvidence, 'candidate'),
+    latencyEvidence: readBoundJson(captured.latencyEvidence, 'latency'),
+    safetyEvidence: readBoundJson(captured.safetyEvidence, 'safety')
   };
   const benchmarkId = requireString(
     bound.baselineEvidence.value[0] && bound.baselineEvidence.value[0].benchmarkId,
@@ -1035,29 +1089,17 @@ function main(argv) {
     latencyEvidence: bound.latencyEvidence.value,
     safetyEvidence: bound.safetyEvidence.value
   };
-  const protocolContext = args['--evaluation-protocol']
+  const protocolContext = files.evaluationProtocol
     ? createExternalProtocolContext(
-      readBoundJson(resolveDataPath(dataRoot, args['--evaluation-protocol'],
-        'evaluation protocol'), 'evaluation protocol'), bound.scenarios)
+      readBoundJson(captured.evaluationProtocol, 'evaluation protocol'), bound.scenarios)
     : null;
-  const evidenceArgumentNames = ['--owner-approval', '--label-provenance',
-    '--shadow-comparisons', '--severe-error-reviews'];
-  const suppliedEvidenceArguments = evidenceArgumentNames.filter(name => args[name]);
-  if (suppliedEvidenceArguments.length !== 0
-      && suppliedEvidenceArguments.length !== evidenceArgumentNames.length) {
-    fail('all external approval and evidence manifest arguments are required together');
-  }
   const evidenceContext = suppliedEvidenceArguments.length === evidenceArgumentNames.length
     ? createExternalEvidenceContext({
       ...bound,
-      ownerApproval: readBoundJson(resolveDataPath(dataRoot, args['--owner-approval'],
-        'owner approval'), 'owner approval'),
-      labelProvenance: readBoundJson(resolveDataPath(dataRoot, args['--label-provenance'],
-        'label provenance'), 'label provenance'),
-      shadowComparisons: readBoundJson(resolveDataPath(dataRoot, args['--shadow-comparisons'],
-        'shadow comparisons'), 'shadow comparisons'),
-      severeErrorReviews: readBoundJson(resolveDataPath(dataRoot, args['--severe-error-reviews'],
-        'severe error reviews'), 'severe error reviews')
+      ownerApproval: readBoundJson(captured.ownerApproval, 'owner approval'),
+      labelProvenance: readBoundJson(captured.labelProvenance, 'label provenance'),
+      shadowComparisons: readBoundJson(captured.shadowComparisons, 'shadow comparisons'),
+      severeErrorReviews: readBoundJson(captured.severeErrorReviews, 'severe error reviews')
     }) : null;
   const output = resolveDataPath(dataRoot, args['--output'], 'output', { allowMissing: true });
   const writer = path.join(__dirname, 'secure_write_evidence.ps1');
