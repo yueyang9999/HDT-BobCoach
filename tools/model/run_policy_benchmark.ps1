@@ -135,7 +135,8 @@ try {
     if ($SelfTest) {
         $arguments += "--self-test"
     } else {
-        $arguments += @("--scenarios", $resolvedScenarios, "--probes", $resolvedProbes,
+        $arguments += @("--data-root", $resolvedDataRoot,
+            "--scenarios", $resolvedScenarios, "--probes", $resolvedProbes,
             "--model", $resolvedModel, "--evaluation-protocol", $resolvedEvaluationProtocol)
     }
     & $runnerPath @arguments

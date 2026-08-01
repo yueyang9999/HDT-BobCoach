@@ -161,7 +161,7 @@ internal static class PolicyBenchmarkRunner
     private static Dictionary<string, string> ParseArgs(string[] args)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        var allowed = new HashSet<string>(new[] { "--output", "--output-root", "--self-test", "--scenarios",
+        var allowed = new HashSet<string>(new[] { "--output", "--output-root", "--self-test", "--data-root", "--scenarios",
             "--probes", "--model", "--evaluation-protocol" },
             StringComparer.Ordinal);
         for (var index = 0; index < args.Length; index++)
@@ -326,60 +326,71 @@ internal static class PolicyBenchmarkRunner
 
     private static void RunProduction(IDictionary<string, string> args, SecureEvidenceDirectory output)
     {
-        foreach (var required in new[] { "--scenarios", "--probes", "--model",
+        foreach (var required in new[] { "--data-root", "--scenarios", "--probes", "--model",
             "--evaluation-protocol" })
             if (!args.ContainsKey(required)) throw new ArgumentException(required + " is required");
 
-        var context = LoadScenarios(args["--scenarios"]);
-        var evaluationContext = LoadEvaluationContext(args["--evaluation-protocol"],
-            args["--scenarios"]);
-        DecisionPolicyBundle bundle;
-        using (var stream = File.OpenRead(args["--model"]))
+        var inputPaths = new Dictionary<string, string>(StringComparer.Ordinal) {
+            { "scenarios", args["--scenarios"] },
+            { "probes", args["--probes"] },
+            { "model", args["--model"] },
+            { "evaluation-protocol", args["--evaluation-protocol"] }
+        };
+        using (var inputs = SecureInputSnapshot.Capture(args["--data-root"], inputPaths))
         {
-            bundle = DecisionPolicyFactory.CreateForEffectEvaluation(new DecisionEngine(), stream,
-                new EvaluationSeasonFeatureExtension(context.GameBuild, context.SeasonId,
-                    context.CardPoolIdentity), evaluationContext);
+            var scenarioBytes = inputs.GetBytes("scenarios");
+            var probeBytes = inputs.GetBytes("probes");
+            var modelBytes = inputs.GetBytes("model");
+            var protocolBytes = inputs.GetBytes("evaluation-protocol");
+            var context = LoadScenarios(scenarioBytes);
+            var evaluationContext = LoadEvaluationContext(protocolBytes, scenarioBytes);
+            DecisionPolicyBundle bundle;
+            using (var stream = new MemoryStream(modelBytes, false))
+            {
+                bundle = DecisionPolicyFactory.CreateForEffectEvaluation(new DecisionEngine(), stream,
+                    new EvaluationSeasonFeatureExtension(context.GameBuild, context.SeasonId,
+                        context.CardPoolIdentity), evaluationContext);
+            }
+            var scenarios = context.Scenarios;
+            var candidateAdapter = new CandidateBenchmarkAdapter(
+                state => ((UnifiedRankingPolicy)bundle.Unified)
+                    .DecideWithDiagnostics(state), bundle.Legacy);
+            var baselineRows = new List<JObject>();
+            var candidateRows = new List<JObject>();
+
+            foreach (var scenario in scenarios)
+            {
+                var detached = Clone(scenario.State);
+                var candidates = bundle.Candidates.Generate(detached)
+                    .OrderBy(value => value.ActionKey, StringComparer.Ordinal).ToList();
+                var record = DecisionEventRecord.Create(scenario.ScenarioId, scenario.GameId,
+                    detached, candidates);
+                if (!string.Equals(record.StateFingerprint, scenario.StateFingerprint, StringComparison.Ordinal)
+                    || !string.Equals(record.CandidateFingerprint, scenario.CandidateFingerprint, StringComparison.Ordinal))
+                    throw new InvalidDataException("scenario fingerprint mismatch: " + scenario.ScenarioId);
+
+                baselineRows.Add(Prediction(record, bundle.Legacy.Decide(Clone(detached)),
+                    "unknown", "unknown"));
+                candidateRows.Add(Prediction(record,
+                    candidateAdapter.DecideWithDiagnostics(detached),
+                    bundle.ModelId, bundle.ModelPayloadSha256));
+            }
+
+            WriteLines(output, "baseline-predictions.jsonl", baselineRows);
+            WriteLines(output, "candidate-predictions.jsonl", candidateRows);
+            WriteJson(output, "latency.json", LatencyEvidence(scenarios,
+                bundle.Legacy, candidateAdapter, bundle.ModelId, bundle.ModelPayloadSha256));
+            WriteJson(output, "safety-probes.json", RunSafetyProbes(probeBytes, bundle));
         }
-        var scenarios = context.Scenarios;
-        var candidateAdapter = new CandidateBenchmarkAdapter(
-            state => ((UnifiedRankingPolicy)bundle.Unified)
-                .DecideWithDiagnostics(state), bundle.Legacy);
-        var baselineRows = new List<JObject>();
-        var candidateRows = new List<JObject>();
-
-        foreach (var scenario in scenarios)
-        {
-            var detached = Clone(scenario.State);
-            var candidates = bundle.Candidates.Generate(detached)
-                .OrderBy(value => value.ActionKey, StringComparer.Ordinal).ToList();
-            var record = DecisionEventRecord.Create(scenario.ScenarioId, scenario.GameId,
-                detached, candidates);
-            if (!string.Equals(record.StateFingerprint, scenario.StateFingerprint, StringComparison.Ordinal)
-                || !string.Equals(record.CandidateFingerprint, scenario.CandidateFingerprint, StringComparison.Ordinal))
-                throw new InvalidDataException("scenario fingerprint mismatch: " + scenario.ScenarioId);
-
-            baselineRows.Add(Prediction(record, bundle.Legacy.Decide(Clone(detached)),
-                "unknown", "unknown"));
-            candidateRows.Add(Prediction(record,
-                candidateAdapter.DecideWithDiagnostics(detached),
-                bundle.ModelId, bundle.ModelPayloadSha256));
-        }
-
-        WriteLines(output, "baseline-predictions.jsonl", baselineRows);
-        WriteLines(output, "candidate-predictions.jsonl", candidateRows);
-        WriteJson(output, "latency.json", LatencyEvidence(scenarios,
-            bundle.Legacy, candidateAdapter, bundle.ModelId, bundle.ModelPayloadSha256));
-        WriteJson(output, "safety-probes.json", RunSafetyProbes(
-            args["--probes"], bundle));
     }
 
-    private static BenchmarkContext LoadScenarios(string path)
+    private static BenchmarkContext LoadScenarios(byte[] bytes)
     {
         var result = new List<Scenario>();
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var pairs = new HashSet<string>(StringComparer.Ordinal);
         string build = null, season = null, pool = null;
-        foreach (var line in File.ReadAllLines(path, Utf8NoBom).Where(value => !string.IsNullOrWhiteSpace(value)))
+        foreach (var line in ReadNonBlankLines(bytes))
         {
             var row = JObject.Parse(line);
             if ((int)row["scenarioSchemaVersion"] != 1) throw new InvalidDataException("scenario schema mismatch");
@@ -410,11 +421,11 @@ internal static class PolicyBenchmarkRunner
         };
     }
 
-    private static EffectEvaluationContext LoadEvaluationContext(string protocolPath,
-        string scenariosPath)
+    private static EffectEvaluationContext LoadEvaluationContext(byte[] protocolBytes,
+        byte[] scenarioBytes)
     {
         JObject protocol;
-        using (var stream = File.OpenRead(protocolPath))
+        using (var stream = new MemoryStream(protocolBytes, false))
         using (var textReader = new StreamReader(stream, Utf8NoBom, true))
         using (var jsonReader = new JsonTextReader(textReader) { DateParseHandling = DateParseHandling.None })
         {
@@ -434,7 +445,7 @@ internal static class PolicyBenchmarkRunner
             throw new InvalidDataException("evaluation protocol checksum mismatch");
 
         var declaredHoldoutSha = Fingerprint(protocol, "holdoutChecksumSha256");
-        var actualHoldoutSha = Sha256File(scenariosPath);
+        var actualHoldoutSha = Sha256Hex(scenarioBytes);
         if (!string.Equals(declaredHoldoutSha, actualHoldoutSha, StringComparison.Ordinal))
             throw new InvalidDataException("evaluation holdout checksum mismatch");
 
@@ -530,11 +541,17 @@ internal static class PolicyBenchmarkRunner
         return token.ToString(Formatting.None);
     }
 
-    private static string Sha256File(string path)
+    private static IList<string> ReadNonBlankLines(byte[] bytes)
     {
-        using (var stream = File.OpenRead(path))
-        using (var sha = SHA256.Create())
-            return string.Concat(sha.ComputeHash(stream).Select(value => value.ToString("x2")));
+        var lines = new List<string>();
+        using (var stream = new MemoryStream(bytes, false))
+        using (var reader = new StreamReader(stream, Utf8NoBom, true))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+                if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
+        }
+        return lines;
     }
 
     private static string Sha256Hex(string value)
@@ -542,6 +559,12 @@ internal static class PolicyBenchmarkRunner
         using (var sha = SHA256.Create())
             return string.Concat(sha.ComputeHash(Utf8NoBom.GetBytes(value))
                 .Select(item => item.ToString("x2")));
+    }
+
+    private static string Sha256Hex(byte[] value)
+    {
+        using (var sha = SHA256.Create())
+            return string.Concat(sha.ComputeHash(value).Select(item => item.ToString("x2")));
     }
 
     private static void Normalize(GameState state)
@@ -686,11 +709,11 @@ internal static class PolicyBenchmarkRunner
         return SafetyObject(new JArray(rows.OrderBy(value => (string)value["probeId"], StringComparer.Ordinal)));
     }
 
-    private static JObject RunSafetyProbes(string path, DecisionPolicyBundle candidateBundle)
+    private static JObject RunSafetyProbes(byte[] bytes, DecisionPolicyBundle candidateBundle)
     {
         var rows = new JArray();
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var line in File.ReadAllLines(path, Utf8NoBom).Where(value => !string.IsNullOrWhiteSpace(value)))
+        foreach (var line in ReadNonBlankLines(bytes))
         {
             var probe = JObject.Parse(line);
             if ((int)probe["probeSchemaVersion"] != 1) throw new InvalidDataException("probe schema mismatch");

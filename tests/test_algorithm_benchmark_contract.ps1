@@ -102,6 +102,13 @@ $secureContractRoot = Join-Path $env:TEMP `
     ("bobcoach_secure_evidence_" + [Guid]::NewGuid().ToString("N"))
 $secureAttackRoot = Join-Path $env:TEMP `
     ("bobcoach_secure_evidence_attack_" + [Guid]::NewGuid().ToString("N"))
+$secureInputRoot = Join-Path $env:TEMP `
+    ("bobcoach_secure_input_" + [Guid]::NewGuid().ToString("N"))
+$secureInputAttackRoot = Join-Path $env:TEMP `
+    ("bobcoach_secure_input_attack_" + [Guid]::NewGuid().ToString("N"))
+$secureInputDirectory = Join-Path $secureInputRoot "nested"
+$secureInputFile = Join-Path $secureInputDirectory "scenarios.jsonl"
+$renamedInputDirectory = Join-Path $secureInputRoot "locked-input"
 $secureParent = Join-Path $secureContractRoot "nested"
 $secureOutput = Join-Path $secureParent "output"
 $renamedOutput = Join-Path $secureParent "locked-output"
@@ -113,7 +120,34 @@ $replacementJunctionCreated = $false
 try {
     New-Item -ItemType Directory -Path $secureContractRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $secureAttackRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $secureInputDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $secureInputAttackRoot -Force | Out-Null
+    [IO.File]::WriteAllText($secureInputFile, "trusted-input", (New-Object Text.UTF8Encoding($false)))
     Add-Type -Path $secureIoSource
+    $secureInputs = New-Object 'Collections.Generic.Dictionary[string,string]'
+    $secureInputs.Add("scenarios", $secureInputFile)
+    $inputSnapshot = [BobCoach.ModelTools.SecureInputSnapshot]::Capture(
+        $secureInputRoot, $secureInputs)
+    try {
+        $inputDirectoryReplacementRejected = $false
+        try {
+            Rename-Item -LiteralPath $secureInputDirectory `
+                -NewName (Split-Path -Leaf $renamedInputDirectory) -ErrorAction Stop
+            New-Item -ItemType Junction -Path $secureInputDirectory `
+                -Target $secureInputAttackRoot | Out-Null
+        } catch {
+            $inputDirectoryReplacementRejected = $true
+        }
+        if (!$inputDirectoryReplacementRejected) {
+            throw "secure input snapshot allowed a concurrent directory rename and junction replacement"
+        }
+        if ((New-Object Text.UTF8Encoding($false)).GetString($inputSnapshot.GetBytes("scenarios")) `
+                -ne "trusted-input") {
+            throw "secure input snapshot did not preserve the bytes read from retained handles"
+        }
+    } finally {
+        $inputSnapshot.Dispose()
+    }
     $scope = [BobCoach.ModelTools.SecureEvidenceDirectory]::Acquire(
         $secureContractRoot, $secureOutput)
     try {
@@ -210,6 +244,12 @@ try {
     if (Test-Path -LiteralPath $secureAttackRoot) {
         Remove-Item -LiteralPath $secureAttackRoot -Recurse -Force
     }
+    if (Test-Path -LiteralPath $secureInputRoot) {
+        Remove-Item -LiteralPath $secureInputRoot -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $secureInputAttackRoot) {
+        Remove-Item -LiteralPath $secureInputAttackRoot -Recurse -Force
+    }
     if (Test-Path -LiteralPath $driveRootOutput) {
         Remove-Item -LiteralPath $driveRootOutput -Recurse -Force
     }
@@ -224,7 +264,10 @@ foreach ($required in @(
     "bundle.Legacy.Decide", "bundle.Unified.Decide", "DecideWithDiagnostics", "LoadEvaluationContext",
     "BestCompletePath", "legacy-v1.1.0", "CandidateEvidenceSurface",
     "ValidateDeclaredCandidates", "self-test must reject a mismatched candidate declaration",
-    "CandidateBenchmarkAdapter", "ValidateProbeModelSource", "SecureEvidenceDirectory")) {
+    "CandidateBenchmarkAdapter", "ValidateProbeModelSource", "SecureEvidenceDirectory",
+    "SecureInputSnapshot.Capture", "LoadScenarios(scenarioBytes)",
+    "LoadEvaluationContext(protocolBytes, scenarioBytes)", "new MemoryStream(modelBytes, false)",
+    "RunSafetyProbes(probeBytes")) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing required evaluation surface: $required" }
 }
 if ($sourceText.Contains('.Where(property => !property.Name.StartsWith("_"')) {
@@ -246,7 +289,7 @@ if ($sourceText.Contains("DecisionOrchestrator") -or $sourceText.Contains("Shado
     throw "benchmark runner must call Unified diagnostics directly without Shadow orchestration"
 }
 $runnerText = [System.IO.File]::ReadAllText($runner)
-foreach ($required in @("EvaluationProtocol", "--evaluation-protocol")) {
+foreach ($required in @("EvaluationProtocol", "--evaluation-protocol", '"--data-root", $resolvedDataRoot')) {
     if (!$runnerText.Contains($required)) { throw "benchmark wrapper does not pass the frozen protocol: $required" }
 }
 $buildText = [System.IO.File]::ReadAllText((Join-Path $root "docs\maintainer\BUILD.md"))

@@ -360,6 +360,52 @@ model was trained, generated, copied, embedded, or activated. Task 12 remains
 `blocked-by-season-data`; Unified ranking remains Shadow and
 `legacy-v1.1.0` remains player-visible and the fallback.
 
+## Secure-input Fresh-review Repair (2026-08-01)
+
+The latest fresh review reported zero Critical, one Important, and zero Minor
+findings. The PowerShell wrapper validated benchmark inputs before build and
+staging, but the compiled runner later reopened scenarios, probes, model, and
+protocol by string path. A concurrent directory rename and junction replacement
+could therefore change which objects the runner consumed. Scenario parsing and
+holdout checksum calculation also reopened the scenario path separately.
+
+### RED
+
+- `tests/test_algorithm_benchmark_contract.ps1` failed with `Unable to find type
+  [BobCoach.ModelTools.SecureInputSnapshot]` after adding a dynamic contract that
+  captures an input, attempts to rename its containing directory and replace it
+  with a junction, and then verifies the captured bytes remain the trusted
+  content.
+
+### GREEN
+
+- `SecureInputSnapshot` opens the declared `DataRoot`, every input directory
+  segment, and every input file through retained Windows handles. It rejects
+  reparse points, verifies final physical containment, omits delete sharing on
+  all handles, and omits write sharing on input files.
+- The snapshot reads scenarios, probes, candidate model, and evaluation protocol
+  exactly once. `PolicyBenchmarkRunner` parses scenarios and calculates the
+  holdout checksum from the same `scenarioBytes`, parses the protocol and probes
+  from their captured bytes, and loads the model through an in-memory stream.
+  It no longer performs production input reads by string path.
+- The wrapper now passes the validated `DataRoot` to the runner as
+  `--data-root`. Static integration contracts require the secure snapshot and
+  each byte-backed consumer so the runner cannot silently regress to path-based
+  reads.
+- Three consecutive benchmark contract invocations passed. Each invocation
+  produced two identical Release `BobCoach.dll` files (`784384` bytes,
+  SHA-256 `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`).
+- `node tests/test_algorithm_evaluation.js`, `node
+  tests/test_algorithm_workspace_contract.js`, and `node
+  tests/test_offline_runtime_contract.js` passed. `git diff --check` passed
+  before this report update.
+
+This repair changes only benchmark input integrity and engineering contracts.
+It does not train, generate, copy, embed, or activate a model, and it does not
+produce an accepted/rejected effect result, improvement percentage, or formal
+effect metric. Task 12 remains `blocked-by-season-data`; Unified ranking remains
+Shadow and `legacy-v1.1.0` remains player-visible and the fallback.
+
 ## Required Conclusion
 
 “新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”

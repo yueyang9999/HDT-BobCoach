@@ -18,10 +18,13 @@ namespace BobCoach.ModelTools
         private const uint FileFlagOpenReparsePoint = 0x00200000;
         private const uint FileFlagBackupSemantics = 0x02000000;
         private const uint FileAttributeReparsePoint = 0x00000400;
+        private const uint FileAttributeDirectory = 0x00000010;
+        private const uint GenericRead = 0x80000000;
         private const uint GenericWrite = 0x40000000;
         private const uint SynchronizeAccess = 0x00100000;
         private const uint FileAttributeNormal = 0x00000080;
         private const uint FileCreate = 2;
+        private const uint FileOpen = 1;
         private const uint FileOpenIf = 3;
         private const uint FileDirectoryFile = 0x00000001;
         private const uint FileWriteThrough = 0x00000002;
@@ -196,7 +199,7 @@ namespace BobCoach.ModelTools
                 _directoryHandles[index].Dispose();
         }
 
-        private static SafeFileHandle OpenDirectory(string path, string name)
+        internal static SafeFileHandle OpenDirectory(string path, string name)
         {
             var handle = CreateFile(path, FileReadAttributes | FileTraverse,
                 FileShareRead | FileShareWrite, IntPtr.Zero,
@@ -222,6 +225,19 @@ namespace BobCoach.ModelTools
 
         private static SafeFileHandle OpenOrCreateRelativeDirectory(
             SafeFileHandle parent, string segment)
+        {
+            return OpenRelativeDirectory(parent, segment, FileOpenIf,
+                "evidence output directory");
+        }
+
+        internal static SafeFileHandle OpenExistingRelativeDirectory(
+            SafeFileHandle parent, string segment, string name)
+        {
+            return OpenRelativeDirectory(parent, segment, FileOpen, name);
+        }
+
+        private static SafeFileHandle OpenRelativeDirectory(
+            SafeFileHandle parent, string segment, uint createDisposition, string displayName)
         {
             IntPtr nameBuffer = IntPtr.Zero;
             IntPtr nameStructure = IntPtr.Zero;
@@ -253,34 +269,104 @@ namespace BobCoach.ModelTools
                 var status = NtCreateFile(out directoryHandle,
                     FileReadAttributes | FileTraverse | SynchronizeAccess,
                     ref attributes, out ioStatus, IntPtr.Zero, FileAttributeNormal,
-                    FileShareRead | FileShareWrite, FileOpenIf,
+                    FileShareRead | FileShareWrite, createDisposition,
                     FileDirectoryFile | FileFlagOpenReparsePoint
                         | FileSynchronousIoNonAlert,
                     IntPtr.Zero, 0);
                 if (status < 0)
                 {
                     if (directoryHandle != null) directoryHandle.Dispose();
-                    ThrowNtStatus(status, "cannot open evidence output directory");
+                    ThrowNtStatus(status, "cannot open " + displayName);
                 }
                 ByHandleFileInformation information;
                 if (!GetFileInformationByHandle(directoryHandle, out information))
                 {
                     var error = Marshal.GetLastWin32Error();
                     directoryHandle.Dispose();
-                    throw new IOException("cannot inspect evidence output directory: "
+                    throw new IOException("cannot inspect " + displayName + ": "
                         + new System.ComponentModel.Win32Exception(error).Message);
                 }
                 if ((information.FileAttributes & FileAttributeReparsePoint) != 0)
                 {
                     directoryHandle.Dispose();
                     throw new InvalidDataException(
-                        "evidence output directory is a reparse point");
+                        displayName + " is a reparse point");
                 }
                 return directoryHandle;
             }
             finally
             {
                 if (parentReferenceAdded) parent.DangerousRelease();
+                if (nameStructure != IntPtr.Zero) Marshal.FreeHGlobal(nameStructure);
+                if (nameBuffer != IntPtr.Zero) Marshal.FreeHGlobal(nameBuffer);
+            }
+        }
+
+        internal static SafeFileHandle OpenExistingRelativeFile(
+            SafeFileHandle directory, string fileName, string name)
+        {
+            IntPtr nameBuffer = IntPtr.Zero;
+            IntPtr nameStructure = IntPtr.Zero;
+            var directoryReferenceAdded = false;
+            try
+            {
+                nameBuffer = Marshal.StringToHGlobalUni(fileName);
+                var nameBytes = checked(fileName.Length * 2);
+                if (nameBytes > ushort.MaxValue - 2)
+                    throw new PathTooLongException("input file name is too long");
+                var relativeName = new UnicodeString {
+                    Length = (ushort)nameBytes,
+                    MaximumLength = (ushort)(nameBytes + 2),
+                    Buffer = nameBuffer
+                };
+                nameStructure = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(UnicodeString)));
+                Marshal.StructureToPtr(relativeName, nameStructure, false);
+                directory.DangerousAddRef(ref directoryReferenceAdded);
+                var attributes = new ObjectAttributes {
+                    Length = Marshal.SizeOf(typeof(ObjectAttributes)),
+                    RootDirectory = directory.DangerousGetHandle(),
+                    ObjectName = nameStructure,
+                    Attributes = ObjectCaseInsensitive,
+                    SecurityDescriptor = IntPtr.Zero,
+                    SecurityQualityOfService = IntPtr.Zero
+                };
+                IoStatusBlock ioStatus;
+                SafeFileHandle fileHandle;
+                var status = NtCreateFile(out fileHandle,
+                    GenericRead | FileReadAttributes | SynchronizeAccess,
+                    ref attributes, out ioStatus, IntPtr.Zero, FileAttributeNormal,
+                    FileShareRead, FileOpen,
+                    FileFlagOpenReparsePoint | FileSynchronousIoNonAlert
+                        | FileNonDirectoryFile,
+                    IntPtr.Zero, 0);
+                if (status < 0)
+                {
+                    if (fileHandle != null) fileHandle.Dispose();
+                    ThrowNtStatus(status, "cannot open " + name);
+                }
+                ByHandleFileInformation information;
+                if (!GetFileInformationByHandle(fileHandle, out information))
+                {
+                    var error = Marshal.GetLastWin32Error();
+                    fileHandle.Dispose();
+                    throw new IOException("cannot inspect " + name + ": "
+                        + new System.ComponentModel.Win32Exception(error).Message);
+                }
+                if ((information.FileAttributes & FileAttributeReparsePoint) != 0)
+                {
+                    fileHandle.Dispose();
+                    throw new InvalidDataException(name + " is a reparse point");
+                }
+                if ((information.FileAttributes & FileAttributeDirectory) != 0)
+                {
+                    fileHandle.Dispose();
+                    throw new InvalidDataException(name + " is not a file");
+                }
+                return fileHandle;
+            }
+            finally
+            {
+                if (directoryReferenceAdded) directory.DangerousRelease();
                 if (nameStructure != IntPtr.Zero) Marshal.FreeHGlobal(nameStructure);
                 if (nameBuffer != IntPtr.Zero) Marshal.FreeHGlobal(nameBuffer);
             }
@@ -391,7 +477,7 @@ namespace BobCoach.ModelTools
                 + new System.ComponentModel.Win32Exception(error).Message);
         }
 
-        private static string FinalPath(SafeFileHandle handle, string name)
+        internal static string FinalPath(SafeFileHandle handle, string name)
         {
             var buffer = new StringBuilder(32768);
             var length = GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Capacity, 0);
@@ -406,7 +492,7 @@ namespace BobCoach.ModelTools
             return Normalize(value);
         }
 
-        private static string Normalize(string value)
+        internal static string Normalize(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("path is required");
             var fullPath = Path.GetFullPath(value);
@@ -416,7 +502,7 @@ namespace BobCoach.ModelTools
                 : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
-        private static bool PathContained(string parent, string candidate)
+        internal static bool PathContained(string parent, string candidate)
         {
             var prefix = parent.EndsWith(Path.DirectorySeparatorChar.ToString(),
                     StringComparison.Ordinal)
@@ -426,6 +512,117 @@ namespace BobCoach.ModelTools
                 : parent + Path.DirectorySeparatorChar;
             return candidate.Equals(parent, StringComparison.OrdinalIgnoreCase)
                 || candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public sealed class SecureInputSnapshot : IDisposable
+    {
+        private readonly IList<SafeFileHandle> _handles;
+        private readonly IDictionary<string, byte[]> _bytes;
+        private bool _disposed;
+
+        private SecureInputSnapshot(IList<SafeFileHandle> handles,
+            IDictionary<string, byte[]> bytes)
+        {
+            _handles = handles;
+            _bytes = bytes;
+        }
+
+        public static SecureInputSnapshot Capture(string trustedRoot,
+            IDictionary<string, string> inputs)
+        {
+            if (inputs == null || inputs.Count == 0)
+                throw new ArgumentException("at least one input is required", "inputs");
+            var root = SecureEvidenceDirectory.Normalize(trustedRoot);
+            var handles = new List<SafeFileHandle>();
+            var bytes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            try
+            {
+                var rootHandle = SecureEvidenceDirectory.OpenDirectory(root, "trusted input root");
+                handles.Add(rootHandle);
+                var physicalRoot = SecureEvidenceDirectory.FinalPath(rootHandle,
+                    "trusted input root");
+                foreach (var input in inputs)
+                {
+                    if (string.IsNullOrWhiteSpace(input.Key))
+                        throw new ArgumentException("input name is required", "inputs");
+                    var path = SecureEvidenceDirectory.Normalize(input.Value);
+                    if (!SecureEvidenceDirectory.PathContained(root, path)
+                        || path.Equals(root, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException(input.Key + " escapes trusted input root");
+                    var segments = path.Substring(root.Length)
+                        .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                        .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                            StringSplitOptions.RemoveEmptyEntries);
+                    if (segments.Length == 0)
+                        throw new InvalidDataException(input.Key + " input path is invalid");
+
+                    var parent = rootHandle;
+                    for (var index = 0; index < segments.Length - 1; index++)
+                    {
+                        var directory = SecureEvidenceDirectory.OpenExistingRelativeDirectory(
+                            parent, segments[index], input.Key + " input directory");
+                        handles.Add(directory);
+                        var physicalDirectory = SecureEvidenceDirectory.FinalPath(directory,
+                            input.Key + " input directory");
+                        if (!SecureEvidenceDirectory.PathContained(physicalRoot, physicalDirectory))
+                            throw new InvalidDataException(input.Key + " escapes trusted input root");
+                        parent = directory;
+                    }
+
+                    var file = SecureEvidenceDirectory.OpenExistingRelativeFile(parent,
+                        segments[segments.Length - 1], input.Key + " input file");
+                    handles.Add(file);
+                    var physicalFile = SecureEvidenceDirectory.FinalPath(file, input.Key + " input file");
+                    if (!SecureEvidenceDirectory.PathContained(physicalRoot, physicalFile))
+                        throw new InvalidDataException(input.Key + " escapes trusted input root");
+                    bytes.Add(input.Key, ReadAllBytes(file));
+                }
+                return new SecureInputSnapshot(handles, bytes);
+            }
+            catch
+            {
+                for (var index = handles.Count - 1; index >= 0; index--)
+                    handles[index].Dispose();
+                throw;
+            }
+        }
+
+        public byte[] GetBytes(string inputName)
+        {
+            if (_disposed) throw new ObjectDisposedException("SecureInputSnapshot");
+            byte[] value;
+            if (!_bytes.TryGetValue(inputName, out value))
+                throw new KeyNotFoundException("unknown secure input: " + inputName);
+            return (byte[])value.Clone();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            for (var index = _handles.Count - 1; index >= 0; index--)
+                _handles[index].Dispose();
+        }
+
+        private static byte[] ReadAllBytes(SafeFileHandle handle)
+        {
+            var handleReferenceAdded = false;
+            try
+            {
+                handle.DangerousAddRef(ref handleReferenceAdded);
+                using (var streamHandle = new SafeFileHandle(handle.DangerousGetHandle(), false))
+                using (var stream = new FileStream(streamHandle, FileAccess.Read, 4096, false))
+                using (var buffer = new MemoryStream())
+                {
+                    stream.CopyTo(buffer);
+                    return buffer.ToArray();
+                }
+            }
+            finally
+            {
+                if (handleReferenceAdded) handle.DangerousRelease();
+            }
         }
     }
 
