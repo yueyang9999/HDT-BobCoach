@@ -4,8 +4,10 @@
 
 Implementation and implementer self-review are complete. Focused contracts, the
 full npm suite, an explicit Release build, repository validation, and whitespace
-validation pass. A fresh review against a frozen Task 12 bundle is still
-required; this report does not claim reviewer approval.
+validation pass. The first fresh review returned three Critical and two
+Important findings; all five were repaired. A fresh re-review against the final
+frozen Task 12 bundle is still required; this report does not claim reviewer
+approval.
 
 Effect acceptance remains exactly `blocked-by-season-data`. No model was
 trained, generated, copied, embedded, or activated. Unified ranking remains in
@@ -167,6 +169,44 @@ Focused verification with `BOBCOACH_HDT_DIR` set to the HDT 1.54.0 reference:
 - No model was trained, generated, copied, embedded, or activated. Unified
   remains Shadow and `legacy-v1.1.0` remains visible/fallback.
 
+## Fresh-review Repair Wave (2026-08-01)
+
+The first fresh Task 12 review reported three Critical and two Important
+findings. The repair wave now:
+
+- records the planner's real selected action key, ordered Top-N actions,
+  best-complete path, and planner status in benchmark evidence;
+- maps `model-unavailable` probes to `modelSource: none` and all other probes
+  to `modelSource: candidate`;
+- centralizes external-root/output validation in `path_contracts.psm1`, rejects
+  repository/system-drive destinations in normal and self-test modes, and
+  rejects reparse-point or junction escapes;
+- replaces repository-local owner approval with an externally supplied,
+  detached Ed25519 signature verified against the checked-in empty trust-root
+  file; and
+- replaces self-attested readiness booleans with external label-provenance,
+  Shadow-comparison, and severe-error-review manifests that bind the exact
+  scenario set, version identities, holdout, evidence files, model checksum,
+  and frozen evaluation protocol checksum.
+
+Fresh verification after the repair wave, with `BOBCOACH_HDT_DIR` set to the
+external HDT 1.54.0 reference directory:
+
+- `node tests/test_algorithm_evaluation.js`: pass.
+- `node tests/test_algorithm_workspace_contract.js`: pass.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests/test_algorithm_benchmark_contract.ps1`: pass; Release `BobCoach.dll`
+  SHA-256 `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+- `node tests/test_offline_runtime_contract.js`: pass.
+- `npm test`: exit code 0 in approximately 311 seconds; contract, behavior,
+  and package suites pass. The deterministic package SHA-256 is
+  `E1D559D21221987A03E2DDE335D80D9DEC73B1A1D4D62CA50E7F7785827D59A9`.
+- `git diff --check`: exit code 0 before this report-only update.
+
+The readiness result remains `effectAcceptanceStatus:
+blocked-by-season-data` with `metrics: null`. The repair wave did not add a
+training, generation, copy, embedding, activation, or visible-policy path.
+
 ## Required Conclusion
 
-新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+“新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”
