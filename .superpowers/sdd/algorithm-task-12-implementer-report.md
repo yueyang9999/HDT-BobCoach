@@ -475,6 +475,43 @@ accepted/rejected effect results, improvement percentages, or formal effect
 metrics. Task 12 remains `blocked-by-season-data`; Unified ranking remains
 Shadow and `legacy-v1.1.0` remains player-visible and the fallback.
 
+## Final Exact-HEAD Verification (2026-08-01)
+
+The final implementation commit `558d90eb2aaa3ff0d3c446cef285671c6e9d0bb6`
+was verified from a clean worktree. An initial invocation pointed
+`BOBCOACH_HDT_DIR` at the parent `build-reference` directory and exited with
+`Missing HDT dependency: HearthstoneDeckTracker.exe`; it was discarded. The
+complete verification was rerun with the installed HDT 1.54.0.7376 directory.
+
+- `tests/test_algorithm_benchmark_contract.ps1`,
+  `tests/test_algorithm_evaluation.js`,
+  `tests/test_algorithm_workspace_contract.js`, and
+  `tests/test_offline_runtime_contract.js` all exited 0 with empty stderr.
+- Full `npm test` exited 0 in 264.4 seconds with 139 `PASS` lines and empty
+  stderr.
+- An independent Release build produced `BobCoach.dll` at 784384 bytes with
+  SHA-256
+  `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+- `tools/build/validate_repository.ps1`, `git diff --check`, and
+  `git diff --cached --check` all exited 0.
+- Logs are under
+  `E:\HDT-BobCoach-evidence\verification\task12-final-head-558d90e-20260801-1520`;
+  Release evidence is under
+  `E:\HDT-BobCoach-evidence\builds\task12-final-head-558d90e-20260801-1530`.
+
+Final self-review found no Critical, Important, or Minor issue in the evaluator
+secure-input repair. The CLI captures scenarios, baseline/candidate predictions,
+latency, safety, protocol, approval, provenance, Shadow comparison, and severe
+error review inputs in one retained-handle snapshot. Parsing and both raw and
+canonical checksums consume only those captured bytes. The exported protocol
+and evidence loaders use the same boundary. No recommendation-routing,
+effect-acceptance, model-training, model-generation, model-copy, model-embedding,
+or model-activation path changed.
+
+Task 12 therefore remains `blocked-by-season-data` with `metrics: null`. Unified
+ranking remains Shadow and `legacy-v1.1.0` remains player-visible and the
+fallback.
+
 ## Required Conclusion
 
 “新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”
