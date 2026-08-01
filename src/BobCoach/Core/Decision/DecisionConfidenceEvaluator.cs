@@ -81,12 +81,28 @@ namespace BobCoach.Engine.Decision
         private const double ConservativeFiniteDistance = 1000000000000d;
         private readonly ConfidenceCalibration _calibration;
         private readonly ConfidenceCalibrationApprovalContext _approvalContext;
+        private readonly bool _allowBlockedEvaluationArtifact;
 
         public DecisionConfidenceEvaluator(ConfidenceCalibration calibration = null,
             ConfidenceCalibrationApprovalContext approvalContext = null)
+            : this(calibration, approvalContext, false)
+        {
+        }
+
+        private DecisionConfidenceEvaluator(ConfidenceCalibration calibration,
+            ConfidenceCalibrationApprovalContext approvalContext,
+            bool allowBlockedEvaluationArtifact)
         {
             _calibration = calibration;
             _approvalContext = approvalContext;
+            _allowBlockedEvaluationArtifact = allowBlockedEvaluationArtifact;
+        }
+
+        internal static DecisionConfidenceEvaluator CreateForEffectEvaluation(
+            ConfidenceCalibration calibration,
+            ConfidenceCalibrationApprovalContext approvalContext)
+        {
+            return new DecisionConfidenceEvaluator(calibration, approvalContext, true);
         }
 
         public ConfidenceAssessment Evaluate(GameState state, IList<RankedAction> rankedActions,
@@ -162,8 +178,13 @@ namespace BobCoach.Engine.Decision
         {
             if (_calibration == null || _approvalContext == null || state == null
                 || payload == null) return false;
+            var payloadStatusAccepted = string.Equals(payload.EffectAcceptanceStatus,
+                "accepted", StringComparison.Ordinal);
+            var payloadStatusAllowedForEvaluation = _allowBlockedEvaluationArtifact
+                && string.Equals(payload.EffectAcceptanceStatus, "blocked-by-season-data",
+                    StringComparison.Ordinal);
             if (!string.Equals(_calibration.Status, "accepted", StringComparison.Ordinal)
-                || !string.Equals(payload.EffectAcceptanceStatus, "accepted", StringComparison.Ordinal))
+                || (!payloadStatusAccepted && !payloadStatusAllowedForEvaluation))
                 return false;
             if (!IsResolved(_calibration.HoldoutIdentity)
                 || !IsResolved(_calibration.CalibrationIdentity)

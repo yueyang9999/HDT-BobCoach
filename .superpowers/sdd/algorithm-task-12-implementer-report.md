@@ -87,19 +87,85 @@ treated as passing evidence.
   does not authorize embedding, activation, or visible takeover.
 - No model resource directory or activation switch was added.
 
-## Review Risk
+## Resolved Review Risk
 
-The normal runner currently supplies a runtime context with effect acceptance
-set to true and uses `DecisionPolicyFactory.Create(..., runtimeContext)`, while
-`RankingModelLoader.LoadForRuntime` also requires the candidate artifact itself
-to declare `EffectAcceptanceStatus == "accepted"`. This may create a circular
-future workflow in which an artifact must already claim effect acceptance before
-the benchmark evidence used to decide effect acceptance can be generated.
+The circular workflow has been removed. Normal effect evaluation now uses the
+internal `CreateForEffectEvaluation` path with an owner-approved, versioned,
+frozen, checksum-bound protocol and matching calibration identities. The public
+production factory still uses `LoadForRuntime`, requires an accepted artifact,
+and remains the only player-visible composition path.
 
-The implementation preserves the explicit Task 12 contract that normal
-benchmarking must use the four-argument production factory path. A fresh reviewer
-must classify this risk. If it is Critical or Important, remediation is required
-before Task 12 can be accepted; this report does not waive it.
+## Contract Repair Follow-up (2026-08-01)
+
+### RED
+
+- `tests/test_algorithm_linear_ranker.ps1` failed with two CS7036 errors: the
+  new internal `CreateForEffectEvaluation` contract requires an explicit,
+  four-argument `EffectEvaluationContext`, while the behavior test still used
+  the removed three-argument form.
+- `tests/test_offline_runtime_contract.js` failed because it still required
+  legacy/unified `DecisionRuntimeMode` orchestration as benchmark evidence.
+  That contradicts the isolated evaluation contract: candidate evidence must
+  use the real Unified diagnostic surface, not an orchestrated visible-mode
+  result. The benchmark contract was already green in the repaired workspace.
+- After the reviewer added protocol cross-binding cases,
+  `node tests/test_algorithm_evaluation.js` failed at line 213 because a protocol
+  with a mutated `holdoutIdentity` still produced a non-null
+  `evaluationProtocol`. Inspection also showed that the C# evaluation factory
+  accepted any resolved benchmark identity instead of the one Task 12 benchmark.
+- The first fresh linear-ranker invocation was blocked by the missing
+  `BOBCOACH_HDT_DIR` shell variable. This was an environment precondition, not a
+  code failure; verification was rerun with the installed HDT 1.54.0 reference.
+
+### GREEN
+
+- `AlgorithmLinearRankerBehavior.cs` now supplies a complete, checksum-bound,
+  owner-approved frozen evaluation context. It proves a
+  `blocked-by-season-data` non-synthetic artifact is composable only by the
+  isolated evaluation factory, and rejects accepted, synthetic, unknown-model,
+  protocol, candidate-checksum, candidate-model, season-extension, and
+  calibration identity violations. It also proves the public production
+  factory returns the `ModelUnavailable` fallback for the same pre-acceptance
+  artifact.
+- Benchmark/offline text contracts now require
+  `CreateForEffectEvaluation`, `bundle.Legacy.Decide`, direct Unified decision
+  diagnostics, and the plugin's hard-coded Shadow mode. They reject both
+  `LegacyOnly` and `Unified` orchestration modes as candidate evidence, reject
+  gameplay recording, reject a forged runtime context in the runner, and scope
+  the strict `LoadForRuntime` assertion to the public production factory while
+  allowing the internal evaluation factory's validated `Load` call.
+- `DecisionPolicyFactory` now binds effect evaluation to
+  `season-2026-next-v1`. The JavaScript evaluator binds the same benchmark and
+  validates resolved holdout/training/season identities, accepted calibration,
+  calibration-to-protocol/input/candidate identities, approval identities,
+  positive margin scale, and all three confidence thresholds. The protocol hash
+  remains the canonical SHA-256 of the protocol with only its own
+  `protocolSha256` field removed.
+
+Focused verification with `BOBCOACH_HDT_DIR` set to the HDT 1.54.0 reference:
+
+- `powershell -File tests/test_algorithm_linear_ranker.ps1`: `PASS linear
+  ranker uses one deterministic score surface`.
+- `powershell -File tests/test_algorithm_benchmark_contract.ps1`: two Release
+  builds produced identical `BobCoach.dll` files (`782336` bytes,
+  SHA-256 `F167804D7034EE217A606B3D61EFA8C63F15171954CBD578AE63E78168F2DC6A`),
+  followed by `PASS benchmark evidence is paired, deterministic, recorder-free,
+  and versioned`.
+- `node tests/test_offline_runtime_contract.js`: all four contracts passed,
+  including `PASS ranking stays Shadow with ordered local lifecycle and
+  legacy-visible fallback`.
+- `node tests/test_algorithm_evaluation.js`: `PASS evaluator validates
+  structure, reports blocked evidence, and fails closed on invalid inputs`.
+- `git diff --check`: exit code 0.
+
+### Follow-up Self-review
+
+- The evaluation path remains internal and requires a non-synthetic,
+  checksum-bound, owner-approved protocol and matching calibration identities.
+- Public production composition still uses `LoadForRuntime` and remains
+  fail-closed; no public acceptance or activation path was added.
+- No model was trained, generated, copied, embedded, or activated. Unified
+  remains Shadow and `legacy-v1.1.0` remains visible/fallback.
 
 ## Required Conclusion
 

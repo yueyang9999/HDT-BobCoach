@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using BobCoach.Engine;
 using BobCoach.Engine.Decision;
@@ -29,38 +30,53 @@ internal static class PolicyBenchmarkRunner
             { "planner-timeout", FallbackReason.None }
         };
 
-    private sealed class CaptureComparisonSink : IShadowComparisonSink
-    {
-        public ShadowComparison Last { get; private set; }
-
-        public void RecordComparison(ShadowComparison comparison)
-        {
-            Last = comparison;
-        }
-    }
-
     private sealed class FakePolicy : IDecisionPolicy
     {
         private readonly string _policyId;
         private readonly FallbackReason _fallbackReason;
         private readonly PlannerStatus _plannerStatus;
+        private readonly ActionType _actionType;
 
-        public FakePolicy(string policyId, FallbackReason fallbackReason, PlannerStatus plannerStatus)
+        public FakePolicy(string policyId, FallbackReason fallbackReason, PlannerStatus plannerStatus,
+            ActionType actionType = ActionType.Upgrade)
         {
             _policyId = policyId;
             _fallbackReason = fallbackReason;
             _plannerStatus = plannerStatus;
+            _actionType = actionType;
         }
 
         public string PolicyId { get { return _policyId; } }
 
         public DecisionResult Decide(GameState state)
         {
-            var action = new GameAction { Type = ActionType.Upgrade, TargetIndex = -1 };
+            var action = new GameAction { Type = _actionType, TargetIndex = -1 };
             var key = ActionDescriptor.CreateKey(action);
             return new DecisionResult(_policyId, action,
                 new List<RankedAction> { new RankedAction(action, key, 1d, null) },
                 1d, _plannerStatus, _fallbackReason, "");
+        }
+    }
+
+    private sealed class EvaluationSeasonFeatureExtension : ISeasonFeatureExtension
+    {
+        public string GameBuild { get; private set; }
+        public string SeasonId { get; private set; }
+        public string CardPoolIdentity { get; private set; }
+
+        public EvaluationSeasonFeatureExtension(string gameBuild, string seasonId,
+            string cardPoolIdentity)
+        {
+            GameBuild = gameBuild;
+            SeasonId = seasonId;
+            CardPoolIdentity = cardPoolIdentity;
+        }
+
+        public bool TryEvaluate(GameState state, ActionDescriptor action, GameState nextState,
+            out double value)
+        {
+            value = 0d;
+            return false;
         }
     }
 
@@ -104,7 +120,8 @@ internal static class PolicyBenchmarkRunner
     private static Dictionary<string, string> ParseArgs(string[] args)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        var allowed = new HashSet<string>(new[] { "--output", "--self-test", "--scenarios", "--probes", "--model" },
+        var allowed = new HashSet<string>(new[] { "--output", "--self-test", "--scenarios",
+            "--probes", "--model", "--evaluation-protocol" },
             StringComparer.Ordinal);
         for (var index = 0; index < args.Length; index++)
         {
@@ -144,13 +161,20 @@ internal static class PolicyBenchmarkRunner
         var record = DecisionEventRecord.Create("synthetic-scenario-0001", "synthetic-game-0001",
             state, candidates);
         var legacy = new FakePolicy("legacy-v1.1.0", FallbackReason.None, PlannerStatus.NotRequested);
-        var unified = new FakePolicy("unified-linear-v1", FallbackReason.None, PlannerStatus.NotRequested);
-        var baselineOrchestrator = new DecisionOrchestrator(legacy, unified,
-            NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.LegacyOnly);
-        var candidateOrchestrator = new DecisionOrchestrator(legacy, unified,
-            NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Unified);
-        var baseline = baselineOrchestrator.Decide(Clone(state));
-        var candidate = candidateOrchestrator.Decide(Clone(state));
+        var unified = new FakePolicy("unified-linear-v1", FallbackReason.None,
+            PlannerStatus.NotRequested, ActionType.Refresh);
+        var baseline = legacy.Decide(Clone(state));
+        var candidate = unified.Decide(Clone(state));
+        if (ActionDescriptor.CreateKey(baseline.SelectedAction)
+            == ActionDescriptor.CreateKey(candidate.SelectedAction))
+            throw new InvalidOperationException("self-test candidate must not reuse legacy output");
+        var fallbackUnified = new FakePolicy("unified-linear-v1", FallbackReason.LowConfidence,
+            PlannerStatus.NotRequested, ActionType.Refresh).Decide(Clone(state));
+        var fallbackCandidate = CandidateEvidenceSurface(fallbackUnified, legacy, Clone(state));
+        var explicitFallbackUsesLegacySurface = fallbackCandidate.PolicyId == "unified-linear-v1"
+            && fallbackCandidate.FallbackReason == FallbackReason.LowConfidence
+            && ActionDescriptor.CreateKey(fallbackCandidate.SelectedAction)
+                == ActionDescriptor.CreateKey(baseline.SelectedAction);
 
         WriteLines(Path.Combine(output, "baseline-predictions.jsonl"), new[] {
             Prediction(record, baseline, "unknown", "unknown")
@@ -160,7 +184,7 @@ internal static class PolicyBenchmarkRunner
         });
         WriteJson(Path.Combine(output, "latency.json"), LatencyEvidence(
             new[] { new Scenario { ScenarioId = record.DecisionId, State = state } },
-            baselineOrchestrator, candidateOrchestrator));
+            legacy, unified, "synthetic-model", new string('b', 64)));
         var safety = SyntheticSafety(record, state, legacy);
         WriteJson(Path.Combine(output, "safety-probes.json"), safety);
 
@@ -179,6 +203,8 @@ internal static class PolicyBenchmarkRunner
             { "scenarioStateIdentityMismatchRejected", identityMismatchRejected },
             { "unknownSafetyEnumRejected", unknownEnumRejected },
             { "incompleteSafetyProbeSetRejected", incompleteProbeSetRejected },
+            { "candidateOutputDistinctFromLegacy", true },
+            { "explicitFallbackUsesLegacySurface", explicitFallbackUsesLegacySurface },
             { "orchestratedSafetyOutcomesObserved",
                 safety["probes"].All(value => (bool)value["passed"]) }
         });
@@ -186,33 +212,21 @@ internal static class PolicyBenchmarkRunner
 
     private static void RunProduction(IDictionary<string, string> args, string output)
     {
-        foreach (var required in new[] { "--scenarios", "--probes", "--model" })
+        foreach (var required in new[] { "--scenarios", "--probes", "--model",
+            "--evaluation-protocol" })
             if (!args.ContainsKey(required)) throw new ArgumentException(required + " is required");
 
         var context = LoadScenarios(args["--scenarios"]);
-        RankingModelPayload validatedModel;
-        using (var stream = File.OpenRead(args["--model"]))
-        {
-            validatedModel = RankingModelLoader.Load(stream);
-        }
-        var runtimeContext = new RankingModelRuntimeContext(
-            context.GameBuild, context.SeasonId, context.CardPoolIdentity, true,
-            validatedModel.PayloadSha256, validatedModel.ModelId,
-            validatedModel.TrainingSetIdentity, validatedModel.SeasonRange);
+        var evaluationContext = LoadEvaluationContext(args["--evaluation-protocol"],
+            args["--scenarios"]);
         DecisionPolicyBundle bundle;
         using (var stream = File.OpenRead(args["--model"]))
         {
-            bundle = DecisionPolicyFactory.Create(new DecisionEngine(), stream,
-                ProductionSeasonFeatureExtension.Instance, runtimeContext);
+            bundle = DecisionPolicyFactory.CreateForEffectEvaluation(new DecisionEngine(), stream,
+                new EvaluationSeasonFeatureExtension(context.GameBuild, context.SeasonId,
+                    context.CardPoolIdentity), evaluationContext);
         }
-        if (!string.Equals(bundle.ModelId, validatedModel.ModelId, StringComparison.Ordinal)
-            || !string.Equals(bundle.ModelPayloadSha256, validatedModel.PayloadSha256, StringComparison.Ordinal))
-            throw new InvalidDataException("candidate model did not enter the strict runtime factory path");
         var scenarios = context.Scenarios;
-        var baselineOrchestrator = new DecisionOrchestrator(bundle.Legacy, bundle.Unified,
-            NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.LegacyOnly);
-        var candidateOrchestrator = new DecisionOrchestrator(bundle.Legacy, bundle.Unified,
-            NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Unified);
         var baselineRows = new List<JObject>();
         var candidateRows = new List<JObject>();
 
@@ -227,16 +241,19 @@ internal static class PolicyBenchmarkRunner
                 || !string.Equals(record.CandidateFingerprint, scenario.CandidateFingerprint, StringComparison.Ordinal))
                 throw new InvalidDataException("scenario fingerprint mismatch: " + scenario.ScenarioId);
 
-            baselineRows.Add(Prediction(record, baselineOrchestrator.Decide(Clone(detached)),
+            baselineRows.Add(Prediction(record, bundle.Legacy.Decide(Clone(detached)),
                 "unknown", "unknown"));
-            candidateRows.Add(Prediction(record, candidateOrchestrator.Decide(Clone(detached)),
+            var diagnostics = ((UnifiedRankingPolicy)bundle.Unified)
+                .DecideWithDiagnostics(Clone(detached));
+            candidateRows.Add(Prediction(record,
+                CandidateEvidenceSurface(diagnostics.Decision, bundle.Legacy, Clone(detached)),
                 bundle.ModelId, bundle.ModelPayloadSha256));
         }
 
         WriteLines(Path.Combine(output, "baseline-predictions.jsonl"), baselineRows);
         WriteLines(Path.Combine(output, "candidate-predictions.jsonl"), candidateRows);
         WriteJson(Path.Combine(output, "latency.json"), LatencyEvidence(scenarios,
-            baselineOrchestrator, candidateOrchestrator));
+            bundle.Legacy, bundle.Unified, bundle.ModelId, bundle.ModelPayloadSha256));
         WriteJson(Path.Combine(output, "safety-probes.json"), RunSafetyProbes(
             args["--probes"], bundle));
     }
@@ -278,6 +295,125 @@ internal static class PolicyBenchmarkRunner
         };
     }
 
+    private static EffectEvaluationContext LoadEvaluationContext(string protocolPath,
+        string scenariosPath)
+    {
+        JObject protocol;
+        using (var stream = File.OpenRead(protocolPath))
+        using (var textReader = new StreamReader(stream, Utf8NoBom, true))
+        using (var jsonReader = new JsonTextReader(textReader) { DateParseHandling = DateParseHandling.None })
+        {
+            protocol = JObject.Load(jsonReader, new JsonLoadSettings {
+                DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error
+            });
+            if (jsonReader.Read()) throw new InvalidDataException("evaluation protocol has trailing content");
+        }
+        if ((int?)protocol["protocolSchemaVersion"] != 1)
+            throw new InvalidDataException("evaluation protocol schema mismatch");
+
+        var declaredProtocolSha = Fingerprint(protocol, "protocolSha256");
+        var canonicalProtocol = (JObject)protocol.DeepClone();
+        canonicalProtocol.Remove("protocolSha256");
+        var actualProtocolSha = Sha256Hex(CanonicalJson(canonicalProtocol));
+        if (!string.Equals(declaredProtocolSha, actualProtocolSha, StringComparison.Ordinal))
+            throw new InvalidDataException("evaluation protocol checksum mismatch");
+
+        var declaredHoldoutSha = Fingerprint(protocol, "holdoutChecksumSha256");
+        var actualHoldoutSha = Sha256File(scenariosPath);
+        if (!string.Equals(declaredHoldoutSha, actualHoldoutSha, StringComparison.Ordinal))
+            throw new InvalidDataException("evaluation holdout checksum mismatch");
+
+        var calibrationRow = protocol["confidenceCalibration"] as JObject;
+        var approvalRow = protocol["calibrationApproval"] as JObject;
+        if (calibrationRow == null || approvalRow == null)
+            throw new InvalidDataException("evaluation calibration context is missing");
+        var planningToken = calibrationRow["planningThreshold"];
+        double? planningThreshold = planningToken == null || planningToken.Type == JTokenType.Null
+            ? (double?)null : RequiredFiniteDouble(calibrationRow, "planningThreshold");
+        var calibration = new ConfidenceCalibration(
+            Required(calibrationRow, "status"),
+            Required(calibrationRow, "gameBuild"),
+            Required(calibrationRow, "seasonId"),
+            Required(calibrationRow, "cardPoolIdentity"),
+            Required(calibrationRow, "trainingSetIdentity"),
+            Required(calibrationRow, "holdoutIdentity"),
+            Required(calibrationRow, "calibrationIdentity"),
+            Required(calibrationRow, "modelId"),
+            RequiredFiniteDouble(calibrationRow, "marginScale"),
+            RequiredFiniteDouble(calibrationRow, "semanticCoverageFloor"),
+            RequiredFiniteDouble(calibrationRow, "confidenceThreshold"),
+            planningThreshold);
+        var calibrationApproval = new ConfidenceCalibrationApprovalContext(
+            Required(approvalRow, "holdoutIdentity"),
+            Required(approvalRow, "calibrationIdentity"),
+            Required(approvalRow, "modelId"));
+
+        return new EffectEvaluationContext(
+            Required(protocol, "protocolId"), Required(protocol, "protocolVersion"),
+            Required(protocol, "approvalStatus"), Required(protocol, "approvedBy"),
+            RequiredUtc(protocol, "approvedAtUtc"), RequiredUtc(protocol, "frozenAtUtc"),
+            RequiredUtc(protocol, "holdoutOpenedAtUtc"),
+            declaredProtocolSha, Required(protocol, "benchmarkId"),
+            Required(protocol, "baselinePolicyId"), Required(protocol, "candidatePolicyId"),
+            Required(protocol, "candidateModelId"),
+            Fingerprint(protocol, "candidateModelPayloadSha256"),
+            Required(protocol, "holdoutIdentity"), declaredHoldoutSha, actualHoldoutSha,
+            Required(protocol, "buildIdentity"), Required(protocol, "seasonIdentity"),
+            Required(protocol, "cardPoolIdentity"), Required(protocol, "trainingSetIdentity"),
+            Required(protocol, "seasonRange"), calibration, calibrationApproval);
+    }
+
+    private static DateTime RequiredUtc(JObject row, string name)
+    {
+        var value = Required(row, name);
+        DateTimeOffset parsed;
+        if (!value.EndsWith("Z", StringComparison.Ordinal)
+            || !DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out parsed))
+            throw new InvalidDataException(name + " must be an explicit UTC timestamp");
+        return parsed.UtcDateTime;
+    }
+
+    private static double RequiredFiniteDouble(JObject row, string name)
+    {
+        var token = row[name];
+        if (token == null || (token.Type != JTokenType.Integer && token.Type != JTokenType.Float))
+            throw new InvalidDataException(name + " must be numeric");
+        var value = (double)token;
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            throw new InvalidDataException(name + " must be finite");
+        return value;
+    }
+
+    private static string CanonicalJson(JToken token)
+    {
+        var objectValue = token as JObject;
+        if (objectValue != null)
+            return "{" + string.Join(",", objectValue.Properties()
+                .Where(property => !property.Name.StartsWith("_", StringComparison.Ordinal))
+                .OrderBy(property => property.Name, StringComparer.Ordinal)
+                .Select(property => JsonConvert.SerializeObject(property.Name) + ":"
+                    + CanonicalJson(property.Value))) + "}";
+        var arrayValue = token as JArray;
+        if (arrayValue != null)
+            return "[" + string.Join(",", arrayValue.Select(CanonicalJson)) + "]";
+        return token.ToString(Formatting.None);
+    }
+
+    private static string Sha256File(string path)
+    {
+        using (var stream = File.OpenRead(path))
+        using (var sha = SHA256.Create())
+            return string.Concat(sha.ComputeHash(stream).Select(value => value.ToString("x2")));
+    }
+
+    private static string Sha256Hex(string value)
+    {
+        using (var sha = SHA256.Create())
+            return string.Concat(sha.ComputeHash(Utf8NoBom.GetBytes(value))
+                .Select(item => item.ToString("x2")));
+    }
+
     private static void Normalize(GameState state)
     {
         if (state == null) throw new InvalidDataException("scenario state is missing");
@@ -310,8 +446,21 @@ internal static class PolicyBenchmarkRunner
         };
     }
 
+    private static DecisionResult CandidateEvidenceSurface(DecisionResult unified,
+        IDecisionPolicy legacy, GameState state)
+    {
+        if (unified == null) throw new InvalidDataException("candidate decision is missing");
+        if (unified.FallbackReason == FallbackReason.None) return unified;
+
+        var fallback = legacy.Decide(state);
+        return new DecisionResult("unified-linear-v1", fallback.SelectedAction,
+            fallback.RankedActions, unified.Confidence, unified.PlannerStatus,
+            unified.FallbackReason, unified.Explanation);
+    }
+
     private static JObject LatencyEvidence(IEnumerable<Scenario> scenarios,
-        DecisionOrchestrator baseline, DecisionOrchestrator candidate)
+        IDecisionPolicy baseline, IDecisionPolicy candidate, string candidateModelId,
+        string candidateModelPayloadSha256)
     {
         var rows = new JArray();
         foreach (var scenario in scenarios.OrderBy(value => value.ScenarioId, StringComparer.Ordinal))
@@ -337,17 +486,21 @@ internal static class PolicyBenchmarkRunner
         }
         return new JObject {
             { "latencyEvidenceSchemaVersion", 1 }, { "benchmarkId", BenchmarkId },
+            { "baselinePolicyId", baseline.PolicyId },
+            { "candidatePolicyId", candidate.PolicyId },
+            { "candidateModelId", candidateModelId },
+            { "candidateModelPayloadSha256", candidateModelPayloadSha256 },
             { "measurementsPerPolicyPerScenario", 10 }, { "scenarios", rows }
         };
     }
 
-    private static double[] Measure(DecisionOrchestrator orchestrator, GameState state)
+    private static double[] Measure(IDecisionPolicy policy, GameState state)
     {
         var values = new double[10];
         for (var index = 0; index < values.Length; index++)
         {
             var start = Stopwatch.GetTimestamp();
-            orchestrator.Decide(Clone(state));
+            policy.Decide(Clone(state));
             values[index] = Math.Max(0d,
                 (Stopwatch.GetTimestamp() - start) * 1000d / Stopwatch.Frequency);
         }
@@ -369,10 +522,15 @@ internal static class PolicyBenchmarkRunner
         {
             var expectedFallback = RequiredProbeFallbacks[id];
             var expectedPlanner = id == "planner-timeout" ? PlannerStatus.TimedOut : PlannerStatus.NotRequested;
-            var unified = new FakePolicy("unified-linear-v1", expectedFallback, expectedPlanner);
-            var actual = ObserveUnified(legacy, unified, state, id);
+            var unified = new FakePolicy("unified-linear-v1", expectedFallback,
+                expectedPlanner, ActionType.Refresh);
+            var decision = unified.Decide(Clone(state));
+            var selected = ActionDescriptor.CreateKey(decision.SelectedAction);
+            var planning = id == "planner-timeout"
+                ? PlanningResult.TimedOut(selected, new List<string> { selected }, 1, 1, 1)
+                : PlanningResult.NotRequested();
             AddProbe(rows, id, record, id == "model-unavailable" ? "none" : "candidate",
-                expectedFallback, expectedPlanner, actual);
+                expectedFallback, expectedPlanner, decision, planning);
         }
         ValidateExactProbeSet(new HashSet<string>(rows.Select(value => (string)value["probeId"]),
             StringComparer.Ordinal));
@@ -418,8 +576,22 @@ internal static class PolicyBenchmarkRunner
             var requiredPlanner = id == "planner-timeout" ? PlannerStatus.TimedOut : PlannerStatus.NotRequested;
             if (parsedFallback != RequiredProbeFallbacks[id] || parsedPlanner != requiredPlanner)
                 throw new InvalidDataException("probe expectation does not match required probe ID: " + id);
-            var actual = ObserveUnified(bundle.Legacy, bundle.Unified, state, id);
-            AddProbe(rows, id, record, modelSource, parsedFallback, parsedPlanner, actual);
+            DecisionResult decision;
+            PlanningResult planning;
+            if (modelSource == "none")
+            {
+                decision = bundle.Unified.Decide(Clone(state));
+                planning = PlanningResult.NotRequested();
+            }
+            else
+            {
+                var diagnostics = ((UnifiedRankingPolicy)bundle.Unified)
+                    .DecideWithDiagnostics(Clone(state));
+                decision = diagnostics.Decision;
+                planning = diagnostics.PlanningResult;
+            }
+            AddProbe(rows, id, record, modelSource, parsedFallback, parsedPlanner,
+                decision, planning);
         }
         ValidateExactProbeSet(ids);
         var sortedRows = new JArray();
@@ -481,32 +653,31 @@ internal static class PolicyBenchmarkRunner
         return rows;
     }
 
-    private static ShadowComparison ObserveUnified(IDecisionPolicy legacy, IDecisionPolicy unified,
-        GameState state, string decisionId)
-    {
-        var sink = new CaptureComparisonSink();
-        var orchestrator = new DecisionOrchestrator(legacy, unified, sink, DecisionRuntimeMode.Shadow);
-        orchestrator.Decide(Clone(state), decisionId);
-        if (sink.Last == null) throw new InvalidOperationException("orchestrator did not emit a comparison");
-        return sink.Last;
-    }
-
     private static void AddProbe(JArray rows, string id, DecisionEventRecord record, string source,
-        FallbackReason expectedFallback, PlannerStatus expectedPlanner, ShadowComparison actual)
+        FallbackReason expectedFallback, PlannerStatus expectedPlanner, DecisionResult decision,
+        PlanningResult planning)
     {
-        var selected = actual.UnifiedSelectedActionKey ?? "";
+        if (decision == null || planning == null)
+            throw new InvalidDataException("safety probe diagnostics are missing");
+        var selected = planning.Status == PlannerStatus.NotRequested
+            ? (decision.SelectedAction == null ? "" : ActionDescriptor.CreateKey(decision.SelectedAction))
+            : planning.ActionKey;
+        var path = planning.BestCompletePath ?? new List<string>();
         rows.Add(new JObject {
             { "probeId", id }, { "stateFingerprint", record.StateFingerprint },
             { "candidateFingerprint", record.CandidateFingerprint }, { "modelSource", source },
             { "expectedFallbackReason", expectedFallback.ToString() },
-            { "actualFallbackReason", actual.UnifiedFallbackReason.ToString() },
+            { "actualFallbackReason", decision.FallbackReason.ToString() },
             { "expectedPlannerStatus", expectedPlanner.ToString() },
-            { "actualPlannerStatus", actual.UnifiedPlannerStatus.ToString() },
+            { "actualPlannerStatus", planning.Status.ToString() },
             { "actualSelectedActionKey", selected },
             { "actualTopActionKeys", string.IsNullOrWhiteSpace(selected) ? new JArray() : new JArray(selected) },
-            { "passed", expectedFallback == actual.UnifiedFallbackReason
-                && expectedPlanner == actual.UnifiedPlannerStatus
-                && (id != "planner-timeout" || !string.IsNullOrWhiteSpace(selected)) }
+            { "actualBestCompletePath", new JArray(path) },
+            { "passed", expectedFallback == decision.FallbackReason
+                && expectedPlanner == planning.Status
+                && (id != "planner-timeout" || (!string.IsNullOrWhiteSpace(selected)
+                    && path.Count > 0
+                    && string.Equals(path[0], selected, StringComparison.Ordinal))) }
         });
     }
 

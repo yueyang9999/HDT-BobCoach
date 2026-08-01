@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { assertExternalDataRoot } = require('./contracts');
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -28,6 +29,22 @@ const SEVERITIES = new Set(['normal', 'high-impact', 'severe']);
 const SEVERITY_WEIGHTS = new Map([['normal', 1], ['high-impact', 2], ['severe', 3]]);
 const ACTION_GRADES = new Set(['preferred', 'acceptable', 'weak', 'severe-error', 'not-evaluable']);
 const GRADE_RANK = new Map([['preferred', 0], ['acceptable', 1], ['weak', 2], ['severe-error', 3]]);
+const FALLBACK_REASONS = new Set(['None', 'ModelUnavailable', 'CriticalStateMissing',
+  'UnsupportedMechanic', 'OutOfDistribution', 'LowConfidence', 'NoSafeAction']);
+const PLANNER_STATUSES = new Set(['NotRequested', 'Completed', 'TimedOut', 'Unsupported']);
+const MISSING_PROTOCOL = 'owner-approved-versioned-frozen-checksum-bound-evaluation-protocol';
+const PROTOCOL_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/;
+const EXTERNAL_PROTOCOL_SOURCE = Symbol('external-evaluation-protocol');
+const EFFECT_THRESHOLD_BINDINGS = [
+  ['minimumSevereErrorRelativeReduction', metrics => metrics.severeErrorRate.relativeReduction, 'minimum'],
+  ['minimumAcceptedTop1Improvement', metrics => metrics.acceptedTop1Rate.improvement, 'minimum'],
+  ['minimumAcceptedTop3Improvement', metrics => metrics.acceptedTop3Rate.improvement, 'minimum'],
+  ['minimumPerCategoryTop1Regression', metrics => Math.min(...Object.values(metrics.perCategoryRegression)), 'minimum'],
+  ['maximumCandidateP95LatencyMilliseconds', metrics => metrics.latencyMilliseconds.candidate.p95, 'maximum'],
+  ['requiredFallbackPassRate', metrics => metrics.fallbackPassRate, 'minimum'],
+  ['maximumNewSevereErrors', metrics => metrics.newSevereErrors.length, 'maximum']
+];
 
 function fail(message) {
   throw new Error(`invalid evidence: ${message}`);
@@ -40,6 +57,10 @@ function requireString(value, name) {
 
 function requireFingerprint(value, name) {
   if (typeof value !== 'string' || !HEX64.test(value)) fail(`${name} fingerprint is invalid`);
+}
+
+function isFiniteInRange(value, minimum, maximum) {
+  return Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
 function uniqueBy(rows, key, name) {
@@ -60,11 +81,16 @@ function validatePrediction(row, expectedBenchmark, kind) {
     fail(`${kind} benchmark identity mismatch`);
   }
   requireString(row.gameId, `${kind}.gameId`);
-  requireString(row.policyId, `${kind}.policyId`);
+  const policyId = requireString(row.policyId, `${kind}.policyId`);
   const modelId = requireString(row.modelId, `${kind}.modelId`);
   const modelChecksum = requireString(row.modelPayloadSha256, `${kind}.modelPayloadSha256`);
-  if (kind === 'candidate' && (modelId === 'unknown' || !HEX64.test(modelChecksum))) {
-    fail('candidate model identity is not checksum-valid');
+  if (kind === 'baseline') {
+    if (policyId !== 'legacy-v1.1.0' || modelId !== 'unknown' || modelChecksum !== 'unknown') {
+      fail('baseline policy or model identity mismatch');
+    }
+  } else if (policyId !== 'unified-linear-v1'
+      || modelId === 'unknown' || !HEX64.test(modelChecksum)) {
+    fail('candidate policy or model identity is not checksum-valid');
   }
   requireFingerprint(row.stateFingerprint, `${kind}.stateFingerprint`);
   requireFingerprint(row.candidateFingerprint, `${kind}.candidateFingerprint`);
@@ -76,13 +102,22 @@ function validatePrediction(row, expectedBenchmark, kind) {
       || new Set(row.topActionKeys).size !== row.topActionKeys.length || row.topActionKeys[0] !== selected) {
     fail(`${kind} selected action and Top-N evidence are inconsistent`);
   }
-  requireString(row.fallbackReason, `${kind}.fallbackReason`);
-  requireString(row.plannerStatus, `${kind}.plannerStatus`);
+  if (!isFiniteInRange(row.confidence, 0, 1)) fail(`${kind} confidence is invalid`);
+  const fallbackReason = requireString(row.fallbackReason, `${kind}.fallbackReason`);
+  const plannerStatus = requireString(row.plannerStatus, `${kind}.plannerStatus`);
+  if (!FALLBACK_REASONS.has(fallbackReason)) fail(`${kind} fallback reason is invalid`);
+  if (!PLANNER_STATUSES.has(plannerStatus)) fail(`${kind} planner status is invalid`);
 }
 
-function validateLatency(evidence, benchmarkId, scenarioIds) {
+function validateLatency(evidence, benchmarkId, scenarioIds, candidateIdentity) {
   if (!evidence || evidence.latencyEvidenceSchemaVersion !== 1) fail('latency schema mismatch');
   if (evidence.benchmarkId !== benchmarkId) fail('latency benchmark identity mismatch');
+  if (evidence.baselinePolicyId !== 'legacy-v1.1.0'
+      || evidence.candidatePolicyId !== 'unified-linear-v1'
+      || evidence.candidateModelId !== candidateIdentity.modelId
+      || evidence.candidateModelPayloadSha256 !== candidateIdentity.modelPayloadSha256) {
+    fail('latency policy or model identity mismatch');
+  }
   if (evidence.measurementsPerPolicyPerScenario !== 10) fail('latency sample count mismatch');
   const rows = uniqueBy(evidence.scenarios, 'scenarioId', 'latency scenario');
   if (rows.size !== scenarioIds.size) fail('latency scenario set mismatch');
@@ -113,19 +148,28 @@ function validateSafety(evidence, benchmarkId) {
     requireFingerprint(probe.stateFingerprint, `safety.${id}.stateFingerprint`);
     requireFingerprint(probe.candidateFingerprint, `safety.${id}.candidateFingerprint`);
     const [fallback, planner] = REQUIRED_PROBE_OUTCOMES.get(id);
-    if (probe.expectedFallbackReason !== fallback || probe.actualFallbackReason !== fallback
-        || probe.expectedPlannerStatus !== planner || probe.actualPlannerStatus !== planner
-        || probe.passed !== true) {
-      fail(`safety probe failed: ${id}`);
+    const expectedModelSource = id === 'model-unavailable' ? 'none' : 'candidate';
+    let semanticsPass = probe.expectedFallbackReason === fallback
+      && probe.actualFallbackReason === fallback
+      && probe.expectedPlannerStatus === planner
+      && probe.actualPlannerStatus === planner
+      && probe.modelSource === expectedModelSource
+      && FALLBACK_REASONS.has(probe.actualFallbackReason)
+      && PLANNER_STATUSES.has(probe.actualPlannerStatus)
+      && Array.isArray(probe.actualBestCompletePath);
+    if (id === 'planner-timeout') {
+      semanticsPass = semanticsPass
+        && typeof probe.actualSelectedActionKey === 'string'
+        && probe.actualSelectedActionKey.trim() !== ''
+        && Array.isArray(probe.actualTopActionKeys)
+        && probe.actualTopActionKeys.length > 0
+        && probe.actualTopActionKeys[0] === probe.actualSelectedActionKey
+        && probe.actualBestCompletePath.length > 0
+        && probe.actualBestCompletePath[0] === probe.actualSelectedActionKey;
+    } else {
+      semanticsPass = semanticsPass && probe.actualBestCompletePath.length === 0;
     }
-    if (id === 'planner-timeout'
-        && (typeof probe.actualSelectedActionKey !== 'string'
-          || probe.actualSelectedActionKey.trim() === ''
-          || !Array.isArray(probe.actualTopActionKeys)
-          || probe.actualTopActionKeys.length === 0
-          || probe.actualTopActionKeys[0] !== probe.actualSelectedActionKey)) {
-      fail('planner-timeout safety completion path is missing');
-    }
+    if (probe.passed !== semanticsPass || !semanticsPass) fail(`safety probe failed: ${id}`);
   }
 }
 
@@ -289,17 +333,128 @@ function calculateMetrics(scenarios, baseline, candidate, safetyEvidence, latenc
   };
 }
 
-function passesEffectGates(metrics) {
-  return metrics.severeErrorRate.relativeReduction >= 0.2
-    && metrics.acceptedTop1Rate.improvement >= 0.1
-    && metrics.acceptedTop3Rate.improvement >= 0.15
-    && Object.values(metrics.perCategoryRegression).every(value => value >= -0.05)
-    && metrics.latencyMilliseconds.candidate.p95 <= 10
-    && metrics.fallbackPassRate === 1
-    && metrics.newSevereErrors.length === 0;
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).filter(key => !key.startsWith('_')).sort()
+      .map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
-function evaluate(input) {
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function hasEngineeringOnlyIdentity(input, candidateIdentity) {
+  const identities = [input.evidenceKind, input.buildIdentity, input.seasonIdentity,
+    input.cardPoolIdentity, candidateIdentity.modelId];
+  for (const scenario of input.scenarios) {
+    identities.push(scenario.scenarioId, scenario.gameId,
+      scenario.state && scenario.state.gameBuild,
+      scenario.state && scenario.state.seasonId,
+      scenario.state && scenario.state.cardPoolIdentity);
+  }
+  return input.evidenceKind !== 'real-season-evaluation'
+    || identities.some(value => typeof value === 'string'
+      && /(synthetic|prior-season|previous-season)/i.test(value));
+}
+
+function validateThresholds(thresholds) {
+  if (!thresholds || typeof thresholds !== 'object') return null;
+  const ranges = [
+    ['minimumSevereErrorRelativeReduction', -1, 1],
+    ['minimumAcceptedTop1Improvement', -1, 1],
+    ['minimumAcceptedTop3Improvement', -1, 1],
+    ['minimumPerCategoryTop1Regression', -1, 1],
+    ['maximumCandidateP95LatencyMilliseconds', 0, Number.MAX_VALUE],
+    ['requiredFallbackPassRate', 0, 1]
+  ];
+  for (const [name, minimum, maximum] of ranges) {
+    if (!isFiniteInRange(thresholds[name], minimum, maximum)) return null;
+  }
+  if (!Number.isInteger(thresholds.maximumNewSevereErrors)
+      || thresholds.maximumNewSevereErrors < 0) return null;
+  return thresholds;
+}
+
+function isResolvedProtocolIdentity(value) {
+  return typeof value === 'string' && value.trim() !== ''
+    && value.trim().toLowerCase() !== 'unknown'
+    && !/^synthetic(?:-|$)/i.test(value.trim());
+}
+
+function validateEvaluationProtocol(context, input, candidateIdentity) {
+  try {
+    if (!context || context.source !== EXTERNAL_PROTOCOL_SOURCE) return null;
+    const protocol = context.protocol;
+    if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) return null;
+    if (protocol.protocolSchemaVersion !== 1
+        || typeof protocol.protocolId !== 'string' || protocol.protocolId.trim() === ''
+        || typeof protocol.protocolVersion !== 'string'
+        || !PROTOCOL_VERSION.test(protocol.protocolVersion)
+        || protocol.approvalStatus !== 'owner-approved'
+        || typeof protocol.approvedBy !== 'string' || protocol.approvedBy.trim() === '') return null;
+    const approvedAt = Date.parse(protocol.approvedAtUtc);
+    const frozenAt = Date.parse(protocol.frozenAtUtc);
+    const holdoutOpenedAt = Date.parse(protocol.holdoutOpenedAtUtc);
+    if (![protocol.approvedAtUtc, protocol.frozenAtUtc, protocol.holdoutOpenedAtUtc]
+      .every(value => typeof value === 'string' && UTC_TIMESTAMP.test(value))
+        || ![approvedAt, frozenAt, holdoutOpenedAt].every(Number.isFinite)
+        || approvedAt > frozenAt || frozenAt > holdoutOpenedAt) return null;
+    if (protocol.benchmarkId !== 'season-2026-next-v1'
+        || protocol.benchmarkId !== input.benchmarkId
+        || protocol.buildIdentity !== input.buildIdentity
+        || protocol.seasonIdentity !== input.seasonIdentity
+        || protocol.cardPoolIdentity !== input.cardPoolIdentity
+        || protocol.baselinePolicyId !== 'legacy-v1.1.0'
+        || protocol.candidatePolicyId !== 'unified-linear-v1'
+        || protocol.candidateModelId !== candidateIdentity.modelId
+        || protocol.candidateModelPayloadSha256 !== candidateIdentity.modelPayloadSha256
+        || protocol.holdoutChecksumSha256 !== context.holdoutFileSha256
+        || !HEX64.test(protocol.candidateModelPayloadSha256)
+        || !HEX64.test(protocol.holdoutChecksumSha256)
+        || !HEX64.test(protocol.protocolSha256)
+        || !HEX64.test(context.protocolFileSha256)
+        || protocol.protocolSha256 !== context.protocolCanonicalSha256) return null;
+    if (!isResolvedProtocolIdentity(protocol.holdoutIdentity)
+        || !isResolvedProtocolIdentity(protocol.trainingSetIdentity)
+        || !isResolvedProtocolIdentity(protocol.seasonRange)) return null;
+    const calibration = protocol.confidenceCalibration;
+    const calibrationApproval = protocol.calibrationApproval;
+    if (!calibration || typeof calibration !== 'object' || Array.isArray(calibration)
+        || !calibrationApproval || typeof calibrationApproval !== 'object'
+        || Array.isArray(calibrationApproval)
+        || calibration.status !== 'accepted'
+        || calibration.gameBuild !== input.buildIdentity
+        || calibration.seasonId !== input.seasonIdentity
+        || calibration.cardPoolIdentity !== input.cardPoolIdentity
+        || calibration.trainingSetIdentity !== protocol.trainingSetIdentity
+        || calibration.holdoutIdentity !== protocol.holdoutIdentity
+        || calibration.modelId !== candidateIdentity.modelId
+        || !isResolvedProtocolIdentity(calibration.calibrationIdentity)
+        || !Number.isFinite(calibration.marginScale) || calibration.marginScale <= 0
+        || !isFiniteInRange(calibration.semanticCoverageFloor, 0, 1)
+        || !isFiniteInRange(calibration.confidenceThreshold, 0, 1)
+        || !isFiniteInRange(calibration.planningThreshold, 0, 1)
+        || calibrationApproval.holdoutIdentity !== protocol.holdoutIdentity
+        || calibrationApproval.calibrationIdentity !== calibration.calibrationIdentity
+        || calibrationApproval.modelId !== candidateIdentity.modelId) return null;
+    const thresholds = validateThresholds(protocol.thresholds);
+    return thresholds ? { protocol, thresholds } : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function meetsFrozenProtocolThresholds(metrics, thresholds) {
+  return EFFECT_THRESHOLD_BINDINGS.every(([name, readMetric, direction]) => {
+    const value = readMetric(metrics);
+    return direction === 'minimum' ? value >= thresholds[name] : value <= thresholds[name];
+  });
+}
+
+function evaluate(input, protocolContext = null) {
   if (!input || typeof input !== 'object') fail('root object is missing');
   const benchmarkId = requireString(input.benchmarkId, 'benchmarkId');
   if (input.scenarioSchemaVersion !== 1) fail('scenario schema version mismatch');
@@ -346,20 +501,24 @@ function evaluate(input) {
     selectedGrade(right, scenario._validatedLabels, 'candidate');
   }
 
-  const baselinePolicyIds = new Set([...baseline.values()].map(row => row.policyId));
   const candidateModels = new Set([...candidate.values()].map(row => `${row.modelId}:${row.modelPayloadSha256}`));
-  if (baselinePolicyIds.size !== 1 || !baselinePolicyIds.has('legacy-v1.1.0')) {
-    fail('baseline policy identity mismatch');
-  }
   if (candidateModels.size !== 1) fail('candidate model identity mismatch');
-  validateLatency(input.latencyEvidence, benchmarkId, new Set(scenarios.keys()));
+  const firstCandidate = candidate.values().next().value;
+  const candidateIdentity = {
+    modelId: firstCandidate.modelId,
+    modelPayloadSha256: firstCandidate.modelPayloadSha256
+  };
+  validateLatency(input.latencyEvidence, benchmarkId, new Set(scenarios.keys()), candidateIdentity);
   validateSafety(input.safetyEvidence, benchmarkId);
 
-  const trustworthy = input.evidenceKind === 'real-season-evaluation'
+  const engineeringOnly = hasEngineeringOnlyIdentity(input, candidateIdentity);
+  const protocol = validateEvaluationProtocol(protocolContext, input, candidateIdentity);
+  const trustworthy = !engineeringOnly
     && input.realTrustworthyVersionMatchedExpertLabels === true
     && scenarios.size >= 300
     && input.shadowComparisonsRepresentative === true
     && input.humanSevereErrorReviewComplete === true
+    && protocol !== null
     && !['buildIdentity', 'seasonIdentity', 'cardPoolIdentity']
       .some(name => !input[name] || input[name] === 'unknown');
 
@@ -373,6 +532,7 @@ function evaluate(input) {
   for (const name of ['buildIdentity', 'seasonIdentity', 'cardPoolIdentity']) {
     if (!input[name] || input[name] === 'unknown') missingPrerequisites.push(name);
   }
+  if (!protocol) missingPrerequisites.push(MISSING_PROTOCOL);
 
   const metrics = trustworthy
     ? calculateMetrics(scenarios, baseline, candidate, input.safetyEvidence, input.latencyEvidence)
@@ -382,8 +542,15 @@ function evaluate(input) {
     evidenceKind: input.evidenceKind || 'unknown',
     benchmarkId,
     effectAcceptanceStatus: trustworthy
-      ? (passesEffectGates(metrics) ? 'accepted' : 'rejected')
+      ? (meetsFrozenProtocolThresholds(metrics, protocol.thresholds) ? 'accepted' : 'rejected')
       : 'blocked-by-season-data',
+    evaluationProtocol: protocol ? {
+      protocolId: protocol.protocol.protocolId,
+      protocolVersion: protocol.protocol.protocolVersion,
+      protocolSha256: protocol.protocol.protocolSha256,
+      protocolFileSha256: protocolContext.protocolFileSha256,
+      holdoutChecksumSha256: protocol.protocol.holdoutChecksumSha256
+    } : null,
     metrics,
     missingPrerequisites
   };
@@ -391,14 +558,15 @@ function evaluate(input) {
 
 function parseArgs(argv) {
   const allowed = new Set(['--data-root', '--scenarios', '--baseline-evidence', '--candidate-evidence',
-    '--latency-evidence', '--safety-evidence', '--output']);
+    '--latency-evidence', '--safety-evidence', '--evaluation-protocol', '--output']);
+  const required = [...allowed].filter(key => key !== '--evaluation-protocol');
   const result = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
     if (!allowed.has(key) || index + 1 >= argv.length) fail(`unsupported command argument: ${key}`);
     result[key] = argv[index + 1];
   }
-  for (const key of allowed) if (!result[key]) fail(`required command argument is missing: ${key}`);
+  for (const key of required) if (!result[key]) fail(`required command argument is missing: ${key}`);
   return result;
 }
 
@@ -412,6 +580,23 @@ function resolveBelow(root, relativePath, name) {
 
 function readJsonLines(file) {
   return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
+}
+
+function loadExternalProtocolContext(protocolFile, scenariosFile) {
+  const protocolBytes = fs.readFileSync(protocolFile);
+  const protocol = JSON.parse(protocolBytes.toString('utf8'));
+  if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) {
+    fail('evaluation protocol root is invalid');
+  }
+  const canonicalPayload = { ...protocol };
+  delete canonicalPayload.protocolSha256;
+  return {
+    source: EXTERNAL_PROTOCOL_SOURCE,
+    protocol,
+    protocolFileSha256: crypto.createHash('sha256').update(protocolBytes).digest('hex'),
+    protocolCanonicalSha256: sha256Hex(canonicalJson(canonicalPayload)),
+    holdoutFileSha256: crypto.createHash('sha256').update(fs.readFileSync(scenariosFile)).digest('hex')
+  };
 }
 
 function readScenarioBundle(file, benchmarkId) {
@@ -449,20 +634,25 @@ function readScenarioBundle(file, benchmarkId) {
 function main(argv) {
   const args = parseArgs(argv);
   const dataRoot = assertExternalDataRoot(args['--data-root'], path.resolve(__dirname, '..', '..'));
+  const scenariosFile = resolveBelow(dataRoot, args['--scenarios'], 'scenarios');
   const baselinePredictions = readJsonLines(resolveBelow(dataRoot, args['--baseline-evidence'], 'baseline evidence'));
   const benchmarkId = requireString(baselinePredictions[0] && baselinePredictions[0].benchmarkId,
     'baseline benchmarkId');
   const fixture = {
-    ...readScenarioBundle(resolveBelow(dataRoot, args['--scenarios'], 'scenarios'), benchmarkId),
+    ...readScenarioBundle(scenariosFile, benchmarkId),
     baselinePredictions,
     candidatePredictions: readJsonLines(resolveBelow(dataRoot, args['--candidate-evidence'], 'candidate evidence')),
     latencyEvidence: JSON.parse(fs.readFileSync(resolveBelow(dataRoot, args['--latency-evidence'], 'latency evidence'), 'utf8')),
     safetyEvidence: JSON.parse(fs.readFileSync(resolveBelow(dataRoot, args['--safety-evidence'], 'safety evidence'), 'utf8'))
   };
+  const protocolContext = args['--evaluation-protocol']
+    ? loadExternalProtocolContext(
+      resolveBelow(dataRoot, args['--evaluation-protocol'], 'evaluation protocol'), scenariosFile)
+    : null;
   const output = resolveBelow(dataRoot, args['--output'], 'output');
   fs.mkdirSync(path.dirname(output), { recursive: true });
-  fs.writeFileSync(output, `${JSON.stringify(evaluate(fixture), null, 2)}\n`, 'utf8');
+  fs.writeFileSync(output, `${JSON.stringify(evaluate(fixture, protocolContext), null, 2)}\n`, 'utf8');
 }
 
-module.exports = { evaluate };
+module.exports = { evaluate, loadExternalProtocolContext };
 if (require.main === module) main(process.argv.slice(2));

@@ -27,11 +27,14 @@ for (const requiredPath of [benchmarkRunnerPath, benchmarkWrapperPath, evaluator
 const benchmarkRunner = fs.readFileSync(benchmarkRunnerPath, "utf8");
 const benchmarkWrapper = fs.readFileSync(benchmarkWrapperPath, "utf8");
 const evaluator = fs.readFileSync(evaluatorPath, "utf8");
-if (!benchmarkRunner.includes("DecisionPolicyFactory.Create")
-    || !benchmarkRunner.includes("DecisionRuntimeMode.LegacyOnly")
-    || !benchmarkRunner.includes("DecisionRuntimeMode.Unified")
-    || benchmarkRunner.includes("DecisionEventRecorder")) {
-    console.error("FAIL benchmark must use production policy composition without gameplay recording");
+if (!benchmarkRunner.includes("DecisionPolicyFactory.CreateForEffectEvaluation")
+    || !benchmarkRunner.includes("bundle.Legacy.Decide")
+    || !benchmarkRunner.includes("bundle.Unified.Decide")
+    || !benchmarkRunner.includes("DecideWithDiagnostics")
+    || benchmarkRunner.includes("DecisionEventRecorder")
+    || benchmarkRunner.includes("DecisionOrchestrator")
+    || benchmarkRunner.includes("DecisionRuntimeMode.Unified")) {
+    console.error("FAIL benchmark must use direct evaluation policies without gameplay recording or Shadow relabeling");
     process.exit(1);
 }
 if (!benchmarkWrapper.includes("assertExternalDataRoot")
@@ -235,10 +238,19 @@ if (!productionSeasonExtension.includes("new RankingModelRuntimeContext[0]")
     console.error("FAIL production ranking approval catalog must default to an empty fail-closed allowlist");
     process.exit(1);
 }
-if (!policyFactory.includes("RankingModelRuntimeContext runtimeContext")
-    || !policyFactory.includes("RankingModelLoader.LoadForRuntime(modelArtifact, runtimeContext)")
-    || policyFactory.includes("RankingModelLoader.Load(modelArtifact)")) {
+const productionFactoryStart = policyFactory.indexOf(
+    "public static DecisionPolicyBundle Create(DecisionEngine engine, Stream modelArtifact,\n            ISeasonFeatureExtension seasonExtension, RankingModelRuntimeContext runtimeContext)");
+const productionFactoryEnd = policyFactory.indexOf("private static DecisionPolicyBundle Unavailable", productionFactoryStart);
+const productionFactory = policyFactory.slice(productionFactoryStart, productionFactoryEnd);
+if (productionFactoryStart < 0 || productionFactoryEnd < 0
+    || !productionFactory.includes("RankingModelLoader.LoadForRuntime(modelArtifact, runtimeContext)")
+    || productionFactory.includes("RankingModelLoader.Load(modelArtifact)")) {
     console.error("FAIL production policy factory must use the strict runtime model loader");
+    process.exit(1);
+}
+if (!policyFactory.includes("internal static DecisionPolicyBundle CreateForEffectEvaluation")
+    || !policyFactory.includes("RankingModelLoader.Load(modelArtifact)")) {
+    console.error("FAIL internal effect evaluation factory must use its isolated model loader");
     process.exit(1);
 }
 const publicProductionEntries = unifiedPolicy.match(/public\s+static\s+UnifiedRankingPolicy\s+CreateProduction\s*\(/g) || [];

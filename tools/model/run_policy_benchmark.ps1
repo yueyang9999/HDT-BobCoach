@@ -4,6 +4,7 @@ param(
     [string]$Scenarios,
     [string]$SafetyProbes,
     [string]$CandidateModel,
+    [string]$EvaluationProtocol,
     [string]$OutputDirectory,
     [string]$HdtDirectory = $env:BOBCOACH_HDT_DIR,
     [switch]$SelfTest
@@ -111,6 +112,7 @@ $resolvedOutput = $null
 $resolvedScenarios = $null
 $resolvedProbes = $null
 $resolvedModel = $null
+$resolvedEvaluationProtocol = $null
 if ($SelfTest) {
     $resolvedOutput = [IO.Path]::GetFullPath($OutputDirectory)
 } else {
@@ -118,6 +120,7 @@ if ($SelfTest) {
     $resolvedScenarios = Resolve-DataPath $resolvedDataRoot $Scenarios "Scenarios"
     $resolvedProbes = Resolve-DataPath $resolvedDataRoot $SafetyProbes "SafetyProbes"
     $resolvedModel = Resolve-DataPath $resolvedDataRoot $CandidateModel "CandidateModel"
+    $resolvedEvaluationProtocol = Resolve-DataPath $resolvedDataRoot $EvaluationProtocol "EvaluationProtocol"
     $resolvedOutput = Resolve-DataPath $resolvedDataRoot $OutputDirectory "OutputDirectory" -AllowMissing
 }
 
@@ -155,7 +158,8 @@ try {
     if ($SelfTest) {
         $arguments += "--self-test"
     } else {
-        $arguments += @("--scenarios", $resolvedScenarios, "--probes", $resolvedProbes, "--model", $resolvedModel)
+        $arguments += @("--scenarios", $resolvedScenarios, "--probes", $resolvedProbes,
+            "--model", $resolvedModel, "--evaluation-protocol", $resolvedEvaluationProtocol)
     }
     & $runnerPath @arguments
     $runnerExitCode = $LASTEXITCODE

@@ -327,6 +327,9 @@ internal static class AlgorithmLinearRankerBehavior
             KeepsUnifiedRankingDiagnosticOnlyAndFailClosed();
             NormalizesBlankBundleModelIdentity();
             PreservesProgrammerErrorsFromRealProductionComposition();
+            ComposesFactoryForPreAcceptanceEffectEvaluation();
+            RejectsUnsafePreAcceptanceEffectEvaluationComposition();
+            KeepsProductionFactoryFailClosedForPreAcceptanceArtifact();
             ComposesFactoryWithRealProductionPipeline();
             Console.WriteLine("PASS linear ranker uses one deterministic score surface");
             return 0;
@@ -484,6 +487,143 @@ internal static class AlgorithmLinearRankerBehavior
             "factory model checksum");
     }
 
+    private static void ComposesFactoryForPreAcceptanceEffectEvaluation()
+    {
+        var artifact = CreateEvaluationArtifact();
+        RankingModelPayload model;
+        using (var modelStream = new MemoryStream(artifact))
+            model = RankingModelLoader.Load(modelStream);
+        var extension = new ExactSeasonExtension(
+            model.GameBuild, model.SeasonId, model.CardPoolIdentity);
+
+        DecisionPolicyBundle bundle;
+        using (var factoryStream = new MemoryStream(artifact))
+            bundle = DecisionPolicyFactory.CreateForEffectEvaluation(
+                new DecisionEngine(), factoryStream, extension, EvaluationContext(model));
+
+        AssertEqual(model.ModelId, bundle.ModelId, "evaluation factory model identity");
+        AssertEqual(model.PayloadSha256, bundle.ModelPayloadSha256,
+            "evaluation factory model checksum");
+        AssertEqual("Refresh|-1||", ActionKeys(bundle.Unified.Decide(RefreshOnlyState(model))),
+            "evaluation factory candidate surface");
+    }
+
+    private static void RejectsUnsafePreAcceptanceEffectEvaluationComposition()
+    {
+        AssertEvaluationFactoryRejects(
+            CreateAcceptedArtifact(), new ExactSeasonExtension(
+                "known-build", "known-season", "known-pool"),
+            "evaluation factory accepted artifact");
+        AssertEvaluationFactoryRejects(
+            CreateArtifact("blocked-by-season-data", "synthetic-model", "synthetic-build",
+                "synthetic-season", "synthetic-pool"),
+            new ExactSeasonExtension("synthetic-build", "synthetic-season", "synthetic-pool"),
+            "evaluation factory synthetic artifact");
+        AssertEvaluationFactoryRejects(
+            CreateArtifact("blocked-by-season-data", "unknown", "known-build",
+                "known-season", "known-pool"),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unknown artifact identity");
+        AssertEvaluationFactoryRejects(
+            CreateEvaluationArtifact(),
+            new ExactSeasonExtension("other-build", "known-season", "known-pool"),
+            "evaluation factory season extension mismatch");
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory protocol mismatch", model => EvaluationContext(model,
+                protocolId: "unknown"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory protocol version mismatch", model => EvaluationContext(model,
+                protocolVersion: "v1"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory protocol version leading zero", model => EvaluationContext(model,
+                protocolVersion: "01.0.0"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory benchmark mismatch", model => EvaluationContext(model,
+                benchmarkId: "other-benchmark"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory approval after freeze", model => EvaluationContext(model,
+                approvedAtUtc: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc),
+                frozenAtUtc: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory checksum mismatch", model => EvaluationContext(model,
+                candidateModelPayloadSha256: new string('a', 64)));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory model mismatch", model => EvaluationContext(model,
+                candidateModelId: "other-model"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory calibration mismatch", model => EvaluationContext(model,
+                calibrationModelId: "other-model"));
+    }
+
+    private static void AssertEvaluationFactoryRejects(byte[] artifact,
+        ISeasonFeatureExtension extension, string label)
+    {
+        AssertEvaluationFactoryRejects(artifact, extension, label,
+            model => EvaluationContext(model));
+    }
+
+    private static void AssertEvaluationFactoryRejects(byte[] artifact,
+        ISeasonFeatureExtension extension, string label,
+        Func<RankingModelPayload, EffectEvaluationContext> contextFactory)
+    {
+        AssertModelValidation(() =>
+        {
+            RankingModelPayload model;
+            using (var modelStream = new MemoryStream(artifact))
+                model = RankingModelLoader.Load(modelStream);
+            using (var stream = new MemoryStream(artifact))
+                DecisionPolicyFactory.CreateForEffectEvaluation(
+                    new DecisionEngine(), stream, extension, contextFactory(model));
+        }, label);
+    }
+
+    private static void KeepsProductionFactoryFailClosedForPreAcceptanceArtifact()
+    {
+        var artifact = CreateEvaluationArtifact();
+        DecisionPolicyBundle bundle;
+        using (var stream = new MemoryStream(artifact))
+            bundle = DecisionPolicyFactory.Create(new DecisionEngine(), stream,
+                new ExactSeasonExtension("known-build", "known-season", "known-pool"));
+
+        AssertEqual("unknown", bundle.ModelId, "production factory blocks evaluation model");
+        AssertEqual(FallbackReason.ModelUnavailable,
+            bundle.Unified.Decide(RefreshOnlyState(ProductionModel())).FallbackReason,
+            "production factory evaluation fallback");
+    }
+
+    private static EffectEvaluationContext EvaluationContext(RankingModelPayload model,
+        string protocolId = "known-protocol", string protocolVersion = "1.0.0",
+        string benchmarkId = "season-2026-next-v1",
+        string candidateModelId = null, string candidateModelPayloadSha256 = null,
+        string calibrationModelId = null, DateTime? approvedAtUtc = null,
+        DateTime? frozenAtUtc = null)
+    {
+        var modelId = candidateModelId ?? model.ModelId;
+        var calibrationId = calibrationModelId ?? model.ModelId;
+        var calibration = new ConfidenceCalibration("accepted", model.GameBuild, model.SeasonId,
+            model.CardPoolIdentity, model.TrainingSetIdentity, "known-holdout",
+            "known-calibration", calibrationId, 1d, 0.5d, 0.5d, 0.1d);
+        var approval = new ConfidenceCalibrationApprovalContext("known-holdout",
+            "known-calibration", model.ModelId);
+        return new EffectEvaluationContext(protocolId, protocolVersion, "owner-approved", "owner",
+            approvedAtUtc ?? new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Utc),
+            frozenAtUtc ?? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), new string('c', 64),
+            benchmarkId, "legacy-v1.1.0", "unified-linear-v1", modelId,
+            candidateModelPayloadSha256 ?? model.PayloadSha256, "known-holdout",
+            new string('d', 64), new string('d', 64), model.GameBuild, model.SeasonId,
+            model.CardPoolIdentity, model.TrainingSetIdentity, model.SeasonRange,
+            calibration, approval);
+    }
+
     private static void NormalizesBlankBundleModelIdentity()
     {
         var bundle = new DecisionPolicyBundle(null, null, null, " \t", "\r\n");
@@ -522,18 +662,31 @@ internal static class AlgorithmLinearRankerBehavior
 
     private static byte[] CreateAcceptedArtifact()
     {
+        return CreateArtifact("accepted", "known-model", "known-build",
+            "known-season", "known-pool");
+    }
+
+    private static byte[] CreateEvaluationArtifact()
+    {
+        return CreateArtifact("blocked-by-season-data", "known-model", "known-build",
+            "known-season", "known-pool");
+    }
+
+    private static byte[] CreateArtifact(string effectAcceptanceStatus, string modelId,
+        string gameBuild, string seasonId, string cardPoolIdentity)
+    {
         var fixturePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
             "linear-v1.valid.envelope.json");
         RankingModelPayload model;
         using (var fixture = File.OpenRead(fixturePath))
             model = RankingModelLoader.Load(fixture);
-        model.ModelId = "known-model";
+        model.ModelId = modelId;
         model.TrainingSetIdentity = "known-training-set";
         model.SeasonRange = "known-season";
-        model.GameBuild = "known-build";
-        model.SeasonId = "known-season";
-        model.CardPoolIdentity = "known-pool";
-        model.EffectAcceptanceStatus = "accepted";
+        model.GameBuild = gameBuild;
+        model.SeasonId = seasonId;
+        model.CardPoolIdentity = cardPoolIdentity;
+        model.EffectAcceptanceStatus = effectAcceptanceStatus;
 
         var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model));
         string checksum;

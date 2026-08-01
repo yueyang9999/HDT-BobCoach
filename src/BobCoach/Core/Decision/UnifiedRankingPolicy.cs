@@ -5,6 +5,18 @@ using BobCoach.Engine;
 
 namespace BobCoach.Engine.Decision
 {
+    internal sealed class UnifiedDecisionDiagnostics
+    {
+        public DecisionResult Decision { get; private set; }
+        public PlanningResult PlanningResult { get; private set; }
+
+        public UnifiedDecisionDiagnostics(DecisionResult decision, PlanningResult planningResult)
+        {
+            Decision = decision;
+            PlanningResult = planningResult;
+        }
+    }
+
     // This policy is diagnostic-only. DecisionOrchestrator keeps legacy-v1.1.0 visible in Shadow.
     public sealed class UnifiedRankingPolicy : IDecisionPolicy
     {
@@ -55,6 +67,21 @@ namespace BobCoach.Engine.Decision
             return CreateProduction(model, candidates, seasonExtension, null, null, null);
         }
 
+        internal static UnifiedRankingPolicy CreateForEffectEvaluation(RankingModelPayload model,
+            CandidateGenerator candidates, ISeasonFeatureExtension seasonExtension,
+            ConfidenceCalibration calibration,
+            ConfidenceCalibrationApprovalContext approvalContext)
+        {
+            ValidateResolvedNonSyntheticIdentity(model, seasonExtension);
+            if (!string.Equals(model.EffectAcceptanceStatus, "blocked-by-season-data",
+                StringComparison.Ordinal))
+                throw new ModelValidationException(
+                    "Invalid ranking model artifact: evaluation artifact status");
+            return new UnifiedRankingPolicy(model, candidates, seasonExtension,
+                DecisionConfidenceEvaluator.CreateForEffectEvaluation(calibration,
+                    approvalContext), null);
+        }
+
         internal static UnifiedRankingPolicy CreateProduction(RankingModelPayload model,
             ISeasonFeatureExtension seasonExtension, ConfidenceCalibration calibration,
             ConfidenceCalibrationApprovalContext approvalContext)
@@ -82,37 +109,27 @@ namespace BobCoach.Engine.Decision
             if (candidates == null) throw new ArgumentNullException("candidates");
             if (seasonExtension == null) throw new ArgumentNullException("seasonExtension");
             RankingModelLoader.ValidatePayloadSchema(model);
-            RequireAcceptedResolvedIdentity(model.ModelId, "model identity");
-            RequireAcceptedResolvedIdentity(model.TrainingSetIdentity, "training set identity");
-            RequireAcceptedResolvedIdentity(model.SeasonRange, "season range identity");
-            RequireAcceptedResolvedIdentity(model.GameBuild, "game build identity");
-            RequireAcceptedResolvedIdentity(model.SeasonId, "season identity");
-            RequireAcceptedResolvedIdentity(model.CardPoolIdentity, "card pool identity");
-            RequireAcceptedResolvedIdentity(model.EffectAcceptanceStatus, "effect acceptance");
-            if (IsSynthetic(model))
-                throw new ModelValidationException("Invalid ranking model artifact: synthetic artifact");
+            ValidateResolvedNonSyntheticIdentity(model, seasonExtension);
             if (!string.Equals(model.EffectAcceptanceStatus, "accepted", StringComparison.Ordinal))
                 throw new ModelValidationException("Invalid ranking model artifact: effect acceptance");
-            RequireAcceptedResolvedIdentity(seasonExtension.GameBuild, "season extension game build");
-            RequireAcceptedResolvedIdentity(seasonExtension.SeasonId, "season extension season");
-            RequireAcceptedResolvedIdentity(seasonExtension.CardPoolIdentity, "season extension card pool");
-            if (!string.Equals(model.GameBuild, seasonExtension.GameBuild, StringComparison.Ordinal)
-                || !string.Equals(model.SeasonId, seasonExtension.SeasonId, StringComparison.Ordinal)
-                || !string.Equals(model.CardPoolIdentity, seasonExtension.CardPoolIdentity, StringComparison.Ordinal))
-                throw new ModelValidationException("Invalid ranking model artifact: identity mismatch");
             return new UnifiedRankingPolicy(model, candidates, seasonExtension,
                 new DecisionConfidenceEvaluator(calibration, approvalContext), shopPoolProvider);
         }
 
         public DecisionResult Decide(GameState state)
         {
+            return DecideWithDiagnostics(state).Decision;
+        }
+
+        internal UnifiedDecisionDiagnostics DecideWithDiagnostics(GameState state)
+        {
             if (!HasMatchingStateIdentity(state))
-                return UnavailableDecisionPolicy.For(FallbackReason.ModelUnavailable).Decide(state);
+                return UnavailableDiagnostics(state, FallbackReason.ModelUnavailable);
 
             var evaluations = EvaluateCandidates(state, false);
             var ranked = Rank(evaluations);
             if (ranked.Count == 0)
-                return UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
+                return UnavailableDiagnostics(state, FallbackReason.NoSafeAction);
 
             var top = evaluations.First(item => string.Equals(item.Descriptor.ActionKey,
                 ranked[0].ActionKey, StringComparison.Ordinal));
@@ -120,9 +137,18 @@ namespace BobCoach.Engine.Decision
             var planning = assessment.ShouldPlan
                 ? _planner.Plan(state, ranked, TimeSpan.FromMilliseconds(25d))
                 : PlanningResult.NotRequested();
-            return new DecisionResult(PolicyId, ranked[0].Action, ranked, assessment.Score,
+            var decision = new DecisionResult(PolicyId, ranked[0].Action, ranked, assessment.Score,
                 planning.Status, assessment.FallbackReason,
                 _explanationBuilder.Build(ranked[0], planning));
+            return new UnifiedDecisionDiagnostics(decision, planning);
+        }
+
+        private static UnifiedDecisionDiagnostics UnavailableDiagnostics(GameState state,
+            FallbackReason reason)
+        {
+            return new UnifiedDecisionDiagnostics(
+                UnavailableDecisionPolicy.For(reason).Decide(state),
+                PlanningResult.NotRequested());
         }
 
         private IList<CandidateEvaluation> EvaluateCandidates(GameState state,
@@ -233,6 +259,31 @@ namespace BobCoach.Engine.Decision
         private static void RequireAcceptedResolvedIdentity(string value, string name)
         {
             if (!IsResolved(value)) throw new ModelValidationException("Invalid ranking model artifact: " + name);
+        }
+
+        private static void ValidateResolvedNonSyntheticIdentity(RankingModelPayload model,
+            ISeasonFeatureExtension seasonExtension)
+        {
+            if (model == null) throw new ArgumentNullException("model");
+            if (seasonExtension == null) throw new ArgumentNullException("seasonExtension");
+            RankingModelLoader.ValidatePayloadSchema(model);
+            RequireAcceptedResolvedIdentity(model.ModelId, "model identity");
+            RequireAcceptedResolvedIdentity(model.TrainingSetIdentity, "training set identity");
+            RequireAcceptedResolvedIdentity(model.SeasonRange, "season range identity");
+            RequireAcceptedResolvedIdentity(model.GameBuild, "game build identity");
+            RequireAcceptedResolvedIdentity(model.SeasonId, "season identity");
+            RequireAcceptedResolvedIdentity(model.CardPoolIdentity, "card pool identity");
+            RequireAcceptedResolvedIdentity(model.EffectAcceptanceStatus, "effect acceptance");
+            if (IsSynthetic(model))
+                throw new ModelValidationException("Invalid ranking model artifact: synthetic artifact");
+            RequireAcceptedResolvedIdentity(seasonExtension.GameBuild, "season extension game build");
+            RequireAcceptedResolvedIdentity(seasonExtension.SeasonId, "season extension season");
+            RequireAcceptedResolvedIdentity(seasonExtension.CardPoolIdentity, "season extension card pool");
+            if (!string.Equals(model.GameBuild, seasonExtension.GameBuild, StringComparison.Ordinal)
+                || !string.Equals(model.SeasonId, seasonExtension.SeasonId, StringComparison.Ordinal)
+                || !string.Equals(model.CardPoolIdentity, seasonExtension.CardPoolIdentity,
+                    StringComparison.Ordinal))
+                throw new ModelValidationException("Invalid ranking model artifact: identity mismatch");
         }
 
         private static bool IsResolved(string value)

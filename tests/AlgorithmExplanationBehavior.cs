@@ -99,6 +99,25 @@ namespace BobCoach.Engine.Decision
         }
     }
 
+    public sealed class ConfidenceCalibration
+    {
+        public string Status { get; private set; }
+        public string GameBuild { get; private set; }
+        public string SeasonId { get; private set; }
+        public string CardPoolIdentity { get; private set; }
+        public string TrainingSetIdentity { get; private set; }
+        public string HoldoutIdentity { get; private set; }
+        public string CalibrationIdentity { get; private set; }
+        public string ModelId { get; private set; }
+    }
+
+    public sealed class ConfidenceCalibrationApprovalContext
+    {
+        public string HoldoutIdentity { get; private set; }
+        public string CalibrationIdentity { get; private set; }
+        public string ModelId { get; private set; }
+    }
+
     public sealed class UnifiedRankingPolicy : IDecisionPolicy
     {
         public CandidateGenerator Candidates { get; private set; }
@@ -119,6 +138,14 @@ namespace BobCoach.Engine.Decision
                 || !string.Equals(model.CardPoolIdentity, seasonExtension.CardPoolIdentity,
                     StringComparison.Ordinal))
                 throw new ModelValidationException("identity mismatch");
+            return new UnifiedRankingPolicy(candidates);
+        }
+
+        internal static UnifiedRankingPolicy CreateForEffectEvaluation(
+            RankingModelPayload model, CandidateGenerator candidates,
+            ISeasonFeatureExtension seasonExtension, ConfidenceCalibration calibration,
+            ConfidenceCalibrationApprovalContext approvalContext)
+        {
             return new UnifiedRankingPolicy(candidates);
         }
 
