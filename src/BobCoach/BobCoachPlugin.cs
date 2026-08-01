@@ -1215,6 +1215,46 @@ namespace BobCoach
             }
         }
 
+        private DecisionResult EvaluateRankingDecision(GameState state)
+        {
+            DecisionResult rankingDecision;
+            if (_decisionLifecycle != null && _decisionEventRecorder != null)
+            {
+                try
+                {
+                    var observedActionKeys = InferObservedActionKeys(_prevState, state);
+                    _decisionLifecycle.AttachObservedActions(observedActionKeys,
+                        DateTime.UtcNow.ToString("o"));
+                    var candidates = _decisionPolicies.Candidates.Generate(state);
+                    var context = _decisionLifecycle.BeginOrReuse(state, candidates);
+                    rankingDecision = SafeCall(
+                        () => _decisionOrchestrator.Decide(state, context.DecisionId), "GetBestAction")
+                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
+                    _decisionEventRecorder.AttachRecommendation(context.DecisionId,
+                        rankingDecision, DateTime.UtcNow.ToString("o"));
+                }
+                catch (Exception ex)
+                {
+                    Log("Decision recording error: " + ex.Message);
+                    ResetDecisionRecording();
+                    rankingDecision = SafeCall(
+                        () => _decisionOrchestrator.Decide(state), "GetBestAction")
+                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
+                }
+            }
+            else
+            {
+                if (_decisionOrchestrator == null)
+                    _decisionOrchestrator = new DecisionOrchestrator(
+                        _decisionPolicies.Legacy, _decisionPolicies.Unified,
+                        NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
+                rankingDecision = SafeCall(
+                    () => _decisionOrchestrator.Decide(state), "GetBestAction")
+                    ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
+            }
+            return rankingDecision;
+        }
+
         // ── Decision evaluation & render ──
 
         private void EvaluateAndRender()
@@ -1456,41 +1496,7 @@ namespace BobCoach
             UpdatePoolFromStateChange(state);
             _poolTracker.OnNewTurn(state.Turn, state.Opponents.FindAll(o => o.Alive).Count);
 
-            DecisionResult rankingDecision;
-            if (_decisionLifecycle != null && _decisionEventRecorder != null)
-            {
-                try
-                {
-                    var observedActionKeys = InferObservedActionKeys(_prevState, state);
-                    _decisionLifecycle.AttachObservedActions(observedActionKeys,
-                        DateTime.UtcNow.ToString("o"));
-                    var candidates = _decisionPolicies.Candidates.Generate(state);
-                    var context = _decisionLifecycle.BeginOrReuse(state, candidates);
-                    rankingDecision = SafeCall(
-                        () => _decisionOrchestrator.Decide(state, context.DecisionId), "GetBestAction")
-                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
-                    _decisionEventRecorder.AttachRecommendation(context.DecisionId,
-                        rankingDecision, DateTime.UtcNow.ToString("o"));
-                }
-                catch (Exception ex)
-                {
-                    Log("Decision recording error: " + ex.Message);
-                    ResetDecisionRecording();
-                    rankingDecision = SafeCall(
-                        () => _decisionOrchestrator.Decide(state), "GetBestAction")
-                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
-                }
-            }
-            else
-            {
-                if (_decisionOrchestrator == null)
-                    _decisionOrchestrator = new DecisionOrchestrator(
-                        _decisionPolicies.Legacy, _decisionPolicies.Unified,
-                        NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
-                rankingDecision = SafeCall(
-                    () => _decisionOrchestrator.Decide(state), "GetBestAction")
-                    ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
-            }
+            var rankingDecision = EvaluateRankingDecision(state);
             var bestAction = rankingDecision.SelectedAction;
             var t0 = DateTime.UtcNow;
             var levelResult = SafeCall(() => _engine.GetLevelUpSuggestion(state), "GetLevelUpSuggestion");

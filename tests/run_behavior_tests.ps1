@@ -39,6 +39,7 @@ foreach ($file in @(
     "test_algorithm_decision_events.ps1",
     "test_algorithm_observed_actions.ps1",
     "test_algorithm_orchestrator.ps1",
+    "test_plugin_ranking_entrypoint.ps1",
     "test_algorithm_linear_ranker.ps1",
     "test_algorithm_confidence.ps1",
     "test_algorithm_beam_planner.ps1",

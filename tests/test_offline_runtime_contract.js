@@ -291,12 +291,20 @@ if (plugin.includes('_engine.GetBestAction(state), "GetBestAction"')) {
 const evaluationStart = plugin.indexOf("private void EvaluateAndRender(");
 const evaluationEnd = plugin.indexOf("private ", evaluationStart + 20);
 const evaluationBody = plugin.slice(evaluationStart, evaluationEnd);
-const observedIndex = evaluationBody.indexOf("InferObservedActionKeys(_prevState, state)");
-const attachObservedIndex = evaluationBody.indexOf("_decisionLifecycle.AttachObservedActions");
-const generateIndex = evaluationBody.indexOf("_decisionPolicies.Candidates.Generate(state)");
-const beginIndex = evaluationBody.indexOf("_decisionLifecycle.BeginOrReuse(state, candidates)");
-const decideWithIdIndex = evaluationBody.indexOf("_decisionOrchestrator.Decide(state, context.DecisionId)");
-const recommendationIndex = evaluationBody.indexOf("_decisionEventRecorder.AttachRecommendation");
+if (!evaluationBody.includes("EvaluateRankingDecision(state)")) {
+    console.error("FAIL main evaluation must route ranking through the guarded ranking entrypoint");
+    process.exit(1);
+}
+
+const rankingStart = plugin.indexOf("private DecisionResult EvaluateRankingDecision(");
+const rankingEnd = plugin.indexOf("private void EvaluateAndRender(", rankingStart);
+const rankingBody = plugin.slice(rankingStart, rankingEnd);
+const observedIndex = rankingBody.indexOf("InferObservedActionKeys(_prevState, state)");
+const attachObservedIndex = rankingBody.indexOf("_decisionLifecycle.AttachObservedActions");
+const generateIndex = rankingBody.indexOf("_decisionPolicies.Candidates.Generate(state)");
+const beginIndex = rankingBody.indexOf("_decisionLifecycle.BeginOrReuse(state, candidates)");
+const decideWithIdIndex = rankingBody.indexOf("_decisionOrchestrator.Decide(state, context.DecisionId)");
+const recommendationIndex = rankingBody.indexOf("_decisionEventRecorder.AttachRecommendation");
 if ([observedIndex, attachObservedIndex, generateIndex, beginIndex, decideWithIdIndex, recommendationIndex]
         .some(index => index < 0)
     || !(observedIndex < attachObservedIndex
@@ -307,16 +315,16 @@ if ([observedIndex, attachObservedIndex, generateIndex, beginIndex, decideWithId
     console.error("FAIL active recording order must be observation -> creation -> Shadow comparison -> recommendation");
     process.exit(1);
 }
-if (!evaluationBody.includes("NoOpShadowComparisonSink.Instance")
-    || !evaluationBody.includes("_decisionOrchestrator.Decide(state)")) {
+if (!rankingBody.includes("NoOpShadowComparisonSink.Instance")
+    || !rankingBody.includes("_decisionOrchestrator.Decide(state)")) {
     console.error("FAIL inactive recording must use the no-op sink and ID-free orchestrator call");
     process.exit(1);
 }
-const guardedDecisionCalls = evaluationBody.match(
+const guardedDecisionCalls = rankingBody.match(
     /SafeCall\s*\(\s*\(\)\s*=>\s*_decisionOrchestrator\.Decide\s*\([^;]*?\)\s*,\s*"GetBestAction"\s*\)/gs) || [];
-const allDecisionCalls = evaluationBody.match(/_decisionOrchestrator\.Decide\s*\(/g) || [];
+const allDecisionCalls = rankingBody.match(/_decisionOrchestrator\.Decide\s*\(/g) || [];
 if (guardedDecisionCalls.length !== 3 || allDecisionCalls.length !== 3
-    || !evaluationBody.includes("UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state)")) {
+    || !rankingBody.includes("UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state)")) {
     console.error("FAIL all ranking calls must preserve an outer SafeCall boundary and conservative fallback");
     process.exit(1);
 }
