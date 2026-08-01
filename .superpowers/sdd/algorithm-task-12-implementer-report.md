@@ -2,14 +2,13 @@
 
 ## Status
 
-Implementation and implementer self-review are complete. Earlier full-suite,
-Release-build, repository-validation, and whitespace evidence remains recorded
-below. The original frozen review reported two Critical/four Important/one
-Minor findings. Three subsequent fresh review waves reported, respectively, one
-Critical/two Important/one Minor, zero Critical/two Important/zero Minor, and
-zero Critical/two Important/zero Minor findings. Every reported finding has now
-been repaired, but a new fresh review against the final frozen Task 12 bundle
-is still required; this report does not claim reviewer approval.
+Implementation, implementer self-review, final Task 12 fresh review, final
+whole-branch fresh review, and final engineering verification are complete.
+The final Task 12 reviewer approved `cc3dc48..f0b9f88` with zero Critical, zero
+Important, and zero Minor findings. The final whole-branch reviewer approved
+`0070303..07f9d23` with zero Critical, zero Important, and two Minor findings.
+The two Minor findings are documented in the final section below; neither
+changes runtime routing or the effect-acceptance boundary.
 
 Effect acceptance remains exactly `blocked-by-season-data`. No model was
 trained, generated, copied, embedded, or activated. Unified ranking remains in
@@ -551,3 +550,68 @@ Task 12 review has zero Critical and zero Important findings.
 Task 12 remains `blocked-by-season-data` with no effect acceptance result or
 formal improvement metric. Unified ranking remains Shadow and
 `legacy-v1.1.0` remains player-visible and the fallback.
+
+## Final Whole-Branch Review And Engineering Acceptance (2026-08-01)
+
+The final Task 12 fixed package was
+`.superpowers/sdd/review-cc3dc48..f0b9f88.diff`, 325815 bytes, SHA-256
+`A57A3C4BF7C71D8C8F6C871D51047DDA7A6F47F9471DB0D4FEAFFBBACAD50C00`.
+Its fresh reviewer reported Critical 0, Important 0, Minor 0, and `APPROVE`.
+`progress.md` was then updated in the separate documentation commit `ce3fa4b`.
+
+Whole-branch fresh review required two repair rounds after the first package:
+
+- ranking-entrypoint failures are contained at the plugin boundary, with a
+  plugin-level behavior contract proving exceptions do not escape and the
+  player-visible result fails closed;
+- `build_pairs.js` and `train_pairwise.js` now resolve input and output paths
+  beneath `DataRoot` through the shared reparse-aware path contract, with real
+  child-junction read/write escape regressions. Their maintainer commands now
+  use `DataRoot`-relative paths.
+
+The final frozen whole-branch package covers `0070303..07f9d23`:
+
+- file: `.superpowers/sdd/review-0070303..07f9d23.diff`;
+- size: 775344 bytes;
+- SHA-256:
+  `6358391297CFF01FF5962E1917870FB0F4E9ACF5FFF1A7C380A13DCC75330107`;
+- fresh review: Critical 0, Important 0, Minor 2, `APPROVE`.
+
+The two non-blocking Minor findings were handled as follows:
+
+- this report was stale inside the frozen package; this final documentation
+  update synchronizes its status after review and verification;
+- `tests/test_algorithm_model_contract.ps1` retains an author-machine `E:`
+  fallback when `BOBCOACH_HDT_DIR` is unset. It is recorded as a portability
+  risk; final validation explicitly supplied the exact HDT 1.54.0.7376
+  reference directory, and the approved code package was not changed again.
+
+Final exact-code-HEAD verification ran on `07f9d23553eff8b83e9f9efd5bd114d2a5142f5b`:
+
+- six focused commands exited 0: algorithm evaluation, workspace contract,
+  offline runtime contract, benchmark contract, orchestrator, and plugin
+  ranking entrypoint;
+- full `npm test` exited 0 in approximately 309.5 seconds with 140 `PASS`
+  lines and no `FAIL` lines;
+- the independent offline runtime contract exited 0;
+- the independent Release build exited 0 and produced `BobCoach.dll` at
+  784896 bytes with SHA-256
+  `8BF904C1CCC3B9CF6C2297005410E833987354AFA0E6968B395654B3B9C4BE56`;
+- repository validation exited 0 after scanning 451 tracked or untracked,
+  non-ignored files;
+- `git diff --check` and `git diff --cached --check` exited 0.
+
+Verification logs are under
+`E:\HDT-BobCoach-evidence\verification\whole-final-07f9d23-20260801-185035`;
+the independent build is under
+`E:\HDT-BobCoach-evidence\builds\whole-final-07f9d23-20260801-185035`.
+The full test suite left one temporary directory on `C:` containing 1147 files,
+391 directories, and 88959304 bytes. It is recorded for owner-approved cleanup
+and was not deleted during this task.
+
+No model was trained, generated, copied, embedded, or activated. Synthetic
+evidence produced no effect acceptance decision, improvement percentage, or
+formal effect metric. Without an owner-approved, versioned, frozen protocol
+bound to a checksum, the evaluator does not return an accepted or rejected
+effect result. Task 12 remains `blocked-by-season-data`, Unified remains Shadow,
+and `legacy-v1.1.0` remains player-visible and the fallback.
