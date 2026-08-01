@@ -2,13 +2,14 @@
 
 ## Status
 
-The implementation, review remediation, and engineering verification are
-complete, and the task is awaiting fresh review against a frozen Task 11 review
-bundle. All Task 11 tests, contracts, package checks, the Release build, and
-diff checks pass. Repository validation reports only the pre-existing Task 7
-report personal-path finding documented below. The unified policy remains
-hard-coded to `Shadow`; `legacy-v1.1.0` remains the player-visible policy and
-fallback.
+The fresh round-2 review rejected the previous implementation with two
+Important findings: production composition constructed its own unapproved
+runtime context, and immediately consumed one-gold tavern spells were ambiguous
+with refresh when evaluated against the real generated candidate set. Both
+findings are remediated and focused engineering verification passes. A new
+fresh review is still pending; this report does not claim reviewer approval.
+The unified policy remains hard-coded to `Shadow`; `legacy-v1.1.0` remains the
+player-visible policy and fallback.
 
 Effect acceptance remains `blocked-by-season-data`. This task does not claim
 improved placement, win rate, accuracy, or decision quality.
@@ -27,6 +28,12 @@ improved placement, win rate, accuracy, or decision quality.
   explicit composition and tests. Both paths use
   `RankingModelLoader.LoadForRuntime` and report unavailable model identity as
   `unknown`.
+- Added `ProductionSeasonFeatureExtension` as the plugin's production provider.
+  It can obtain runtime approval only from
+  `ProductionRankingModelApprovalCatalog`; that catalog is currently empty and
+  returns no context unless it contains exactly one owner-approved tuple. The
+  plugin no longer constructs `RankingModelRuntimeContext` or supplies approval
+  facts at the artifact call site.
 - Limited fail-closed exception handling to model-loader validation and expected
   artifact I/O failures. Approval-provider, programmer, stream-state, and
   post-load composition failures remain visible to callers.
@@ -49,10 +56,11 @@ improved placement, win rate, accuracy, or decision quality.
   immediately after purchase can be inferred only within the same turn when it
   leaves the shop, never appears in hand or board, and the exact gold delta
   matches its cost.
-- Required refresh inference to remain within the same turn, observe a changed
-  shop entity set, and reconcile either the exact paid refresh cost or one
-  consumed free refresh. Automatic turn-start shop replacement is not recorded
-  as a player refresh.
+- Required refresh inference to remain within the same turn, observe a complete
+  shop replacement with no shared positive entity ID, and reconcile either the
+  exact paid refresh cost or one consumed free refresh. Removing one purchased
+  entity, including a replenishing-shop transition, is not treated as refresh;
+  automatic turn-start replacement is not recorded as a player refresh.
 - Added model ID and payload checksum fields to local decision events, normalized
   to `unknown` when no approved model exists.
 
@@ -78,6 +86,15 @@ Recorded RED evidence from the implementation and review-remediation loops:
   to compile with `CS0246` for the missing
   `IRankingModelRuntimeContextProvider` before the independent approval contract
   was added.
+- Fresh round-2 production-wiring RED exited `1` with
+  `FAIL production policy composition must use a dedicated season extension and
+  approval catalog` before the production provider and empty approval catalog
+  were added.
+- Fresh round-2 real-candidate RED exited `1` with
+  `FAIL immediately consumed tavern spell from generated candidates
+  expected=BuySpell|0|SPELL_A|tavern_shop
+  actual=observation|unresolved|unknown` before refresh inference required a
+  complete shop replacement.
 
 Focused GREEN evidence after remediation:
 
@@ -112,6 +129,7 @@ Production:
 - `src/BobCoach/Core/Decision/DecisionPolicyFactory.cs`
 - `src/BobCoach/Core/Decision/ExplanationBuilder.cs`
 - `src/BobCoach/Core/Decision/ObservedActionInference.cs`
+- `src/BobCoach/Core/Decision/ProductionSeasonFeatureExtension.cs`
 - `src/BobCoach/Core/Decision/RankingModel.cs`
 - `src/BobCoach/Core/Decision/UnifiedRankingPolicy.cs`
 
@@ -131,30 +149,35 @@ Tests and release contracts:
 
 ## Review
 
-Pending fresh review against the frozen Task 11 review bundle. Reviewer results
-must be recorded only after that review completes.
+The previous fresh round-2 review result was rejected with the two Important
+findings recorded above. Remediation is complete, but a new fresh review against
+the updated frozen Task 11 review bundle remains pending. Reviewer results must
+be recorded only after that review completes.
 
 ## Verification
 
-The final review-remediation verification used the exact local HDT `1.54.0`
-baseline:
+The final fresh round-2 remediation verification used the exact local HDT
+`1.54.0` baseline:
 
-- `npm test` passed with exit code `0` in `242.3s`. Contract, behavior, and
+- `npm test` passed with exit code `0` in `243.5s`. Contract, behavior, and
   package suites all completed successfully, including the Task 11 Shadow,
   lifecycle, observed-action, confidence, explanation, and factory cases. The
   existing `CardSemanticFact.CardId` `CS0649` warning remains non-fatal. The
-  release compile allowlist is `196` items with SHA-256
-  `1daabc5d5cb8db52bff033b0ee72a0535f0deef3a80cb4f08ccfb98dfb833e29`.
+  release compile allowlist is `197` items with SHA-256
+  `4e3998627d51827254b1814e6209dbabcd53ae2325e3d5c9ee336e0b0cde80aa`.
 - The `npm test` package suite produced the Release DLL three times with
-  identical size `773120` bytes and SHA-256
-  `CAF74D7C0F56CFD168AF8806B734D33A29544990AED409D5425D3E536A9373C4`.
-  Its two deterministic approved-candidate offline ZIPs were both `853620`
-  bytes with SHA-256
-  `DE34916632EDE9707383A5B5EAAC252C9CFC0FE2F548C440856F2F4D2A2F5653`.
+  identical size `773632` bytes and SHA-256
+  `F5230D7BD813DDB9401110AC51E58C32FA84AE389CD41D65D2B551F53287CAE1`.
+  Its deterministic offline ZIPs were `853990` bytes with SHA-256
+  `D7B93419FCDB398CB49BBD1F57D67D45BA7979058698934FA64FB2A8A118ED50`.
+- The explicit Release build and formal offline package build both passed.
+  Independent file inspection confirmed the same DLL and ZIP sizes and hashes.
+  The outputs are under the external evidence store at
+  `validation/task-11-fresh-round2-20260801/{release,package}`.
 - `git diff --check` passed with exit code `0`; Git emitted only line-ending
   conversion warnings and no whitespace errors.
 - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/build/validate_repository.ps1`
-  reported exactly one issue across `435` tracked or untracked non-ignored
+  reported exactly one issue across `436` tracked or untracked non-ignored
   files: the pre-existing personal absolute path in
   `.superpowers/sdd/algorithm-task-7-report.md`. Task 11 introduces no new
   repository-validation finding, and the historical Task 7 report was not

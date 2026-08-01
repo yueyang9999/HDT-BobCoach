@@ -11,6 +11,10 @@ const fetcher = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "Trin
 const extractor = fs.readFileSync(path.join(root, "src", "BobCoach", "GameStateExtractor.cs"), "utf8");
 const policyFactory = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "Decision", "DecisionPolicyFactory.cs"), "utf8");
 const unifiedPolicy = fs.readFileSync(path.join(root, "src", "BobCoach", "Core", "Decision", "UnifiedRankingPolicy.cs"), "utf8");
+const productionSeasonExtensionPath = path.join(root, "src", "BobCoach", "Core", "Decision", "ProductionSeasonFeatureExtension.cs");
+const productionSeasonExtension = fs.existsSync(productionSeasonExtensionPath)
+    ? fs.readFileSync(productionSeasonExtensionPath, "utf8")
+    : "";
 
 const forbiddenPluginPaths = [
     "new NodeEngineBridge(",
@@ -187,9 +191,23 @@ if (!plugin.includes("BobCoach.DecisionModels.linear-v1.envelope.json")
 const pluginLoadStart = plugin.indexOf("public void OnLoad()");
 const pluginLoadEnd = plugin.indexOf("public void OnUnload()", pluginLoadStart);
 const pluginLoadBody = plugin.slice(pluginLoadStart, pluginLoadEnd);
-if (!pluginLoadBody.includes("new RankingModelRuntimeContext(")
-    || !pluginLoadBody.includes("DecisionPolicyFactory.Create")) {
-    console.error("FAIL production policy composition must provide an explicit runtime approval context");
+if (!productionSeasonExtension) {
+    console.error("FAIL production policy composition must use a dedicated season extension and approval catalog");
+    process.exit(1);
+}
+if (!/DecisionPolicyFactory\.Create\s*\(\s*_engine\s*,\s*modelArtifact\s*,\s*ProductionSeasonFeatureExtension\.Instance\s*\)/.test(pluginLoadBody)
+    || pluginLoadBody.includes("new RankingModelRuntimeContext(")) {
+    console.error("FAIL plugin must obtain runtime approval only through the production season extension provider");
+    process.exit(1);
+}
+if (!/ProductionSeasonFeatureExtension\s*:\s*ISeasonFeatureExtension\s*,\s*IRankingModelRuntimeContextProvider/.test(productionSeasonExtension)
+    || !productionSeasonExtension.includes("ProductionRankingModelApprovalCatalog.GetApprovedContext()")) {
+    console.error("FAIL production season extension must provide runtime context from the approval catalog");
+    process.exit(1);
+}
+if (!productionSeasonExtension.includes("new RankingModelRuntimeContext[0]")
+    || !productionSeasonExtension.includes("ApprovedContexts.Length == 1")) {
+    console.error("FAIL production ranking approval catalog must default to an empty fail-closed allowlist");
     process.exit(1);
 }
 if (!policyFactory.includes("RankingModelRuntimeContext runtimeContext")
@@ -206,6 +224,7 @@ if (publicProductionEntries.length !== 0 || internalProductionEntries.length !==
 }
 if (!project.includes('Core\\Decision\\ExplanationBuilder.cs')
     || !project.includes('Core\\Decision\\DecisionPolicyFactory.cs')
+    || !project.includes('Core\\Decision\\ProductionSeasonFeatureExtension.cs')
     || project.includes("DecisionModels\\linear-v1.envelope.json")) {
     console.error("FAIL build must include Task 11 composition code without embedding a production model");
     process.exit(1);

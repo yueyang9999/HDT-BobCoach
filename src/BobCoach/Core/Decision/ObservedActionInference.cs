@@ -87,8 +87,13 @@ namespace BobCoach.Engine.Decision
         private static bool MatchesRefresh(ActionDescriptor candidate, GameState previous,
             GameState current)
         {
-            if (previous.Turn != current.Turn
-                || EntityIds(previous.ShopMinions).SequenceEqual(EntityIds(current.ShopMinions)))
+            if (previous.Turn != current.Turn)
+                return false;
+
+            var previousShopIds = PositiveEntityIds(previous.ShopMinions).ToList();
+            var currentShopIds = PositiveEntityIds(current.ShopMinions).ToList();
+            if (previousShopIds.Count == 0 || currentShopIds.Count == 0
+                || previousShopIds.Intersect(currentShopIds).Any())
                 return false;
 
             var goldSpent = previous.Gold - current.Gold;
@@ -105,9 +110,9 @@ namespace BobCoach.Engine.Decision
             return items ?? Enumerable.Empty<MinionData>();
         }
 
-        private static IEnumerable<int> EntityIds(IEnumerable<MinionData> items)
+        private static IEnumerable<int> PositiveEntityIds(IEnumerable<MinionData> items)
         {
-            return Items(items).Select(item => item.EntityId).OrderBy(id => id);
+            return Items(items).Where(item => item.EntityId > 0).Select(item => item.EntityId);
         }
     }
 }

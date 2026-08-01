@@ -202,10 +202,7 @@ namespace BobCoach
                     "BobCoach.DecisionModels.linear-v1.envelope.json"))
                 {
                     _decisionPolicies = DecisionPolicyFactory.Create(_engine, modelArtifact,
-                        NullSeasonFeatureExtension.Instance,
-                        new RankingModelRuntimeContext(
-                            "unknown", "unknown", "unknown", false,
-                            "unknown", "unknown", "unknown", "unknown"));
+                        ProductionSeasonFeatureExtension.Instance);
                 }
                 _decisionOrchestrator = new DecisionOrchestrator(
                     _decisionPolicies.Legacy, _decisionPolicies.Unified,

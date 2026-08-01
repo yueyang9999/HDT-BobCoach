@@ -1,54 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
-namespace BobCoach.Engine
-{
-    public enum ActionType
-    {
-        BuyMinion,
-        BuySpell,
-        SellMinion,
-        Refresh,
-        Upgrade,
-        FreezeShop,
-        UseHeroPower,
-    }
-
-    public sealed class GameAction
-    {
-        public ActionType Type;
-    }
-
-    public sealed class MinionData
-    {
-        public int EntityId;
-    }
-
-    public sealed class GameState
-    {
-        public int Turn;
-        public int Gold;
-        public int TavernTier;
-        public bool FrozenShop;
-        public bool HeroPowerExhausted;
-        public int FreeRefreshCount;
-        public List<MinionData> ShopMinions = new List<MinionData>();
-        public List<MinionData> BoardMinions = new List<MinionData>();
-        public List<MinionData> HandMinions = new List<MinionData>();
-    }
-}
-
-namespace BobCoach.Engine.Decision
-{
-    public sealed class ActionDescriptor
-    {
-        public GameAction Action;
-        public string ActionKey;
-        public int EntityId;
-        public int GoldCost;
-    }
-}
+using BobCoach.Engine;
+using BobCoach.Engine.Decision;
 
 internal static class AlgorithmObservedActionInferenceBehavior
 {
@@ -59,7 +13,7 @@ internal static class AlgorithmObservedActionInferenceBehavior
             IgnoresTurnStartShopReplacement();
             InfersPaidRefreshWithinTheSameTurn();
             InfersFreeRefreshWithinTheSameTurn();
-            InfersImmediatelyConsumedBuySpell();
+            InfersImmediatelyConsumedBuySpellFromGeneratedCandidates();
             RejectsBuySpellWithoutMatchingGoldSpend();
             RejectsBuySpellAcrossTurns();
             MarksMultipleMatchingCandidatesUnresolved();
@@ -79,7 +33,7 @@ internal static class AlgorithmObservedActionInferenceBehavior
         var previous = State(4, 5, 0, 11, 12);
         var current = State(5, 6, 0, 21, 22);
 
-        AssertActions(new string[0], Infer(previous, current, Refresh(1)),
+        AssertActions(new string[0], Infer(previous, current, Refresh(previous)),
             "turn-start automatic shop replacement");
     }
 
@@ -88,7 +42,7 @@ internal static class AlgorithmObservedActionInferenceBehavior
         var previous = State(4, 5, 0, 11, 12);
         var current = State(4, 4, 0, 21, 22);
 
-        AssertActions(new[] { "Refresh|-1||" }, Infer(previous, current, Refresh(1)),
+        AssertActions(new[] { "Refresh|-1||" }, Infer(previous, current, Refresh(previous)),
             "paid refresh");
     }
 
@@ -97,38 +51,53 @@ internal static class AlgorithmObservedActionInferenceBehavior
         var previous = State(4, 5, 1, 11, 12);
         var current = State(4, 5, 0, 21, 22);
 
-        AssertActions(new[] { "Refresh|-1||" }, Infer(previous, current, Refresh(0)),
+        AssertActions(new[] { "Refresh|-1||" }, Infer(previous, current, Refresh(previous)),
             "free refresh");
     }
 
-    private static void InfersImmediatelyConsumedBuySpell()
+    private static void InfersImmediatelyConsumedBuySpellFromGeneratedCandidates()
     {
-        var previous = State(4, 5, 0, 11, 12);
-        var current = State(4, 3, 0, 12);
+        var previous = State(4, 1, 0, 11, 12);
+        previous.ShopMinions[0].CardId = "SPELL_A";
+        previous.ShopMinions[0].CardName = "Spell A";
+        previous.ShopMinions[0].IsSpell = true;
+        previous.ShopMinions[0].Cost = 1;
+        var current = State(4, 0, 0, 12);
+        var candidates = new CandidateGenerator(new ActionEnumerator()).Generate(previous);
 
-        AssertActions(new[] { "BuySpell|0|SPELL_A|shop" }, Infer(previous, current,
-            Candidate(BobCoach.Engine.ActionType.BuySpell,
-                "BuySpell|0|SPELL_A|shop", 11, 2)), "immediately consumed tavern spell");
+        AssertTrue(candidates.Any(candidate => candidate.Action.Type == ActionType.BuySpell),
+            "generated candidates include BuySpell");
+        AssertTrue(candidates.Any(candidate => candidate.Action.Type == ActionType.Refresh),
+            "generated candidates include Refresh");
+        AssertActions(new[] { "BuySpell|0|SPELL_A|tavern_shop" },
+            Infer(previous, current, candidates.ToArray()),
+            "immediately consumed tavern spell from generated candidates");
     }
 
     private static void RejectsBuySpellWithoutMatchingGoldSpend()
     {
         var previous = State(4, 5, 0, 11, 12);
+        previous.ShopMinions[0].IsSpell = true;
+        previous.ShopMinions[0].Cost = 2;
+        previous.ShopMinions[0].CardId = "SPELL_A";
         var current = State(4, 4, 0, 12);
 
         AssertActions(new string[0], Infer(previous, current,
-            Candidate(BobCoach.Engine.ActionType.BuySpell,
-                "BuySpell|0|SPELL_A|shop", 11, 2)), "spell purchase gold mismatch");
+            Candidate(previous, ActionType.BuySpell, 0, "SPELL_A", "tavern_shop")),
+            "spell purchase gold mismatch");
     }
 
     private static void RejectsBuySpellAcrossTurns()
     {
         var previous = State(4, 5, 0, 11, 12);
+        previous.ShopMinions[0].IsSpell = true;
+        previous.ShopMinions[0].Cost = 2;
+        previous.ShopMinions[0].CardId = "SPELL_A";
         var current = State(5, 3, 0, 12);
 
         AssertActions(new string[0], Infer(previous, current,
-            Candidate(BobCoach.Engine.ActionType.BuySpell,
-                "BuySpell|0|SPELL_A|shop", 11, 2)), "spell purchase across turns");
+            Candidate(previous, ActionType.BuySpell, 0, "SPELL_A", "tavern_shop")),
+            "spell purchase across turns");
     }
 
     private static void MarksMultipleMatchingCandidatesUnresolved()
@@ -137,11 +106,11 @@ internal static class AlgorithmObservedActionInferenceBehavior
         previous.FrozenShop = false;
         var current = State(4, 5, 0);
         current.FrozenShop = true;
-        current.HandMinions.Add(new BobCoach.Engine.MinionData { EntityId = 11 });
+        current.HandMinions.Add(new MinionData { EntityId = 11 });
         var candidates = new[]
         {
-            Candidate(BobCoach.Engine.ActionType.BuyMinion, "BuyMinion|0|CARD_A|shop", 11, 3),
-            Candidate(BobCoach.Engine.ActionType.FreezeShop, "FreezeShop|-1||", 0, 0),
+            Candidate(previous, ActionType.BuyMinion, 0, "CARD_A", "tavern_shop"),
+            Candidate(previous, ActionType.FreezeShop, -1, null, ""),
         };
 
         AssertActions(new[] { "observation|unresolved|unknown" },
@@ -153,48 +122,54 @@ internal static class AlgorithmObservedActionInferenceBehavior
         var previous = State(4, 5, 0, 11);
         var current = State(4, 3, 0, 11);
 
-        AssertActions(new string[0], Infer(previous, current, Refresh(1)),
+        AssertActions(new string[0], Infer(previous, current, Refresh(previous)),
             "unmatched state change");
     }
 
-    private static BobCoach.Engine.GameState State(int turn, int gold, int freeRefreshes,
+    private static GameState State(int turn, int gold, int freeRefreshes,
         params int[] shopIds)
     {
-        var state = new BobCoach.Engine.GameState
+        var state = new GameState
         {
+            GameActive = true,
             Turn = turn,
             Gold = gold,
             TavernTier = 3,
             FreeRefreshCount = freeRefreshes,
         };
         foreach (var id in shopIds)
-            state.ShopMinions.Add(new BobCoach.Engine.MinionData { EntityId = id });
+            state.ShopMinions.Add(new MinionData
+            {
+                EntityId = id,
+                CardId = "CARD_" + id,
+                CardName = "Card " + id,
+                Tier = 1,
+                Cost = 3,
+            });
         return state;
     }
 
-    private static BobCoach.Engine.Decision.ActionDescriptor Refresh(int goldCost)
+    private static ActionDescriptor Refresh(GameState state)
     {
-        return Candidate(BobCoach.Engine.ActionType.Refresh, "Refresh|-1||", 0, goldCost);
+        return Candidate(state, ActionType.Refresh, -1, null, "");
     }
 
-    private static BobCoach.Engine.Decision.ActionDescriptor Candidate(
-        BobCoach.Engine.ActionType type, string key, int entityId, int goldCost)
+    private static ActionDescriptor Candidate(GameState state, ActionType type,
+        int targetIndex, string cardId, string purchaseSource)
     {
-        return new BobCoach.Engine.Decision.ActionDescriptor
+        return ActionDescriptor.From(state, new GameAction
         {
-            Action = new BobCoach.Engine.GameAction { Type = type },
-            ActionKey = key,
-            EntityId = entityId,
-            GoldCost = goldCost,
-        };
+            Type = type,
+            TargetIndex = targetIndex,
+            CardId = cardId,
+            PurchaseSource = purchaseSource,
+        });
     }
 
-    private static IList<string> Infer(BobCoach.Engine.GameState previous,
-        BobCoach.Engine.GameState current,
-        params BobCoach.Engine.Decision.ActionDescriptor[] candidates)
+    private static IList<string> Infer(GameState previous, GameState current,
+        params ActionDescriptor[] candidates)
     {
-        return BobCoach.Engine.Decision.ObservedActionInference.Infer(
-            previous, current, candidates);
+        return ObservedActionInference.Infer(previous, current, candidates);
     }
 
     private static void AssertActions(IEnumerable<string> expected, IEnumerable<string> actual,
@@ -205,5 +180,10 @@ internal static class AlgorithmObservedActionInferenceBehavior
         if (!string.Equals(expectedText, actualText, StringComparison.Ordinal))
             throw new InvalidOperationException(label + " expected=" + expectedText
                 + " actual=" + actualText);
+    }
+
+    private static void AssertTrue(bool condition, string label)
+    {
+        if (!condition) throw new InvalidOperationException(label);
     }
 }
