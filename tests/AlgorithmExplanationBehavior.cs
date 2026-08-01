@@ -109,6 +109,10 @@ namespace BobCoach.Engine.Decision
         public string HoldoutIdentity { get; private set; }
         public string CalibrationIdentity { get; private set; }
         public string ModelId { get; private set; }
+        public double MarginScale { get; private set; }
+        public double SemanticCoverageFloor { get; private set; }
+        public double ConfidenceThreshold { get; private set; }
+        public double? PlanningThreshold { get; private set; }
     }
 
     public sealed class ConfidenceCalibrationApprovalContext

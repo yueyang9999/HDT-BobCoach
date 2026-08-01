@@ -12,8 +12,12 @@ foreach ($required in @(
     "DecisionPolicyFactory.CreateForEffectEvaluation", "CandidateGenerator", "DecisionEventRecord.Create",
     "bundle.Legacy.Decide", "bundle.Unified.Decide", "DecideWithDiagnostics", "LoadEvaluationContext",
     "BestCompletePath", "legacy-v1.1.0", "CandidateEvidenceSurface",
-    "ValidateDeclaredCandidates", "self-test must reject a mismatched candidate declaration")) {
+    "ValidateDeclaredCandidates", "self-test must reject a mismatched candidate declaration",
+    "CandidateBenchmarkAdapter")) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing required evaluation surface: $required" }
+}
+if ($sourceText.Contains('.Where(property => !property.Name.StartsWith("_"')) {
+    throw "underscore-prefixed protocol fields must remain checksum-bound"
 }
 $factorySourceText = [System.IO.File]::ReadAllText($factorySource)
 foreach ($required in @("internal static DecisionPolicyBundle CreateForEffectEvaluation",
@@ -33,6 +37,11 @@ if ($sourceText.Contains("DecisionOrchestrator") -or $sourceText.Contains("Shado
 $runnerText = [System.IO.File]::ReadAllText($runner)
 foreach ($required in @("EvaluationProtocol", "--evaluation-protocol")) {
     if (!$runnerText.Contains($required)) { throw "benchmark wrapper does not pass the frozen protocol: $required" }
+}
+$buildText = [System.IO.File]::ReadAllText((Join-Path $root "docs\maintainer\BUILD.md"))
+foreach ($required in @("protocols\season-2026-next-effect-v1.json",
+    "-EvaluationProtocol", "--evaluation-protocol")) {
+    if (!$buildText.Contains($required)) { throw "BUILD protocol example is incomplete: $required" }
 }
 
 $first = Join-Path $env:TEMP ("bobcoach_policy_evidence_a_" + [Guid]::NewGuid().ToString("N"))
@@ -92,6 +101,8 @@ try {
     foreach ($name in @("scenarioStateIdentityMismatchRejected", "unknownSafetyEnumRejected",
         "incompleteSafetyProbeSetRejected", "candidateOutputDistinctFromLegacy",
         "explicitFallbackUsesLegacySurface",
+        "candidateLatencyIncludesLegacyFallback", "missingCandidateDecisionRejected",
+        "protocolUnderscoreFieldsChecksumBound",
         "orchestratedSafetyOutcomesObserved")) {
         if ($contracts.$name -ne $true) { throw "self-test did not dynamically prove $name" }
     }

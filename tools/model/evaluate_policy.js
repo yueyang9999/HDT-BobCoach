@@ -33,6 +33,8 @@ const FALLBACK_REASONS = new Set(['None', 'ModelUnavailable', 'CriticalStateMiss
   'UnsupportedMechanic', 'OutOfDistribution', 'LowConfidence', 'NoSafeAction']);
 const PLANNER_STATUSES = new Set(['NotRequested', 'Completed', 'TimedOut', 'Unsupported']);
 const MISSING_PROTOCOL = 'owner-approved-versioned-frozen-checksum-bound-evaluation-protocol';
+const MISSING_PROVENANCE = 'owner-approved-independent-provenance-trust-root';
+const APPROVAL_REGISTRY_FILE = path.join(__dirname, 'evaluation_protocol_approvals.json');
 const PROTOCOL_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/;
 const EXTERNAL_PROTOCOL_SOURCE = Symbol('external-evaluation-protocol');
@@ -336,7 +338,7 @@ function calculateMetrics(scenarios, baseline, candidate, safetyEvidence, latenc
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).filter(key => !key.startsWith('_')).sort()
+    return `{${Object.keys(value).sort()
       .map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
@@ -390,11 +392,11 @@ function validateEvaluationProtocol(context, input, candidateIdentity) {
     const protocol = context.protocol;
     if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) return null;
     if (protocol.protocolSchemaVersion !== 1
-        || typeof protocol.protocolId !== 'string' || protocol.protocolId.trim() === ''
+        || !isResolvedProtocolIdentity(protocol.protocolId)
         || typeof protocol.protocolVersion !== 'string'
         || !PROTOCOL_VERSION.test(protocol.protocolVersion)
         || protocol.approvalStatus !== 'owner-approved'
-        || typeof protocol.approvedBy !== 'string' || protocol.approvedBy.trim() === '') return null;
+        || !isResolvedProtocolIdentity(protocol.approvedBy)) return null;
     const approvedAt = Date.parse(protocol.approvedAtUtc);
     const frozenAt = Date.parse(protocol.frozenAtUtc);
     const holdoutOpenedAt = Date.parse(protocol.holdoutOpenedAtUtc);
@@ -412,6 +414,10 @@ function validateEvaluationProtocol(context, input, candidateIdentity) {
         || protocol.candidateModelId !== candidateIdentity.modelId
         || protocol.candidateModelPayloadSha256 !== candidateIdentity.modelPayloadSha256
         || protocol.holdoutChecksumSha256 !== context.holdoutFileSha256
+        || !isResolvedProtocolIdentity(protocol.buildIdentity)
+        || !isResolvedProtocolIdentity(protocol.seasonIdentity)
+        || !isResolvedProtocolIdentity(protocol.cardPoolIdentity)
+        || !isResolvedProtocolIdentity(protocol.candidateModelId)
         || !HEX64.test(protocol.candidateModelPayloadSha256)
         || !HEX64.test(protocol.holdoutChecksumSha256)
         || !HEX64.test(protocol.protocolSha256)
@@ -432,19 +438,97 @@ function validateEvaluationProtocol(context, input, candidateIdentity) {
         || calibration.trainingSetIdentity !== protocol.trainingSetIdentity
         || calibration.holdoutIdentity !== protocol.holdoutIdentity
         || calibration.modelId !== candidateIdentity.modelId
+        || !isResolvedProtocolIdentity(calibration.gameBuild)
+        || !isResolvedProtocolIdentity(calibration.seasonId)
+        || !isResolvedProtocolIdentity(calibration.cardPoolIdentity)
+        || !isResolvedProtocolIdentity(calibration.trainingSetIdentity)
+        || !isResolvedProtocolIdentity(calibration.holdoutIdentity)
         || !isResolvedProtocolIdentity(calibration.calibrationIdentity)
+        || !isResolvedProtocolIdentity(calibration.modelId)
         || !Number.isFinite(calibration.marginScale) || calibration.marginScale <= 0
         || !isFiniteInRange(calibration.semanticCoverageFloor, 0, 1)
         || !isFiniteInRange(calibration.confidenceThreshold, 0, 1)
-        || !isFiniteInRange(calibration.planningThreshold, 0, 1)
+        || (calibration.planningThreshold !== null
+          && !isFiniteInRange(calibration.planningThreshold, 0, 1))
         || calibrationApproval.holdoutIdentity !== protocol.holdoutIdentity
         || calibrationApproval.calibrationIdentity !== calibration.calibrationIdentity
-        || calibrationApproval.modelId !== candidateIdentity.modelId) return null;
+        || calibrationApproval.modelId !== candidateIdentity.modelId
+        || !isResolvedProtocolIdentity(calibrationApproval.holdoutIdentity)
+        || !isResolvedProtocolIdentity(calibrationApproval.calibrationIdentity)
+        || !isResolvedProtocolIdentity(calibrationApproval.modelId)) return null;
     const thresholds = validateThresholds(protocol.thresholds);
     return thresholds ? { protocol, thresholds } : null;
   } catch (_) {
     return null;
   }
+}
+
+function loadApprovalRegistry() {
+  const bytes = fs.readFileSync(APPROVAL_REGISTRY_FILE);
+  const text = bytes.toString('utf8');
+  rejectDuplicateJsonProperties(text);
+  const registry = JSON.parse(text);
+  if (!registry || registry.registrySchemaVersion !== 1
+      || !Array.isArray(registry.approvals)) {
+    fail('evaluation approval registry is invalid');
+  }
+  const identities = new Set();
+  for (const approval of registry.approvals) {
+    if (!approval || typeof approval !== 'object' || Array.isArray(approval)
+        || !isResolvedProtocolIdentity(approval.approvalId)
+        || typeof approval.approvalVersion !== 'string'
+        || !PROTOCOL_VERSION.test(approval.approvalVersion)
+        || approval.approvalStatus !== 'owner-approved'
+        || !isResolvedProtocolIdentity(approval.approvedBy)
+        || typeof approval.approvedAtUtc !== 'string'
+        || !UTC_TIMESTAMP.test(approval.approvedAtUtc)
+        || !Number.isFinite(Date.parse(approval.approvedAtUtc))) {
+      fail('evaluation approval registry entry is invalid');
+    }
+    for (const name of ['protocolId', 'protocolVersion', 'candidateModelId', 'benchmarkId',
+      'buildIdentity', 'seasonIdentity', 'cardPoolIdentity', 'trainingSetIdentity',
+      'holdoutIdentity', 'seasonRange', 'calibrationIdentity']) {
+      if (!isResolvedProtocolIdentity(approval[name])) {
+        fail(`evaluation approval registry ${name} is invalid`);
+      }
+    }
+    for (const name of ['protocolFileSha256', 'protocolCanonicalSha256',
+      'holdoutLabelsFileSha256', 'candidateModelPayloadSha256']) {
+      if (!HEX64.test(approval[name])) {
+        fail(`evaluation approval registry ${name} is invalid`);
+      }
+    }
+    const identity = `${approval.approvalId}:${approval.approvalVersion}`;
+    if (identities.has(identity)) fail('duplicate evaluation approval registry identity');
+    identities.add(identity);
+  }
+  return {
+    approvals: registry.approvals,
+    registrySha256: crypto.createHash('sha256').update(bytes).digest('hex')
+  };
+}
+
+function findApprovedProvenance(context, validatedProtocol, candidateIdentity) {
+  if (!context || !validatedProtocol) return null;
+  const protocol = validatedProtocol.protocol;
+  const registry = loadApprovalRegistry();
+  const approval = registry.approvals.find(entry =>
+    entry.protocolId === protocol.protocolId
+      && entry.protocolVersion === protocol.protocolVersion
+      && entry.protocolFileSha256 === context.protocolFileSha256
+      && entry.protocolCanonicalSha256 === context.protocolCanonicalSha256
+      && entry.holdoutLabelsFileSha256 === context.holdoutFileSha256
+      && entry.candidateModelId === candidateIdentity.modelId
+      && entry.candidateModelPayloadSha256 === candidateIdentity.modelPayloadSha256
+      && entry.benchmarkId === protocol.benchmarkId
+      && entry.buildIdentity === protocol.buildIdentity
+      && entry.seasonIdentity === protocol.seasonIdentity
+      && entry.cardPoolIdentity === protocol.cardPoolIdentity
+      && entry.trainingSetIdentity === protocol.trainingSetIdentity
+      && entry.holdoutIdentity === protocol.holdoutIdentity
+      && entry.seasonRange === protocol.seasonRange
+      && entry.calibrationIdentity === protocol.confidenceCalibration.calibrationIdentity);
+  return approval ? { approval, registrySha256: registry.registrySha256 } : null;
 }
 
 function meetsFrozenProtocolThresholds(metrics, thresholds) {
@@ -513,12 +597,14 @@ function evaluate(input, protocolContext = null) {
 
   const engineeringOnly = hasEngineeringOnlyIdentity(input, candidateIdentity);
   const protocol = validateEvaluationProtocol(protocolContext, input, candidateIdentity);
+  const approvedProvenance = findApprovedProvenance(protocolContext, protocol, candidateIdentity);
   const trustworthy = !engineeringOnly
     && input.realTrustworthyVersionMatchedExpertLabels === true
     && scenarios.size >= 300
     && input.shadowComparisonsRepresentative === true
     && input.humanSevereErrorReviewComplete === true
     && protocol !== null
+    && approvedProvenance !== null
     && !['buildIdentity', 'seasonIdentity', 'cardPoolIdentity']
       .some(name => !input[name] || input[name] === 'unknown');
 
@@ -533,6 +619,7 @@ function evaluate(input, protocolContext = null) {
     if (!input[name] || input[name] === 'unknown') missingPrerequisites.push(name);
   }
   if (!protocol) missingPrerequisites.push(MISSING_PROTOCOL);
+  if (!approvedProvenance) missingPrerequisites.push(MISSING_PROVENANCE);
 
   const metrics = trustworthy
     ? calculateMetrics(scenarios, baseline, candidate, input.safetyEvidence, input.latencyEvidence)
@@ -549,7 +636,11 @@ function evaluate(input, protocolContext = null) {
       protocolVersion: protocol.protocol.protocolVersion,
       protocolSha256: protocol.protocol.protocolSha256,
       protocolFileSha256: protocolContext.protocolFileSha256,
-      holdoutChecksumSha256: protocol.protocol.holdoutChecksumSha256
+      holdoutChecksumSha256: protocol.protocol.holdoutChecksumSha256,
+      provenanceApprovalId: approvedProvenance
+        ? approvedProvenance.approval.approvalId : null,
+      approvalRegistrySha256: approvedProvenance
+        ? approvedProvenance.registrySha256 : null
     } : null,
     metrics,
     missingPrerequisites
@@ -582,9 +673,97 @@ function readJsonLines(file) {
   return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
 }
 
+function rejectDuplicateJsonProperties(text) {
+  let index = 0;
+  const skipWhitespace = () => {
+    while (/\s/.test(text[index] || '')) index += 1;
+  };
+  const parseString = () => {
+    const start = index;
+    index += 1;
+    let escaped = false;
+    while (index < text.length) {
+      const character = text[index++];
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        return JSON.parse(text.slice(start, index));
+      }
+    }
+    fail('evaluation protocol JSON is invalid');
+  };
+  const parseValue = () => {
+    skipWhitespace();
+    if (text[index] === '{') {
+      parseObject();
+      return;
+    }
+    if (text[index] === '[') {
+      index += 1;
+      skipWhitespace();
+      if (text[index] === ']') {
+        index += 1;
+        return;
+      }
+      while (index < text.length) {
+        parseValue();
+        skipWhitespace();
+        if (text[index] === ']') {
+          index += 1;
+          return;
+        }
+        if (text[index++] !== ',') fail('evaluation protocol JSON is invalid');
+      }
+      fail('evaluation protocol JSON is invalid');
+    }
+    if (text[index] === '"') {
+      parseString();
+      return;
+    }
+    const start = index;
+    while (index < text.length && !/[\s,\]}]/.test(text[index])) index += 1;
+    if (start === index) fail('evaluation protocol JSON is invalid');
+  };
+  const parseObject = () => {
+    index += 1;
+    const keys = new Set();
+    skipWhitespace();
+    if (text[index] === '}') {
+      index += 1;
+      return;
+    }
+    while (index < text.length) {
+      skipWhitespace();
+      if (text[index] !== '"') fail('evaluation protocol JSON is invalid');
+      const key = parseString();
+      if (keys.has(key)) fail(`evaluation protocol has duplicate property: ${key}`);
+      keys.add(key);
+      skipWhitespace();
+      if (text[index++] !== ':') fail('evaluation protocol JSON is invalid');
+      parseValue();
+      skipWhitespace();
+      if (text[index] === '}') {
+        index += 1;
+        return;
+      }
+      if (text[index++] !== ',') fail('evaluation protocol JSON is invalid');
+    }
+    fail('evaluation protocol JSON is invalid');
+  };
+
+  skipWhitespace();
+  parseValue();
+  skipWhitespace();
+  if (index !== text.length) fail('evaluation protocol JSON is invalid');
+}
+
 function loadExternalProtocolContext(protocolFile, scenariosFile) {
   const protocolBytes = fs.readFileSync(protocolFile);
-  const protocol = JSON.parse(protocolBytes.toString('utf8'));
+  const protocolText = protocolBytes.toString('utf8');
+  rejectDuplicateJsonProperties(protocolText);
+  const protocol = JSON.parse(protocolText);
   if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol)) {
     fail('evaluation protocol root is invalid');
   }

@@ -561,6 +561,65 @@ internal static class AlgorithmLinearRankerBehavior
             new ExactSeasonExtension("known-build", "known-season", "known-pool"),
             "evaluation factory calibration mismatch", model => EvaluationContext(model,
                 calibrationModelId: "other-model"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved context build", model => EvaluationContext(model,
+                contextGameBuild: "unknown"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved context season", model => EvaluationContext(model,
+                contextSeasonId: "synthetic-season"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved context card pool", model => EvaluationContext(model,
+                contextCardPoolIdentity: " \t"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved context training set", model => EvaluationContext(model,
+                contextTrainingSetIdentity: "unknown"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved context season range", model => EvaluationContext(model,
+                contextSeasonRange: "synthetic-range"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved calibration identity", model => EvaluationContext(model,
+                calibrationIdentity: "unknown", approvalCalibrationIdentity: "unknown"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory unresolved calibration holdout", model => EvaluationContext(model,
+                calibrationHoldoutIdentity: "synthetic-holdout",
+                approvalHoldoutIdentity: "synthetic-holdout"));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory non-finite margin scale", model => EvaluationContext(model,
+                marginScale: double.NaN));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory non-positive margin scale", model => EvaluationContext(model,
+                marginScale: 0d));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory invalid semantic coverage floor", model => EvaluationContext(model,
+                semanticCoverageFloor: double.PositiveInfinity));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory invalid confidence threshold", model => EvaluationContext(model,
+                confidenceThreshold: -0.01d));
+        AssertEvaluationFactoryRejects(CreateEvaluationArtifact(),
+            new ExactSeasonExtension("known-build", "known-season", "known-pool"),
+            "evaluation factory invalid planning threshold", model => EvaluationContext(model,
+                planningThreshold: 1.01d));
+
+        RankingModelPayload nullablePlanningModel;
+        var nullablePlanningArtifact = CreateEvaluationArtifact();
+        using (var nullablePlanningStream = new MemoryStream(nullablePlanningArtifact))
+            nullablePlanningModel = RankingModelLoader.Load(nullablePlanningStream);
+        using (var nullablePlanningStream = new MemoryStream(nullablePlanningArtifact))
+            DecisionPolicyFactory.CreateForEffectEvaluation(new DecisionEngine(),
+                nullablePlanningStream, new ExactSeasonExtension("known-build", "known-season",
+                    "known-pool"), EvaluationContext(nullablePlanningModel,
+                    planningThreshold: null));
     }
 
     private static void AssertEvaluationFactoryRejects(byte[] artifact,
@@ -604,23 +663,37 @@ internal static class AlgorithmLinearRankerBehavior
         string benchmarkId = "season-2026-next-v1",
         string candidateModelId = null, string candidateModelPayloadSha256 = null,
         string calibrationModelId = null, DateTime? approvedAtUtc = null,
-        DateTime? frozenAtUtc = null)
+        DateTime? frozenAtUtc = null, string contextGameBuild = null,
+        string contextSeasonId = null, string contextCardPoolIdentity = null,
+        string contextTrainingSetIdentity = null, string contextSeasonRange = null,
+        string calibrationHoldoutIdentity = "known-holdout",
+        string calibrationIdentity = "known-calibration",
+        string approvalHoldoutIdentity = "known-holdout",
+        string approvalCalibrationIdentity = "known-calibration",
+        double marginScale = 1d, double semanticCoverageFloor = 0.5d,
+        double confidenceThreshold = 0.5d, double? planningThreshold = 0.1d)
     {
         var modelId = candidateModelId ?? model.ModelId;
         var calibrationId = calibrationModelId ?? model.ModelId;
-        var calibration = new ConfidenceCalibration("accepted", model.GameBuild, model.SeasonId,
-            model.CardPoolIdentity, model.TrainingSetIdentity, "known-holdout",
-            "known-calibration", calibrationId, 1d, 0.5d, 0.5d, 0.1d);
-        var approval = new ConfidenceCalibrationApprovalContext("known-holdout",
-            "known-calibration", model.ModelId);
+        var gameBuild = contextGameBuild ?? model.GameBuild;
+        var seasonId = contextSeasonId ?? model.SeasonId;
+        var cardPoolIdentity = contextCardPoolIdentity ?? model.CardPoolIdentity;
+        var trainingSetIdentity = contextTrainingSetIdentity ?? model.TrainingSetIdentity;
+        var seasonRange = contextSeasonRange ?? model.SeasonRange;
+        var calibration = new ConfidenceCalibration("accepted", gameBuild, seasonId,
+            cardPoolIdentity, trainingSetIdentity, calibrationHoldoutIdentity,
+            calibrationIdentity, calibrationId, marginScale, semanticCoverageFloor,
+            confidenceThreshold, planningThreshold);
+        var approval = new ConfidenceCalibrationApprovalContext(approvalHoldoutIdentity,
+            approvalCalibrationIdentity, model.ModelId);
         return new EffectEvaluationContext(protocolId, protocolVersion, "owner-approved", "owner",
             approvedAtUtc ?? new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Utc),
             frozenAtUtc ?? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), new string('c', 64),
             benchmarkId, "legacy-v1.1.0", "unified-linear-v1", modelId,
             candidateModelPayloadSha256 ?? model.PayloadSha256, "known-holdout",
-            new string('d', 64), new string('d', 64), model.GameBuild, model.SeasonId,
-            model.CardPoolIdentity, model.TrainingSetIdentity, model.SeasonRange,
+            new string('d', 64), new string('d', 64), gameBuild, seasonId,
+            cardPoolIdentity, trainingSetIdentity, seasonRange,
             calibration, approval);
     }
 

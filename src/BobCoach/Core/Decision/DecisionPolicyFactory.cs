@@ -159,6 +159,16 @@ namespace BobCoach.Engine.Decision
         private static void ValidateEffectEvaluationContext(RankingModelPayload model,
             ISeasonFeatureExtension seasonExtension, EffectEvaluationContext context)
         {
+            RequireResolved(model.ModelId, "model identity");
+            RequireResolved(model.GameBuild, "model build identity");
+            RequireResolved(model.SeasonId, "model season identity");
+            RequireResolved(model.CardPoolIdentity, "model card-pool identity");
+            RequireResolved(model.TrainingSetIdentity, "model training-set identity");
+            RequireResolved(model.SeasonRange, "model season range");
+            RequireResolved(seasonExtension.GameBuild, "season extension build identity");
+            RequireResolved(seasonExtension.SeasonId, "season extension season identity");
+            RequireResolved(seasonExtension.CardPoolIdentity,
+                "season extension card-pool identity");
             RequireResolved(context.ProtocolId, "protocol identity");
             RequireResolved(context.ProtocolVersion, "protocol version");
             if (!IsProtocolVersion(context.ProtocolVersion))
@@ -166,6 +176,12 @@ namespace BobCoach.Engine.Decision
             RequireResolved(context.ApprovedBy, "protocol approver");
             RequireResolved(context.BenchmarkId, "benchmark identity");
             RequireResolved(context.HoldoutIdentity, "holdout identity");
+            RequireResolved(context.CandidateModelId, "candidate model identity");
+            RequireResolved(context.GameBuild, "evaluation build identity");
+            RequireResolved(context.SeasonId, "evaluation season identity");
+            RequireResolved(context.CardPoolIdentity, "evaluation card-pool identity");
+            RequireResolved(context.TrainingSetIdentity, "evaluation training-set identity");
+            RequireResolved(context.SeasonRange, "evaluation season range");
             if (!string.Equals(context.BenchmarkId, "season-2026-next-v1",
                     StringComparison.Ordinal))
                 throw InvalidEvaluation("benchmark identity");
@@ -210,8 +226,21 @@ namespace BobCoach.Engine.Decision
 
             var calibration = context.Calibration;
             var approval = context.CalibrationApproval;
-            if (calibration == null || approval == null
-                || !string.Equals(calibration.Status, "accepted", StringComparison.Ordinal)
+            if (calibration == null || approval == null)
+                throw InvalidEvaluation("calibration binding");
+            RequireResolved(calibration.GameBuild, "calibration build identity");
+            RequireResolved(calibration.SeasonId, "calibration season identity");
+            RequireResolved(calibration.CardPoolIdentity, "calibration card-pool identity");
+            RequireResolved(calibration.TrainingSetIdentity,
+                "calibration training-set identity");
+            RequireResolved(calibration.HoldoutIdentity, "calibration holdout identity");
+            RequireResolved(calibration.CalibrationIdentity, "calibration identity");
+            RequireResolved(calibration.ModelId, "calibration model identity");
+            RequireResolved(approval.HoldoutIdentity, "calibration approval holdout identity");
+            RequireResolved(approval.CalibrationIdentity,
+                "calibration approval identity");
+            RequireResolved(approval.ModelId, "calibration approval model identity");
+            if (!string.Equals(calibration.Status, "accepted", StringComparison.Ordinal)
                 || !string.Equals(calibration.GameBuild, model.GameBuild, StringComparison.Ordinal)
                 || !string.Equals(calibration.SeasonId, model.SeasonId, StringComparison.Ordinal)
                 || !string.Equals(calibration.CardPoolIdentity, model.CardPoolIdentity,
@@ -227,6 +256,12 @@ namespace BobCoach.Engine.Decision
                     calibration.CalibrationIdentity, StringComparison.Ordinal)
                 || !string.Equals(approval.ModelId, model.ModelId, StringComparison.Ordinal))
                 throw InvalidEvaluation("calibration binding");
+            if (!IsFinite(calibration.MarginScale) || calibration.MarginScale <= 0d
+                || !IsFiniteInRange(calibration.SemanticCoverageFloor, 0d, 1d)
+                || !IsFiniteInRange(calibration.ConfidenceThreshold, 0d, 1d)
+                || (calibration.PlanningThreshold.HasValue
+                    && !IsFiniteInRange(calibration.PlanningThreshold.Value, 0d, 1d)))
+                throw InvalidEvaluation("calibration thresholds");
         }
 
         private static void RequireResolved(string value, string name)
@@ -247,6 +282,16 @@ namespace BobCoach.Engine.Decision
                     || (character >= 'a' && character <= 'f'))) return false;
             }
             return true;
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
+        }
+
+        private static bool IsFiniteInRange(double value, double minimum, double maximum)
+        {
+            return IsFinite(value) && value >= minimum && value <= maximum;
         }
 
         private static bool IsProtocolVersion(string value)

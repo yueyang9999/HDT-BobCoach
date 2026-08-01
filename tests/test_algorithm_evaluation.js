@@ -14,6 +14,7 @@ const categories = ['level', 'refresh', 'buy', 'sell', 'freeze', 'play', 'transi
 const preferred = 'Upgrade|-1||';
 const weak = 'Buy|0|CARD_001|shop';
 const severe = 'Sell|0|CARD_002|board';
+const missingProvenanceTrustRoot = 'owner-approved-independent-provenance-trust-root';
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -24,7 +25,7 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-function protocolContextFor(input, mutate = () => {}) {
+function protocolContextFor(input, mutate = () => {}, transformRaw = value => value) {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_protocol_contract_'));
   const scenariosFile = path.join(temporaryRoot, 'holdout.jsonl');
   const protocolFile = path.join(temporaryRoot, 'protocol.json');
@@ -84,10 +85,12 @@ function protocolContextFor(input, mutate = () => {}) {
   mutate(protocol);
   protocol.protocolSha256 = crypto.createHash('sha256')
     .update(canonicalJson(protocol), 'utf8').digest('hex');
-  fs.writeFileSync(protocolFile, JSON.stringify(protocol), 'utf8');
-  const context = loadExternalProtocolContext(protocolFile, scenariosFile);
-  fs.rmSync(temporaryRoot, { recursive: true, force: true });
-  return context;
+  fs.writeFileSync(protocolFile, transformRaw(JSON.stringify(protocol)), 'utf8');
+  try {
+    return loadExternalProtocolContext(protocolFile, scenariosFile);
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
 }
 
 const report = evaluate(clone(fixture));
@@ -192,16 +195,72 @@ assert(forgedReport.missingPrerequisites.includes('owner-approved-versioned-froz
 assert(!JSON.stringify(forgedReport).includes('improvementPercent'));
 
 const protocolInput = forgedSyntheticEvidence();
+protocolInput.evidenceKind = 'engineering-self-test';
+for (const prediction of protocolInput.candidatePredictions) {
+  prediction.modelId = 'season-2026-next-linear-v1';
+}
+protocolInput.latencyEvidence.candidateModelId = 'season-2026-next-linear-v1';
 const validProtocolReport = evaluate(protocolInput, protocolContextFor(protocolInput));
 assert(validProtocolReport.evaluationProtocol,
   'checksum-bound external protocol should be recognized even while synthetic evidence stays blocked');
 assert.strictEqual(validProtocolReport.effectAcceptanceStatus, 'blocked-by-season-data');
 assert.strictEqual(validProtocolReport.metrics, null);
+assert(validProtocolReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+
+const renamedSyntheticInput = JSON.parse(JSON.stringify(protocolInput), (_, value) =>
+  typeof value === 'string'
+    ? value.replace(/synthetic/gi, 'current-season').replace(/forged/gi, 'declared')
+    : value);
+const renamedSyntheticReport = evaluate(renamedSyntheticInput,
+  protocolContextFor(renamedSyntheticInput));
+assert.strictEqual(renamedSyntheticReport.effectAcceptanceStatus, 'blocked-by-season-data');
+assert.strictEqual(renamedSyntheticReport.metrics, null);
+assert(renamedSyntheticReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+
+for (const transformRaw of [
+  raw => raw.replace('{"protocolSchemaVersion":1',
+    '{"_postChecksumTopLevel":"tampered","protocolSchemaVersion":1'),
+  raw => raw.replace('"status":"accepted"',
+    '"status":"accepted","_postChecksumNested":"tampered"')
+]) {
+  const tamperedProtocolReport = evaluate(protocolInput,
+    protocolContextFor(protocolInput, () => {}, transformRaw));
+  assert.strictEqual(tamperedProtocolReport.evaluationProtocol, null,
+    'underscore-prefixed protocol fields must remain checksum-bound');
+  assert.strictEqual(tamperedProtocolReport.effectAcceptanceStatus, 'blocked-by-season-data');
+  assert.strictEqual(tamperedProtocolReport.metrics, null);
+}
+const nullablePlanningProtocolReport = evaluate(protocolInput,
+  protocolContextFor(protocolInput,
+    protocol => { protocol.confidenceCalibration.planningThreshold = null; }));
+assert(nullablePlanningProtocolReport.evaluationProtocol,
+  'null planning threshold should keep planning disabled without invalidating calibration');
+assert.throws(() => protocolContextFor(protocolInput, () => {}, raw => raw.replace(
+  '"protocolVersion":"1.0.0"',
+  '"protocolVersion":"1.0.0","protocolVersion":"1.0.1"')),
+/duplicate.*property/i);
+assert.throws(() => protocolContextFor(protocolInput, () => {}, raw => raw.replace(
+  '"planningThreshold":0.5',
+  '"planningThreshold":0.5,"planningThreshold":0.6')),
+/duplicate.*property/i);
+assert.doesNotThrow(() => protocolContextFor(protocolInput, () => {}, raw => raw.replace(
+  '{"protocolSchemaVersion":1',
+  '{"_arrayProbe":[{"escaped\\u004bey":1}],"protocolSchemaVersion":1')));
+assert.throws(() => protocolContextFor(protocolInput, () => {}, raw => raw.replace(
+  '{"protocolSchemaVersion":1',
+  '{"_arrayProbe":[{"probe":1,"pr\\u006fbe":2}],"protocolSchemaVersion":1')),
+/duplicate.*property/i);
 const invalidProtocolMutations = [
+  protocol => { protocol.protocolId = 'unknown'; },
+  protocol => { protocol.approvedBy = 'synthetic-owner'; },
   protocol => { protocol.protocolVersion = '01.0.0'; },
   protocol => { protocol.approvedAtUtc = '2026-07-30T00:00:00+00:00'; },
   protocol => { protocol.holdoutOpenedAtUtc = '2026-07-31T00:00:00'; },
   protocol => { protocol.benchmarkId = 'other-benchmark'; },
+  protocol => { protocol.buildIdentity = 'unknown'; },
+  protocol => { protocol.seasonIdentity = 'synthetic-season'; },
+  protocol => { protocol.cardPoolIdentity = 'unknown'; },
+  protocol => { protocol.candidateModelId = 'unknown'; },
   protocol => { protocol.holdoutIdentity = 'other-holdout'; },
   protocol => { protocol.trainingSetIdentity = 'other-training'; },
   protocol => { protocol.seasonRange = 'unknown'; },
@@ -275,6 +334,13 @@ for (const mutate of mutations) {
 }
 
 const source = fs.readFileSync(path.join(root, 'tools', 'model', 'evaluate_policy.js'), 'utf8');
+const approvalRegistry = JSON.parse(fs.readFileSync(
+  path.join(root, 'tools', 'model', 'evaluation_protocol_approvals.json'), 'utf8'));
+assert.strictEqual(approvalRegistry.registrySchemaVersion, 1);
+assert.deepStrictEqual(approvalRegistry.approvals, [],
+  'Task 12 must not ship an approval for synthetic or unavailable season evidence');
+assert(source.includes('evaluation_protocol_approvals.json'),
+  'evaluator does not use the repository-owned provenance trust root');
 assert(source.includes('protocolSha256: protocol.protocol.protocolSha256'),
   'acceptance report does not record the validated protocol checksum');
 for (const forbidden of ['train(', 'activationDecision', 'Resources/DecisionModels']) {
