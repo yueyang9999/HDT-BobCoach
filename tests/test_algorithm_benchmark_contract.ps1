@@ -344,11 +344,18 @@ try {
     }
 
     $safety = Get-Content -Raw (Join-Path $first "safety-probes.json") | ConvertFrom-Json
-    if ($safety.safetyEvidenceSchemaVersion -ne 1 -or @($safety.probes).Count -ne 7) { throw "safety evidence is incomplete" }
+    if ($safety.safetyEvidenceSchemaVersion -ne 2 -or @($safety.probes).Count -ne 7) { throw "safety evidence is incomplete" }
     $expectedProbeIds = @("critical-state-missing", "low-confidence", "model-unavailable", "no-safe-action", "out-of-distribution", "planner-timeout", "unsupported-mechanic")
     $actualProbeIds = @($safety.probes | ForEach-Object { $_.probeId } | Sort-Object)
     if (($actualProbeIds -join "|") -ne ($expectedProbeIds -join "|")) { throw "safety probe ID set mismatch" }
     if (@($safety.probes | Where-Object { !$_.passed }).Count -ne 0) { throw "self-test safety probe failed" }
+    foreach ($probe in @($safety.probes | Where-Object { $_.actualFallbackReason -ne "None" })) {
+        if ([string]::IsNullOrWhiteSpace($probe.legacySelectedActionKey) -or
+            $probe.actualSelectedActionKey -ne $probe.legacySelectedActionKey -or
+            (@($probe.actualTopActionKeys) -join "|") -ne (@($probe.legacyTopActionKeys) -join "|")) {
+            throw "fallback safety probe did not use the legacy action surface: $($probe.probeId)"
+        }
+    }
     $timeout = @($safety.probes | Where-Object { $_.probeId -eq "planner-timeout" })[0]
     if ($timeout.actualFallbackReason -ne "None" -or $timeout.actualPlannerStatus -ne "TimedOut" -or
         [string]::IsNullOrWhiteSpace($timeout.actualSelectedActionKey) -or
@@ -369,7 +376,7 @@ try {
         "protocolUnsafeIntegerRejected",
         "productionSelectedActionDistinctFromPlannerDiagnostic",
         "modelUnavailableCandidateSourceRejected", "candidateProbeNoneSourceRejected",
-        "orchestratedSafetyOutcomesObserved")) {
+        "orchestratedSafetyOutcomesObserved", "safetyProbeFallbackUsesLegacySurface")) {
         if ($contracts.$name -ne $true) { throw "self-test did not dynamically prove $name" }
     }
 

@@ -159,7 +159,7 @@ function validateLatency(evidence, benchmarkId, scenarioIds, candidateIdentity) 
 }
 
 function validateSafety(evidence, benchmarkId) {
-  if (!evidence || evidence.safetyEvidenceSchemaVersion !== 1) fail('safety schema mismatch');
+  if (!evidence || evidence.safetyEvidenceSchemaVersion !== 2) fail('safety schema mismatch');
   if (evidence.benchmarkId !== benchmarkId) fail('safety benchmark identity mismatch');
   const probes = uniqueBy(evidence.probes, 'probeId', 'safety probe');
   if (probes.size !== REQUIRED_PROBES.length) fail('safety probe set mismatch');
@@ -170,6 +170,14 @@ function validateSafety(evidence, benchmarkId) {
     requireFingerprint(probe.candidateFingerprint, `safety.${id}.candidateFingerprint`);
     const [fallback, planner] = REQUIRED_PROBE_OUTCOMES.get(id);
     const expectedModelSource = id === 'model-unavailable' ? 'none' : 'candidate';
+    const validActionSurface = (selected, top) => typeof selected === 'string'
+      && selected.trim() !== ''
+      && Array.isArray(top)
+      && top.length > 0
+      && top.length <= 3
+      && top[0] === selected
+      && top.every(value => typeof value === 'string' && value.trim() !== '')
+      && new Set(top).size === top.length;
     let semanticsPass = probe.expectedFallbackReason === fallback
       && probe.actualFallbackReason === fallback
       && probe.expectedPlannerStatus === planner
@@ -177,14 +185,18 @@ function validateSafety(evidence, benchmarkId) {
       && probe.modelSource === expectedModelSource
       && FALLBACK_REASONS.has(probe.actualFallbackReason)
       && PLANNER_STATUSES.has(probe.actualPlannerStatus)
+      && validActionSurface(probe.legacySelectedActionKey, probe.legacyTopActionKeys)
+      && validActionSurface(probe.actualSelectedActionKey, probe.actualTopActionKeys)
       && Array.isArray(probe.actualBestCompletePath);
+    if (fallback !== 'None') {
+      semanticsPass = semanticsPass
+        && probe.actualSelectedActionKey === probe.legacySelectedActionKey
+        && probe.actualTopActionKeys.length === probe.legacyTopActionKeys.length
+        && probe.actualTopActionKeys.every(
+          (value, index) => value === probe.legacyTopActionKeys[index]);
+    }
     if (id === 'planner-timeout') {
       semanticsPass = semanticsPass
-        && typeof probe.actualSelectedActionKey === 'string'
-        && probe.actualSelectedActionKey.trim() !== ''
-        && Array.isArray(probe.actualTopActionKeys)
-        && probe.actualTopActionKeys.length > 0
-        && probe.actualTopActionKeys[0] === probe.actualSelectedActionKey
         && probe.actualBestCompletePath.length > 0;
     } else {
       semanticsPass = semanticsPass && probe.actualBestCompletePath.length === 0;
@@ -241,7 +253,8 @@ function percentile(values, fraction) {
   return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)];
 }
 
-function calculateMetrics(scenarios, baseline, candidate, safetyEvidence, latencyEvidence) {
+function calculateMetrics(scenarios, baseline, candidate, validatedLabels,
+  safetyEvidence, latencyEvidence) {
   let baselineSevere = 0;
   let candidateSevere = 0;
   let baselineTop1 = 0;
@@ -259,7 +272,7 @@ function calculateMetrics(scenarios, baseline, candidate, safetyEvidence, latenc
   const categoryCounts = new Map(CATEGORIES.map(name => [name, { total: 0, baseline: 0, candidate: 0 }]));
 
   for (const [id, scenario] of scenarios) {
-    const labels = scenario._validatedLabels;
+    const labels = validatedLabels.get(id);
     const left = baseline.get(id);
     const right = candidate.get(id);
     const leftGrade = selectedGrade(left, labels, 'baseline');
@@ -531,7 +544,10 @@ function verifyDetachedOwnerApproval(artifact, trustedKeys) {
 }
 
 function loadTrustedOwnerKeys() {
-  const keySet = readBoundJson(TRUSTED_OWNER_KEYS_FILE, 'trusted owner key set').value;
+  const captured = captureExternalInputs(path.dirname(TRUSTED_OWNER_KEYS_FILE), {
+    trustedOwnerKeys: TRUSTED_OWNER_KEYS_FILE
+  });
+  const keySet = readBoundJson(captured.trustedOwnerKeys, 'trusted owner key set').value;
   if (!keySet || keySet.trustedKeySetSchemaVersion !== 1 || !Array.isArray(keySet.keys)) {
     fail('trusted owner key set is invalid');
   }
@@ -713,7 +729,8 @@ function evaluate(input, protocolContext = null, evidenceContext = null) {
   const protocol = validateEvaluationProtocol(
     protocolContext, input, candidateIdentity, holdoutCanonicalSha256);
   const preliminaryMetrics = !engineeringOnly && scenarios.size >= 300 && protocol
-    ? calculateMetrics(scenarios, baseline, candidate, input.safetyEvidence, input.latencyEvidence)
+    ? calculateMetrics(scenarios, baseline, candidate, validatedLabels,
+      input.safetyEvidence, input.latencyEvidence)
     : null;
   const approvedEvidence = validateEvidenceManifests(evidenceContext, input, scenarios,
     baseline, candidate, candidateIdentity, protocol, preliminaryMetrics);

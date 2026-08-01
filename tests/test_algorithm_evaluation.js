@@ -148,6 +148,113 @@ function evidenceContextFor(input) {
   }
 }
 
+function approvedEvidenceContextFor(input, protocolContext, privateKey) {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_approval_contract_'));
+  const files = {
+    ownerApproval: path.join(temporaryRoot, 'owner-approval.json'),
+    labelProvenance: path.join(temporaryRoot, 'label-provenance.json'),
+    shadowComparisons: path.join(temporaryRoot, 'shadow-comparisons.json'),
+    severeErrorReviews: path.join(temporaryRoot, 'severe-error-reviews.json'),
+    scenarios: path.join(temporaryRoot, 'holdout.jsonl'),
+    baselineEvidence: path.join(temporaryRoot, 'baseline.jsonl'),
+    candidateEvidence: path.join(temporaryRoot, 'candidate.jsonl'),
+    latencyEvidence: path.join(temporaryRoot, 'latency.json'),
+    safetyEvidence: path.join(temporaryRoot, 'safety.json')
+  };
+  const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value)}\n`, 'utf8');
+  const fileSha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  for (const [name, rows] of [
+    ['scenarios', input.scenarios],
+    ['baselineEvidence', input.baselinePredictions],
+    ['candidateEvidence', input.candidatePredictions]
+  ]) {
+    fs.writeFileSync(files[name], `${rows.map(row => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+  }
+  writeJson(files.latencyEvidence, input.latencyEvidence);
+  writeJson(files.safetyEvidence, input.safetyEvidence);
+  const common = {
+    buildIdentity: input.buildIdentity,
+    seasonIdentity: input.seasonIdentity,
+    cardPoolIdentity: input.cardPoolIdentity
+  };
+  const scenarioIds = input.scenarios.map(value => value.scenarioId);
+  const labelProvenance = {
+    labelProvenanceSchemaVersion: 1,
+    evidenceKind: 'real-season-evaluation',
+    ...common,
+    holdoutFileSha256: protocolContext.holdoutFileSha256,
+    holdoutCanonicalSha256: crypto.createHash('sha256')
+      .update(canonicalJson(input.scenarios), 'utf8').digest('hex'),
+    scenarioIds,
+    labelRecords: scenarioIds.map(scenarioId => ({
+      scenarioId,
+      labelerId: 'independent-reviewer-1',
+      sourceEvidenceId: `source-${scenarioId}`,
+      versionVerificationRecordId: `version-${scenarioId}`,
+      labeledAtUtc: '2026-08-01T01:00:00Z'
+    }))
+  };
+  const baselineById = new Map(input.baselinePredictions.map(value => [value.scenarioId, value]));
+  const candidateById = new Map(input.candidatePredictions.map(value => [value.scenarioId, value]));
+  const shadowComparisons = {
+    shadowComparisonSchemaVersion: 1,
+    ...common,
+    baselineEvidenceFileSha256: fileSha256(files.baselineEvidence),
+    candidateEvidenceFileSha256: fileSha256(files.candidateEvidence),
+    representativeRationale: 'frozen-representative-sample-v1',
+    scenarioIds,
+    comparisons: scenarioIds.map(scenarioId => ({
+      scenarioId,
+      baselineActionKey: baselineById.get(scenarioId).selectedActionKey,
+      candidateActionKey: candidateById.get(scenarioId).selectedActionKey,
+      reviewedBy: 'independent-reviewer-1',
+      reviewedAtUtc: '2026-08-01T02:00:00Z'
+    }))
+  };
+  const severeErrorReviews = {
+    severeErrorReviewSchemaVersion: 1,
+    ...common,
+    scenarioIds,
+    reviews: []
+  };
+  writeJson(files.labelProvenance, labelProvenance);
+  writeJson(files.shadowComparisons, shadowComparisons);
+  writeJson(files.severeErrorReviews, severeErrorReviews);
+  const candidate = input.candidatePredictions[0];
+  const payload = {
+    approvalId: 'owner-approval-contract-v1',
+    approvalVersion: '1.0.0',
+    approvedBy: 'owner-contract-signer',
+    approvedAtUtc: '2026-08-01T03:00:00Z',
+    protocolId: protocolContext.protocol.protocolId,
+    protocolVersion: protocolContext.protocol.protocolVersion,
+    protocolFileSha256: protocolContext.protocolFileSha256,
+    protocolCanonicalSha256: protocolContext.protocolCanonicalSha256,
+    holdoutFileSha256: protocolContext.holdoutFileSha256,
+    holdoutCanonicalSha256: labelProvenance.holdoutCanonicalSha256,
+    candidateModelId: candidate.modelId,
+    candidateModelPayloadSha256: candidate.modelPayloadSha256,
+    labelProvenanceFileSha256: fileSha256(files.labelProvenance),
+    shadowComparisonsFileSha256: fileSha256(files.shadowComparisons),
+    severeErrorReviewsFileSha256: fileSha256(files.severeErrorReviews),
+    latencyEvidenceFileSha256: fileSha256(files.latencyEvidence),
+    safetyEvidenceFileSha256: fileSha256(files.safetyEvidence)
+  };
+  writeJson(files.ownerApproval, {
+    ownerApprovalSchemaVersion: 1,
+    keyId: 'owner-contract-key',
+    signatureAlgorithm: 'ed25519',
+    payload,
+    signatureBase64: crypto.sign(null, Buffer.from(canonicalJson(payload), 'utf8'), privateKey)
+      .toString('base64')
+  });
+  try {
+    return loadExternalEvidenceContext(temporaryRoot, files);
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
 const report = evaluate(clone(fixture));
 assert.strictEqual(report.evidenceSchemaVersion, 1);
 assert.strictEqual(report.effectAcceptanceStatus, 'blocked-by-season-data');
@@ -441,6 +548,8 @@ const mutations = [
   value => { value.safetyEvidence.probes[1].modelSource = 'none'; },
   value => { value.safetyEvidence.probes[0].actualFallbackReason = 'None'; },
   value => { value.safetyEvidence.probes[0].passed = false; },
+  value => { value.safetyEvidence.probes[0].actualSelectedActionKey = 'Refresh|-1||'; },
+  value => { value.safetyEvidence.probes[0].actualTopActionKeys = ['Refresh|-1||']; },
   value => {
     const timeout = value.safetyEvidence.probes.find(probe => probe.probeId === 'planner-timeout');
     timeout.actualBestCompletePath = [];
@@ -531,6 +640,52 @@ assert.strictEqual(verifyDetachedOwnerApproval(signedApproval, testKeys), true,
 signedApproval.payload.protocolCanonicalSha256 = 'e'.repeat(64);
 assert.strictEqual(verifyDetachedOwnerApproval(signedApproval, testKeys), false,
   'owner signature must bind the complete canonical approval payload');
+
+const contractInput = forgedSyntheticEvidence();
+for (const prediction of contractInput.candidatePredictions) {
+  prediction.modelId = 'season-2026-next-linear-v1';
+}
+contractInput.latencyEvidence.candidateModelId = 'season-2026-next-linear-v1';
+const contractProtocolContext = protocolContextFor(contractInput);
+const contractKeys = crypto.generateKeyPairSync('ed25519');
+const contractEvidenceContext = approvedEvidenceContextFor(
+  contractInput, contractProtocolContext, contractKeys.privateKey);
+const contractTrustRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bobcoach_owner_trust_contract_'));
+const contractTrustFile = path.join(contractTrustRoot, 'owner-keys.json');
+fs.writeFileSync(contractTrustFile, `${JSON.stringify({
+  trustedKeySetSchemaVersion: 1,
+  keys: [{
+    keyId: 'owner-contract-key',
+    algorithm: 'ed25519',
+    publicKeySpkiPem: contractKeys.publicKey.export({ type: 'spki', format: 'pem' })
+  }]
+})}\n`, 'utf8');
+const originalSpawnSync = childProcess.spawnSync;
+childProcess.spawnSync = (command, args, options) => {
+  const manifest = options && typeof options.input === 'string'
+    ? JSON.parse(options.input) : null;
+  if (manifest && manifest.files && manifest.files.trustedOwnerKeys) {
+    return originalSpawnSync(command, args, {
+      ...options,
+      input: JSON.stringify({
+        dataRoot: contractTrustRoot,
+        files: { trustedOwnerKeys: contractTrustFile }
+      })
+    });
+  }
+  return originalSpawnSync(command, args, options);
+};
+try {
+  const contractReport = evaluate(
+    contractInput, contractProtocolContext, contractEvidenceContext);
+  assert.notStrictEqual(contractReport.effectAcceptanceStatus, 'blocked-by-season-data',
+    'a complete signed evidence chain must reach the evaluator decision path');
+  assert.strictEqual(contractReport.evaluationProtocol.ownerApprovalKeyId, 'owner-contract-key');
+  assert(!contractReport.missingPrerequisites.includes(missingProvenanceTrustRoot));
+} finally {
+  childProcess.spawnSync = originalSpawnSync;
+  fs.rmSync(contractTrustRoot, { recursive: true, force: true });
+}
 for (const checksumName of ['latencyEvidenceFileSha256', 'safetyEvidenceFileSha256']) {
   assert(source.includes(`${checksumName}: trusted.${checksumName}`),
     `owner approval must bind ${checksumName}`);

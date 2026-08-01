@@ -244,6 +244,12 @@ internal static class PolicyBenchmarkRunner
             legacy, candidateAdapter, "synthetic-model", new string('b', 64)));
         var safety = SyntheticSafety(record, state, legacy);
         WriteJson(output, "safety-probes.json", safety);
+        var safetyProbeFallbackUsesLegacySurface = safety["probes"]
+            .Where(value => (string)value["actualFallbackReason"] != FallbackReason.None.ToString())
+            .All(value => (string)value["actualSelectedActionKey"]
+                    == (string)value["legacySelectedActionKey"]
+                && ((JArray)value["actualTopActionKeys"]).Values<string>().SequenceEqual(
+                    ((JArray)value["legacyTopActionKeys"]).Values<string>(), StringComparer.Ordinal));
 
         var identityMismatchRejected = RejectsInvalidData(delegate {
             ValidateStateIdentity(state, "different-build", state.SeasonId, state.CardPoolIdentity);
@@ -319,6 +325,7 @@ internal static class PolicyBenchmarkRunner
             { "protocolNumericCanonicalizationCrossLanguage",
                 protocolNumericCanonicalizationCrossLanguage },
             { "protocolUnsafeIntegerRejected", protocolUnsafeIntegerRejected },
+            { "safetyProbeFallbackUsesLegacySurface", safetyProbeFallbackUsesLegacySurface },
             { "orchestratedSafetyOutcomesObserved",
                 safety["probes"].All(value => (bool)value["passed"]) }
         });
@@ -692,8 +699,6 @@ internal static class PolicyBenchmarkRunner
             var expectedPlanner = id == "planner-timeout" ? PlannerStatus.TimedOut : PlannerStatus.NotRequested;
             var unified = new FakePolicy("unified-linear-v1", expectedFallback,
                 expectedPlanner, ActionType.Refresh);
-            var decision = unified.Decide(Clone(state));
-            var selected = ActionDescriptor.CreateKey(decision.SelectedAction);
             var diagnosticPathAction = ActionDescriptor.CreateKey(new GameAction {
                 Type = ActionType.Upgrade, TargetIndex = -1
             });
@@ -701,8 +706,13 @@ internal static class PolicyBenchmarkRunner
                 ? PlanningResult.TimedOut(diagnosticPathAction,
                     new List<string> { diagnosticPathAction }, 1, 1, 1)
                 : PlanningResult.NotRequested();
+            var adapter = new CandidateBenchmarkAdapter(candidateState =>
+                new UnifiedDecisionDiagnostics(unified.Decide(candidateState), planning), legacy);
+            var diagnostics = adapter.DecideWithDiagnostics(Clone(state));
+            var legacyDecision = legacy.Decide(Clone(state));
             AddProbe(rows, id, record, id == "model-unavailable" ? "none" : "candidate",
-                expectedFallback, expectedPlanner, decision, planning);
+                expectedFallback, expectedPlanner, diagnostics.Decision,
+                diagnostics.PlanningResult, legacyDecision);
         }
         ValidateExactProbeSet(new HashSet<string>(rows.Select(value => (string)value["probeId"]),
             StringComparer.Ordinal));
@@ -748,22 +758,17 @@ internal static class PolicyBenchmarkRunner
             var requiredPlanner = id == "planner-timeout" ? PlannerStatus.TimedOut : PlannerStatus.NotRequested;
             if (parsedFallback != RequiredProbeFallbacks[id] || parsedPlanner != requiredPlanner)
                 throw new InvalidDataException("probe expectation does not match required probe ID: " + id);
-            DecisionResult decision;
-            PlanningResult planning;
-            if (modelSource == "none")
-            {
-                decision = bundle.Unified.Decide(Clone(state));
-                planning = PlanningResult.NotRequested();
-            }
-            else
-            {
-                var diagnostics = ((UnifiedRankingPolicy)bundle.Unified)
-                    .DecideWithDiagnostics(Clone(state));
-                decision = diagnostics.Decision;
-                planning = diagnostics.PlanningResult;
-            }
+            Func<GameState, UnifiedDecisionDiagnostics> decideWithDiagnostics = modelSource == "none"
+                ? (Func<GameState, UnifiedDecisionDiagnostics>)(candidateState =>
+                    new UnifiedDecisionDiagnostics(bundle.Unified.Decide(candidateState),
+                        PlanningResult.NotRequested()))
+                : candidateState => ((UnifiedRankingPolicy)bundle.Unified)
+                    .DecideWithDiagnostics(candidateState);
+            var adapter = new CandidateBenchmarkAdapter(decideWithDiagnostics, bundle.Legacy);
+            var diagnostics = adapter.DecideWithDiagnostics(Clone(state));
+            var legacyDecision = bundle.Legacy.Decide(Clone(state));
             AddProbe(rows, id, record, modelSource, parsedFallback, parsedPlanner,
-                decision, planning);
+                diagnostics.Decision, diagnostics.PlanningResult, legacyDecision);
         }
         ValidateExactProbeSet(ids);
         var sortedRows = new JArray();
@@ -827,14 +832,21 @@ internal static class PolicyBenchmarkRunner
 
     private static void AddProbe(JArray rows, string id, DecisionEventRecord record, string source,
         FallbackReason expectedFallback, PlannerStatus expectedPlanner, DecisionResult decision,
-        PlanningResult planning)
+        PlanningResult planning, DecisionResult legacyDecision)
     {
-        if (decision == null || planning == null)
+        if (decision == null || planning == null || legacyDecision == null)
             throw new InvalidDataException("safety probe diagnostics are missing");
         ValidateProbeModelSource(id, source);
         var selected = decision.SelectedAction == null
             ? "" : ActionDescriptor.CreateKey(decision.SelectedAction);
+        var top = ActionKeys(decision);
+        var legacySelected = legacyDecision.SelectedAction == null
+            ? "" : ActionDescriptor.CreateKey(legacyDecision.SelectedAction);
+        var legacyTop = ActionKeys(legacyDecision);
         var path = planning.BestCompletePath ?? new List<string>();
+        var fallbackUsesLegacySurface = expectedFallback == FallbackReason.None
+            || (string.Equals(selected, legacySelected, StringComparison.Ordinal)
+                && top.SequenceEqual(legacyTop, StringComparer.Ordinal));
         rows.Add(new JObject {
             { "probeId", id }, { "stateFingerprint", record.StateFingerprint },
             { "candidateFingerprint", record.CandidateFingerprint }, { "modelSource", source },
@@ -842,15 +854,30 @@ internal static class PolicyBenchmarkRunner
             { "actualFallbackReason", decision.FallbackReason.ToString() },
             { "expectedPlannerStatus", expectedPlanner.ToString() },
             { "actualPlannerStatus", planning.Status.ToString() },
+            { "legacySelectedActionKey", legacySelected },
+            { "legacyTopActionKeys", new JArray(legacyTop) },
             { "actualSelectedActionKey", selected },
-            { "actualTopActionKeys", string.IsNullOrWhiteSpace(selected) ? new JArray() : new JArray(selected) },
+            { "actualTopActionKeys", new JArray(top) },
             { "actualBestCompletePath", new JArray(path) },
             { "passed", expectedFallback == decision.FallbackReason
                 && expectedPlanner == planning.Status
                 && string.Equals(source, ExpectedProbeModelSource(id), StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(selected)
+                && !string.IsNullOrWhiteSpace(legacySelected)
+                && top.Count > 0 && legacyTop.Count > 0
+                && fallbackUsesLegacySurface
                 && (id != "planner-timeout" || (!string.IsNullOrWhiteSpace(selected)
                     && path.Count > 0)) }
         });
+    }
+
+    private static List<string> ActionKeys(DecisionResult decision)
+    {
+        return (decision.RankedActions ?? new List<RankedAction>())
+            .Where(value => value != null)
+            .Take(3)
+            .Select(value => value.ActionKey ?? "")
+            .ToList();
     }
 
     private static string ExpectedProbeModelSource(string id)
@@ -869,7 +896,7 @@ internal static class PolicyBenchmarkRunner
     private static JObject SafetyObject(JArray rows)
     {
         return new JObject {
-            { "safetyEvidenceSchemaVersion", 1 }, { "benchmarkId", BenchmarkId }, { "probes", rows }
+            { "safetyEvidenceSchemaVersion", 2 }, { "benchmarkId", BenchmarkId }, { "probes", rows }
         };
     }
 
