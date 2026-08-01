@@ -270,6 +270,10 @@ foreach ($required in @(
     "RunSafetyProbes(probeBytes")) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing required evaluation surface: $required" }
 }
+if (!$sourceText.Contains('{ "candidateOutputDistinctFromLegacy", candidateOutputDistinctFromLegacy }') -or
+    $sourceText.Contains('{ "candidateOutputDistinctFromLegacy", true }')) {
+    throw "candidate output distinctness contract must use the computed selected-action comparison"
+}
 foreach ($required in @('ParseStrictJsonLine(line, "scenario")',
     'ParseStrictJsonLine(line, "safety probe")')) {
     if (!$sourceText.Contains($required)) { throw "benchmark path missing strict JSONL parsing: $required" }
@@ -371,6 +375,11 @@ try {
     }
 
     $contracts = Get-Content -Raw (Join-Path $first "self-test-contracts.json") | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($contracts.baselineSelectedActionKey) -or
+        [string]::IsNullOrWhiteSpace($contracts.candidateSelectedActionKey) -or
+        $contracts.baselineSelectedActionKey -eq $contracts.candidateSelectedActionKey) {
+        throw "self-test did not dynamically prove distinct baseline and candidate selected actions"
+    }
     foreach ($name in @("scenarioStateIdentityMismatchRejected", "unknownSafetyEnumRejected",
         "incompleteSafetyProbeSetRejected", "candidateOutputDistinctFromLegacy",
         "explicitFallbackUsesLegacySurface",

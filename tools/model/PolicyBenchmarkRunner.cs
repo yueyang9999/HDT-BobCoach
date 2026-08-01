@@ -203,18 +203,21 @@ internal static class PolicyBenchmarkRunner
             state, candidates);
         var legacy = new FakePolicy("legacy-v1.1.0", FallbackReason.None, PlannerStatus.NotRequested);
         var unified = new FakePolicy("unified-linear-v1", FallbackReason.None,
-            PlannerStatus.Completed, ActionType.Upgrade);
+            PlannerStatus.Completed, ActionType.Refresh);
         var baseline = legacy.Decide(Clone(state));
         var plannedActionKey = ActionDescriptor.CreateKey(new GameAction {
-            Type = ActionType.Refresh, TargetIndex = -1
+            Type = ActionType.Upgrade, TargetIndex = -1
         });
         var candidateAdapter = new CandidateBenchmarkAdapter(candidateState =>
             new UnifiedDecisionDiagnostics(unified.Decide(candidateState),
                 PlanningResult.Completed(plannedActionKey,
                     new List<string> { plannedActionKey }, 1, 1, 1)), legacy);
         var candidate = candidateAdapter.DecideWithDiagnostics(state);
-        if (ActionDescriptor.CreateKey(baseline.SelectedAction)
-            == candidate.PlanningResult.ActionKey)
+        var baselineSelectedActionKey = ActionDescriptor.CreateKey(baseline.SelectedAction);
+        var candidateSelectedActionKey = ActionDescriptor.CreateKey(candidate.Decision.SelectedAction);
+        var candidateOutputDistinctFromLegacy = !string.Equals(baselineSelectedActionKey,
+            candidateSelectedActionKey, StringComparison.Ordinal);
+        if (!candidateOutputDistinctFromLegacy)
             throw new InvalidOperationException("self-test candidate must not reuse legacy output");
         var candidatePrediction = Prediction(record, candidate, "synthetic-model",
             new string('b', 64));
@@ -321,7 +324,9 @@ internal static class PolicyBenchmarkRunner
             { "scenarioStateIdentityMismatchRejected", identityMismatchRejected },
             { "unknownSafetyEnumRejected", unknownEnumRejected },
             { "incompleteSafetyProbeSetRejected", incompleteProbeSetRejected },
-            { "candidateOutputDistinctFromLegacy", true },
+            { "baselineSelectedActionKey", baselineSelectedActionKey },
+            { "candidateSelectedActionKey", candidateSelectedActionKey },
+            { "candidateOutputDistinctFromLegacy", candidateOutputDistinctFromLegacy },
             { "explicitFallbackUsesLegacySurface", explicitFallbackUsesLegacySurface },
             { "candidateLatencyIncludesLegacyFallback", candidateLatencyIncludesLegacyFallback },
             { "missingCandidateDecisionRejected", missingCandidateDecisionRejected },
