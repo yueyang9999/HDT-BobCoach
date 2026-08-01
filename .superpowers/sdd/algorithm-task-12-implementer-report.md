@@ -240,7 +240,8 @@ directory by string path, leaving a junction/reparse replacement window.
   flushes a unique staging file relative to the retained output-directory
   handle, then publishes relative to that same handle without replacing an
   existing target. Dynamic contracts cover hierarchy creation, rejected rename,
-  first publication, rejected overwrite, and staging cleanup.
+  first publication, rejected overwrite, staging cleanup, and UTF-8 stdin
+  content through the evaluator's PowerShell writer boundary.
 - Protocol-only numeric canonicalization now gives C# and JavaScript the same
   17-significant-digit scientific representation. The focused contracts prove
   equivalent `1`, `1.0`, and `1e0` spellings produce one checksum and reject
@@ -256,11 +257,16 @@ directory by string path, leaving a junction/reparse replacement window.
   SHA-256 `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`).
 - `node tests/test_algorithm_workspace_contract.js`: pass.
 - `node tests/test_offline_runtime_contract.js`: all four contracts pass.
-- `git diff --check`: exit code 0 before this report update.
-
-Full-suite, explicit Release-build, and repository-validation evidence must be
-refreshed after the final Task 12 and whole-branch reviews; this section does
-not reuse the earlier repair wave's results for the current implementation.
+- `npm test`: exit code 0 in 241 seconds; contract, behavior, and package suites
+  pass. The deterministic package SHA-256 is
+  `E1D559D21221987A03E2DDE335D80D9DEC73B1A1D4D62CA50E7F7785827D59A9`.
+- Explicit Release build in a new external evidence directory: `BobCoach.dll`
+  is `784384` bytes with SHA-256
+  `8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+- `tools/build/validate_repository.ps1`: passes with 448 tracked or untracked,
+  non-ignored files scanned.
+- `git diff --cached --check` and `git diff --check`: exit code 0 before this
+  report update.
 
 The result remains `blocked-by-season-data` with no accepted/rejected effect
 decision or formal improvement metric. Unified ranking remains Shadow and
