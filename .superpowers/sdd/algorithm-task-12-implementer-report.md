@@ -515,3 +515,39 @@ fallback.
 ## Required Conclusion
 
 “新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。”
+
+## Fresh-review Repair At `24cf00f` (2026-08-01)
+
+The fresh review at `558d90eb2aaa3ff0d3c446cef285671c6e9d0bb6`
+reported zero Critical, two Important, and zero Minor findings. The repair commit
+`24cf00fcef4d6a06339dc4603eaff043f50b38fd` addresses both findings:
+
+- trusted owner keys are now captured through the retained-handle secure input
+  snapshot before parsing, so the signed owner-approval decision path is
+  reachable without reopening the trust root by path;
+- safety evidence schema v2 binds the actual selected and top-ranked action
+  surfaces to the independently measured `legacy-v1.1.0` surfaces whenever a
+  fallback occurs, and production safety probes use `CandidateBenchmarkAdapter`.
+
+The repair also fixes the complete signed-evidence-chain contract to pass the
+validated label map into metric calculation. The repository trust-root fixture
+remains an empty keyset; the Ed25519 chain test creates temporary signing
+material only for the duration of the test.
+
+Focused verification at `24cf00f` passed:
+
+- `node tests/test_algorithm_evaluation.js`;
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests/test_algorithm_benchmark_contract.ps1`;
+- `git diff --check` and `git diff --cached --check` before the repair commit.
+
+The benchmark contract built the Release DLL twice at 784384 bytes with SHA-256
+`8DA71739DCC903F3A15150E33538B7153AB80344FBD2ECB9D9B4ED9008A16E7E`.
+No fresh reviewer has reviewed `24cf00f` yet, and full `npm test`, offline
+runtime, repository validation, an independent final Release build, and the
+whole-branch review remain pending. Do not update `progress.md` until the fresh
+Task 12 review has zero Critical and zero Important findings.
+
+Task 12 remains `blocked-by-season-data` with no effect acceptance result or
+formal improvement metric. Unified ranking remains Shadow and
+`legacy-v1.1.0` remains player-visible and the fallback.
