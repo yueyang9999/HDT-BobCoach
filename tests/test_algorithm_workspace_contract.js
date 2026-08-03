@@ -11,7 +11,7 @@ for (const required of [
   'explicit external data root'
 ]) assert(agents.includes(required), `missing directory rule: ${required}`);
 
-const { assertExternalDataRoot, resolveDataPath, actionKey, scenarioSchemaVersion } = require('../tools/model/contracts');
+const { assertExternalDataRoot, resolveDataPath, actionKey, cardPoolIdentity, contractHeader, scenarioSchemaVersion } = require('../tools/model/contracts');
 assert.throws(() => assertExternalDataRoot(repo, repo), /outside the repository/);
 assert.throws(() => assertExternalDataRoot(path.join(process.env.SystemDrive, 'bobcoach-algorithm'), repo), /system drive/);
 assert.throws(() => assertExternalDataRoot(path.dirname(repo), repo), /cannot contain repository/);
@@ -61,6 +61,52 @@ try {
 }
 assert.strictEqual(actionKey({ type: 'Upgrade', targetIndex: -1, cardId: '', purchaseSource: '' }),
   'Upgrade|-1||');
+assert.strictEqual(cardPoolIdentity(['Bacon_1', 'Bacon_2']), '64ee82650ea80b74',
+  'card pool fingerprint must be a stable golden value');
+assert.strictEqual(cardPoolIdentity(['Bacon_2', 'Bacon_1']), '64ee82650ea80b74',
+  'fingerprint must be order independent');
+assert.strictEqual(cardPoolIdentity(['Bacon_1', 'Bacon_1', 'Bacon_2']), '64ee82650ea80b74',
+  'fingerprint must treat the pool as a set');
+assert.notStrictEqual(cardPoolIdentity(['A', 'a']), cardPoolIdentity(['A']),
+  'fingerprint must be case sensitive');
+assert.strictEqual(cardPoolIdentity(null), 'unknown');
+assert.strictEqual(cardPoolIdentity(undefined), 'unknown');
+assert.throws(() => cardPoolIdentity([]), /must not be empty/,
+  'an empty pool is a data error and must fail loudly');
+assert.throws(() => cardPoolIdentity('Bacon_1'), /expects an array/);
+assert.throws(() => cardPoolIdentity([42]), /non-empty strings/);
+assert.throws(() => cardPoolIdentity(['']), /non-empty strings/);
+const header = contractHeader({
+  season: 'unknown',
+  gameBuild: 'unknown',
+  cardPoolIdentity: cardPoolIdentity(['Bacon_1', 'Bacon_2']),
+  source: 'fixture-source',
+  capturedAt: '2026-08-03T00:00:00Z',
+  sha256: 'A'.repeat(64),
+  provenance: { generator: 'fixture', parameters: { version: 1 } },
+});
+assert.deepStrictEqual(header, {
+  schemaVersion: 1,
+  season: 'unknown',
+  gameBuild: 'unknown',
+  cardPoolIdentity: '64ee82650ea80b74',
+  source: 'fixture-source',
+  capturedAt: '2026-08-03T00:00:00Z',
+  sha256: 'a'.repeat(64),
+  provenance: { generator: 'fixture', parameters: { version: 1 } },
+});
+assert.deepStrictEqual(Object.keys(header),
+  ['schemaVersion', 'season', 'gameBuild', 'cardPoolIdentity', 'source', 'capturedAt', 'sha256', 'provenance'],
+  'contract header must keep a fixed key order');
+assert.throws(() => contractHeader({ season: 'x', gameBuild: 'x', cardPoolIdentity: 'x',
+  capturedAt: '2026-08-03T00:00:00Z', sha256: 'a'.repeat(64) }), /source/);
+assert.throws(() => contractHeader({ season: 'x', gameBuild: 'x', cardPoolIdentity: 'x',
+  source: 's', capturedAt: '2026-08-03', sha256: 'a'.repeat(64) }), /ISO-8601/);
+assert.throws(() => contractHeader({ season: 'x', gameBuild: 'x', cardPoolIdentity: 'x',
+  source: 's', capturedAt: '2026-08-03T00:00:00Z', sha256: 'zz' }), /64-character/);
+assert.throws(() => contractHeader({ season: 'x', gameBuild: 'x', cardPoolIdentity: 'x',
+  source: 's', capturedAt: '2026-08-03T00:00:00Z', sha256: 'a'.repeat(64),
+  provenance: ['not-an-object'] }), /provenance/);
 
 const fixtures = path.join(repo, 'tests', 'fixtures', 'algorithm');
 const schema = JSON.parse(fs.readFileSync(path.join(fixtures, 'scenario-schema-v1.json'), 'utf8'));

@@ -31,6 +31,8 @@ $output = Join-Path $env:TEMP "bobcoach_active_trinket_effects.exe"
 $sources = @(
     (Join-Path $root "src\BobCoach\Core\GameState.cs"),
     (Join-Path $root "src\BobCoach\Core\ActiveTrinketContext.cs"),
+    (Join-Path $root "src\BobCoach\Core\BobCoachDataPaths.cs"),
+    (Join-Path $root "src\BobCoach\Core\TrinketDefinitionRegistry.cs"),
     (Join-Path $root "src\BobCoach\Core\TrinketEffectRegistry.cs"),
     (Join-Path $root "src\BobCoach\Core\TrinketEffectResolver.cs"),
     (Join-Path $root "src\BobCoach\Core\EffectiveGameRules.cs"),
@@ -91,5 +93,13 @@ $sources = @(
     "/r:$(Join-Path $hdtDir 'HearthDb.dll')" "/r:$netstandard" @sources
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& $output
-exit $LASTEXITCODE
+$dataRoot = Join-Path $env:TEMP ("bobcoach_active_trinket_effects_data_{0}" -f [Guid]::NewGuid().ToString("N"))
+try {
+    New-Item -ItemType Directory -Path (Join-Path $dataRoot "data") | Out-Null
+    $env:BOBCOACH_DATA_ROOT = $dataRoot
+    & $output
+    exit $LASTEXITCODE
+}
+finally {
+    if (Test-Path -LiteralPath $dataRoot) { Remove-Item -LiteralPath $dataRoot -Recurse -Force }
+}

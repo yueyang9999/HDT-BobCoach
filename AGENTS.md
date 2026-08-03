@@ -81,6 +81,12 @@ Algorithm acceptance has two separate gates:
 
 Before effect acceptance passes, the required conclusion is: `新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。`
 
+## Season Data Contract
+
+- All generated registries, datasets, and model artifacts carry contract headers (`schemaVersion`, `season`, `gameBuild`, `cardPoolIdentity`, `source`, `capturedAt`, `sha256`) per `docs/maintainer/SEASON_DATA_CONTRACT.md`; tools implement them in `tools/model/contracts.js`.
+- C# rule registries load definitions through data-backed classes (e.g. `TrinketDefinitionRegistry`) with fail-closed coverage checks; do not add new per-card hardcoded rules. Decision behavior (`Resolve`/policy output) stays unchanged until real, version-matched season data lands.
+- Before the 2026-08-05 content refresh, do not read or migrate production data files under `%APPDATA%\bob-coach\data\`; generate and test only against explicit synthetic data roots (e.g. `BOB_COACH_DATA_ROOT` in disposable temp directories).
+
 ## Validation
 
 Before considering a change complete, run the repository validation commands documented in `docs/maintainer/BUILD.md`. At minimum, validation must cover:

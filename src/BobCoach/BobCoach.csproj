@@ -57,6 +57,7 @@
     <Compile Include="Core\BobCoachDataPaths.cs" />
     <Compile Include="Core\GameState.cs" />
     <Compile Include="Core\ActiveTrinketContext.cs" />
+    <Compile Include="Core\TrinketDefinitionRegistry.cs" />
     <Compile Include="Core\TrinketEffectRegistry.cs" />
     <Compile Include="Core\TrinketEffectResolver.cs" />
     <Compile Include="Core\AnomalyContext.cs" />

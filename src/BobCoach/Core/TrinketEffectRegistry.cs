@@ -25,6 +25,54 @@ namespace BobCoach.Engine
         public const string BartendOTronOilcanCardId = "BG30_MagicItem_705";
         public const string KarazhanChessSetCardId = "BG30_MagicItem_972";
 
+        // Order-independent audit list: must match the hard-coded switch cases below.
+        private static readonly string[] EquippedTrinketCardIds = new string[]
+        {
+            DesignerEyepatchCardId,
+            CowrieNecklaceCardId,
+            IronforgeAnvilCardId,
+            SlammaStickerCardId,
+            EmeraldDreamcatcherCardId,
+            StegodonPortraitCardId,
+            TinyfinOnesieCardId,
+            DramalocStickerCardId,
+            EternalPortraitCardId,
+            RivendarePortraitCardId,
+            HolyMalletCardId,
+            TrainingCertificateCardId,
+            ValorousMedallionCardId,
+            GreaterValorousMedallionCardId,
+            BalefulIncenseCardId,
+            BartendOTronOilcanCardId,
+            KarazhanChessSetCardId,
+        };
+
+        // Optional season-contract source. When BOB_COACH_DATA_ROOT is configured it loads the
+        // generated trinket_registry.json for coverage verification and the post-8/5 injection
+        // channel; the APPDATA fallback root is never touched. Resolution behavior is unchanged.
+        private static readonly TrinketDefinitionRegistry DefinitionSource = CreateDefinitionSource();
+
+        private static TrinketDefinitionRegistry CreateDefinitionSource()
+        {
+            var source = new TrinketDefinitionRegistry();
+            try
+            {
+                source.LoadFromConfiguredRoot();
+                if (source.IsLoaded)
+                {
+                    var missing = source.VerifyCoverage(EquippedTrinketCardIds);
+                    source.WriteDiagnostic(
+                        "equipped trinket registry loaded: count=" + source.Count
+                        + " missing=" + string.Join(",", missing.ToArray()));
+                }
+            }
+            catch
+            {
+                // Registry verification must never break equipped-trinket resolution.
+            }
+            return source;
+        }
+
         // Audited against the HDT 1.53.5 HearthDb snapshot. Cowrie's hard cost rule
         // must fail closed: localized text is never used to infer resource changes.
         private static readonly HashSet<string> StatGrantingTavernSpellCardIds =

@@ -31,7 +31,8 @@ $output = Join-Path $outputDirectory "AlgorithmFeatureBehavior.exe"
 $netstandard = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\netstandard.dll"
 $sources = @(
     "Core\GameState.cs", "Core\AnomalyFactSource.cs", "Core\AnomalyRegistry.cs", "Core\AnomalyContext.cs",
-    "Core\ActiveTrinketContext.cs", "Core\TrinketEffectRegistry.cs",
+    "Core\ActiveTrinketContext.cs", "Core\BobCoachDataPaths.cs", "Core\TrinketDefinitionRegistry.cs",
+    "Core\TrinketEffectRegistry.cs",
     "Core\TrinketEffectResolver.cs", "Core\EffectiveGameRules.cs", "Core\EffectiveCardPoolRules.cs",
     "Core\FirstPurchaseExtraCopyRule.cs", "Core\UpgradePrizeRule.cs", "Core\PortalInBottleRule.cs",
     "Core\SharedYoggWheelRule.cs", "Core\SharedCardVoteRule.cs", "Core\BuddyPoolRule.cs",
@@ -60,6 +61,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $hdtDir 'HearthDb.dll') -Destination $outputDirectory
     & $csc /nologo /langversion:7.3 /target:exe "/out:$output" "/r:$(Join-Path $hdtDir 'HearthDb.dll')" "/r:$netstandard" @sources
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $env:BOBCOACH_DATA_ROOT = Join-Path $outputDirectory "data-root"
+    New-Item -ItemType Directory -Path (Join-Path $env:BOBCOACH_DATA_ROOT "data") | Out-Null
     & $output
     exit $LASTEXITCODE
 }

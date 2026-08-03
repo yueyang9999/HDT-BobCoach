@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -76,4 +77,51 @@ function resolveDataPath(root, relativePath, name, options = {}) {
 function actionKey(action) {
   return [action.type, action.targetIndex, action.cardId || '', action.purchaseSource || ''].join('|');
 }
-module.exports = { assertExternalDataRoot, resolveDataPath, actionKey, scenarioSchemaVersion: 1 };
+function cardPoolIdentity(cardIds) {
+  if (cardIds === null || cardIds === undefined) return 'unknown';
+  if (!Array.isArray(cardIds)) throw new Error('cardPoolIdentity expects an array of card ids or null');
+  const ids = cardIds.map((cardId) => {
+    if (typeof cardId !== 'string' || cardId.length === 0)
+      throw new Error('card ids must be non-empty strings');
+    return cardId;
+  });
+  if (ids.length === 0) throw new Error('card pool must not be empty; pass null for unknown');
+  const sorted = [...new Set(ids)].sort((a, b) =>
+    Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
+  const digest = crypto.createHash('sha256')
+    .update(JSON.stringify(sorted), 'utf8')
+    .digest('hex');
+  return digest.slice(0, 16);
+}
+function contractHeader(options) {
+  if (!options || typeof options !== 'object')
+    throw new Error('contractHeader expects an options object');
+  for (const key of ['season', 'gameBuild', 'cardPoolIdentity', 'source', 'capturedAt', 'sha256']) {
+    const value = options[key];
+    if (typeof value !== 'string' || value.trim().length === 0)
+      throw new Error(`contract header requires a non-empty ${key}`);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(options.capturedAt))
+    throw new Error('capturedAt must be an ISO-8601 UTC timestamp');
+  if (!/^[a-f0-9]{64}$/i.test(options.sha256))
+    throw new Error('sha256 must be a 64-character hexadecimal digest');
+  const header = {
+    schemaVersion: 1,
+    season: options.season,
+    gameBuild: options.gameBuild,
+    cardPoolIdentity: options.cardPoolIdentity,
+    source: options.source,
+    capturedAt: options.capturedAt,
+    sha256: options.sha256.toLowerCase(),
+  };
+  if (options.provenance !== undefined) {
+    if (!options.provenance || typeof options.provenance !== 'object' || Array.isArray(options.provenance))
+      throw new Error('provenance must be an object');
+    header.provenance = options.provenance;
+  }
+  return header;
+}
+module.exports = {
+  assertExternalDataRoot, resolveDataPath, actionKey, cardPoolIdentity, contractHeader,
+  scenarioSchemaVersion: 1
+};
