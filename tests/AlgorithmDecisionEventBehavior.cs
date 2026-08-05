@@ -32,10 +32,13 @@ namespace BobCoach.Engine
         public int FreeRefreshCount;
         public bool FirstPurchaseUsedThisTurn;
         public bool FirstMinionPurchaseUsedThisTurn;
+        public string CurrentCompGuideTier;
         public HashSet<string> AvailableTribes = new HashSet<string>();
         public List<MinionData> BoardMinions = new List<MinionData>();
         public List<MinionData> HandMinions = new List<MinionData>();
         public List<MinionData> ShopMinions = new List<MinionData>();
+        public List<TrinketOption> TrinketOffer = new List<TrinketOption>();
+        public List<string> ActiveTrinkets = new List<string>();
     }
 
     public sealed class MinionData
@@ -60,6 +63,18 @@ namespace BobCoach.Engine
         public bool IsSpell;
         public int Cost;
         public string Tribe = "";
+    }
+
+    public sealed class TrinketOption
+    {
+        public string CardId = "";
+        public string TrinketName = "";
+        public int EntityId;
+        public bool IsLesser;
+        public int Tier;
+        public int Attack;
+        public int Health;
+        public List<string> Tribes = new List<string>();
     }
 
     internal static class BobCoachDataPaths
@@ -104,6 +119,8 @@ internal static class AlgorithmDecisionEventBehavior
         {
             PreservesDetachedPreActionStateAndFingerprints();
             CapturesRuleIdentitiesAndDistinguishesUnknownValues();
+            CapturesSeasonMechanicDecisionState();
+            CapturesSeasonMechanicFingerprintTransitions();
             AppendsIdempotentObservationEventsWithoutQualityLabels();
             WritesModelIdentityIntoEveryEnvelope();
             NormalizesMissingModelIdentityToUnknown();
@@ -229,6 +246,152 @@ internal static class AlgorithmDecisionEventBehavior
         AssertIdentityTransitionChangesFingerprint(
             "cardPoolIdentity", "card-pool identity", state => state.CardPoolIdentity,
             snapshot => snapshot.CardPoolIdentity, (state, value) => state.CardPoolIdentity = value, "pool-9");
+    }
+
+    private static void CapturesSeasonMechanicDecisionState()
+    {
+        var state = State(5, 4);
+        state.CurrentCompGuideTier = "T1";
+        state.ActiveTrinkets.Add("TB2_001");
+        state.ActiveTrinkets.Add("TB2_002");
+        state.TrinketOffer.Add(new TrinketOption
+        {
+            CardId = "TB2_100",
+            TrinketName = "Lesser Test",
+            EntityId = 301,
+            IsLesser = true,
+            Tier = 1,
+            Attack = 2,
+            Health = 3,
+            Tribes = new List<string> { "Beast", "Dragon" }
+        });
+        state.TrinketOffer.Add(new TrinketOption
+        {
+            CardId = "TB2_101",
+            TrinketName = "Greater Test",
+            EntityId = 302,
+            IsLesser = false,
+            Tier = 3,
+            Attack = 4,
+            Health = 5,
+            Tribes = new List<string> { "Murloc" }
+        });
+
+        var record = DecisionEventRecord.Create("season-mechanic", "game-1", state, Candidates());
+        AssertEqual(2, DecisionEventRecord.SchemaVersion,
+            "decision snapshot schema version must advance with season mechanics");
+        AssertEqual("T1", record.State.CurrentCompGuideTier,
+            "snapshot captures current comp guide tier");
+        AssertEqual(2, record.State.TrinketOffer.Count,
+            "snapshot preserves every trinket offer");
+        AssertEqual("TB2_100", record.State.TrinketOffer[0].CardId,
+            "snapshot preserves trinket card id");
+        AssertEqual("Lesser Test", record.State.TrinketOffer[0].TrinketName,
+            "snapshot preserves trinket name");
+        AssertEqual(301, record.State.TrinketOffer[0].EntityId,
+            "snapshot preserves trinket entity id");
+        AssertTrue(record.State.TrinketOffer[0].IsLesser,
+            "snapshot preserves lesser flag");
+        AssertEqual(1, record.State.TrinketOffer[0].Tier,
+            "snapshot preserves trinket tier");
+        AssertEqual(2, record.State.TrinketOffer[0].Attack,
+            "snapshot preserves trinket attack");
+        AssertEqual(3, record.State.TrinketOffer[0].Health,
+            "snapshot preserves trinket health");
+        AssertEqual(2, record.State.TrinketOffer[0].Tribes.Count,
+            "snapshot preserves trinket tribes");
+        AssertEqual(2, record.State.ActiveTrinkets.Count,
+            "snapshot preserves active trinkets");
+        AssertEqual("TB2_001", record.State.ActiveTrinkets[0],
+            "snapshot preserves first active trinket");
+        AssertEqual("TB2_002", record.State.ActiveTrinkets[1],
+            "snapshot preserves second active trinket");
+
+        var canonical = CanonicalJson.Serialize(record.State);
+        AssertTrue(canonical.Contains("\"currentCompGuideTier\":\"T1\""),
+            "comp guide tier is inside the canonical hash domain");
+        AssertTrue(canonical.Contains("\"trinketOffer\":[{\"cardId\":\"TB2_100\""),
+            "trinket offer is inside the canonical hash domain");
+        AssertTrue(canonical.Contains("\"activeTrinkets\":[\"TB2_001\",\"TB2_002\"]"),
+            "active trinkets are inside the canonical hash domain");
+
+        var empty = State(5, 4);
+        empty.TrinketOffer = null;
+        empty.ActiveTrinkets = null;
+        var emptyRecord = DecisionEventRecord.Create(
+            "season-mechanic-empty", "game-1", empty, Candidates());
+        AssertEqual(0, emptyRecord.State.TrinketOffer.Count,
+            "missing trinket offer snapshots as empty");
+        AssertEqual(0, emptyRecord.State.ActiveTrinkets.Count,
+            "missing active trinkets snapshots as empty");
+        var emptyCanonical = CanonicalJson.Serialize(emptyRecord.State);
+        AssertTrue(emptyCanonical.Contains("\"trinketOffer\":[]"),
+            "missing trinket offer canonicalizes as empty");
+        AssertTrue(emptyCanonical.Contains("\"activeTrinkets\":[]"),
+            "missing active trinkets canonicalizes as empty");
+
+        state.CurrentCompGuideTier = "T2";
+        state.TrinketOffer[0].CardId = "MUTATED";
+        state.TrinketOffer.Add(new TrinketOption { CardId = "TB2_102" });
+        state.ActiveTrinkets.Add("MUTATED");
+        AssertEqual("T1", record.State.CurrentCompGuideTier,
+            "snapshot must detach comp guide tier");
+        AssertEqual("TB2_100", record.State.TrinketOffer[0].CardId,
+            "snapshot must detach trinket cards");
+        AssertEqual(2, record.State.TrinketOffer.Count,
+            "snapshot must detach trinket offer list");
+        AssertEqual(2, record.State.ActiveTrinkets.Count,
+            "snapshot must detach active trinket list");
+    }
+
+    private static void CapturesSeasonMechanicFingerprintTransitions()
+    {
+        var baseline = State(5, 4);
+        baseline.CurrentCompGuideTier = "T1";
+        baseline.TrinketOffer.Add(new TrinketOption { CardId = "TB2_100", EntityId = 301 });
+        baseline.ActiveTrinkets.Add("TB2_001");
+        var baselineRecord = DecisionEventRecord.Create(
+            "season-fingerprint-baseline", "game-1", baseline, Candidates());
+
+        var changedTier = Clone(baseline);
+        changedTier.CurrentCompGuideTier = "T2";
+        var changedTierRecord = DecisionEventRecord.Create(
+            "season-fingerprint-tier", "game-1", changedTier, Candidates());
+        AssertTrue(baselineRecord.StateFingerprint != changedTierRecord.StateFingerprint,
+            "comp guide tier changes the state fingerprint");
+
+        var changedOffer = Clone(baseline);
+        changedOffer.TrinketOffer[0].CardId = "TB2_200";
+        var changedOfferRecord = DecisionEventRecord.Create(
+            "season-fingerprint-offer", "game-1", changedOffer, Candidates());
+        AssertTrue(baselineRecord.StateFingerprint != changedOfferRecord.StateFingerprint,
+            "trinket offer changes the state fingerprint");
+
+        var reorderedOffer = Clone(baseline);
+        reorderedOffer.TrinketOffer.Add(new TrinketOption { CardId = "TB2_101", EntityId = 302 });
+        reorderedOffer.TrinketOffer.Reverse();
+        var reorderedOfferRecord = DecisionEventRecord.Create(
+            "season-fingerprint-offer-order", "game-1", reorderedOffer, Candidates());
+        AssertTrue(baselineRecord.StateFingerprint != reorderedOfferRecord.StateFingerprint,
+            "trinket offer order changes the state fingerprint");
+
+        var changedActive = Clone(baseline);
+        changedActive.ActiveTrinkets.Add("TB2_002");
+        var changedActiveRecord = DecisionEventRecord.Create(
+            "season-fingerprint-active", "game-1", changedActive, Candidates());
+        AssertTrue(baselineRecord.StateFingerprint != changedActiveRecord.StateFingerprint,
+            "active trinkets change the state fingerprint");
+
+        var empty = State(5, 4);
+        empty.TrinketOffer = null;
+        empty.ActiveTrinkets = null;
+        var emptyRecord = DecisionEventRecord.Create(
+            "season-fingerprint-empty", "game-1", empty, Candidates());
+        var emptyList = State(5, 4);
+        var emptyListRecord = DecisionEventRecord.Create(
+            "season-fingerprint-empty-list", "game-1", emptyList, Candidates());
+        AssertEqual(emptyRecord.StateFingerprint, emptyListRecord.StateFingerprint,
+            "null and empty season lists produce the same fingerprint");
     }
 
     private static void WritesModelIdentityIntoEveryEnvelope()
@@ -414,6 +577,25 @@ internal static class AlgorithmDecisionEventBehavior
         result.GameBuild = state.GameBuild;
         result.SeasonId = state.SeasonId;
         result.CardPoolIdentity = state.CardPoolIdentity;
+        result.CurrentCompGuideTier = state.CurrentCompGuideTier;
+        result.TrinketOffer = state.TrinketOffer != null
+            ? new List<TrinketOption>(state.TrinketOffer.Select(option => new TrinketOption
+            {
+                CardId = option.CardId,
+                TrinketName = option.TrinketName,
+                EntityId = option.EntityId,
+                IsLesser = option.IsLesser,
+                Tier = option.Tier,
+                Attack = option.Attack,
+                Health = option.Health,
+                Tribes = option.Tribes != null
+                    ? new List<string>(option.Tribes)
+                    : new List<string>()
+            }))
+            : new List<TrinketOption>();
+        result.ActiveTrinkets = state.ActiveTrinkets != null
+            ? new List<string>(state.ActiveTrinkets)
+            : new List<string>();
         return result;
     }
 

@@ -54,10 +54,13 @@ namespace BobCoach.Engine
         public int FreeRefreshCount;
         public bool FirstPurchaseUsedThisTurn;
         public bool FirstMinionPurchaseUsedThisTurn;
+        public string CurrentCompGuideTier;
         public HashSet<string> AvailableTribes = new HashSet<string>();
         public List<MinionData> BoardMinions = new List<MinionData>();
         public List<MinionData> HandMinions = new List<MinionData>();
         public List<MinionData> ShopMinions = new List<MinionData>();
+        public List<TrinketOption> TrinketOffer = new List<TrinketOption>();
+        public List<string> ActiveTrinkets = new List<string>();
     }
 
     public sealed class MinionData
@@ -82,6 +85,18 @@ namespace BobCoach.Engine
         public bool IsSpell;
         public int Cost;
         public string Tribe = "";
+    }
+
+    public sealed class TrinketOption
+    {
+        public string CardId = "";
+        public string TrinketName = "";
+        public int EntityId;
+        public bool IsLesser;
+        public int Tier;
+        public int Attack;
+        public int Health;
+        public List<string> Tribes = new List<string>();
     }
 
     internal static class BobCoachDataPaths

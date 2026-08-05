@@ -12,7 +12,7 @@ namespace BobCoach.Engine.Decision
 {
     public sealed class DecisionEventRecord
     {
-        public const int SchemaVersion = 1;
+        public const int SchemaVersion = 2;
 
         public string DecisionId { get; private set; }
         public string GameId { get; private set; }
@@ -81,10 +81,13 @@ namespace BobCoach.Engine.Decision
         public int FreeRefreshCount { get; private set; }
         public bool FirstPurchaseUsedThisTurn { get; private set; }
         public bool FirstMinionPurchaseUsedThisTurn { get; private set; }
+        public string CurrentCompGuideTier { get; private set; }
         public IList<string> AvailableTribes { get; private set; }
         public IList<MinionSnapshot> BoardMinions { get; private set; }
         public IList<MinionSnapshot> HandMinions { get; private set; }
         public IList<MinionSnapshot> ShopMinions { get; private set; }
+        public IList<TrinketSnapshot> TrinketOffer { get; private set; }
+        public IList<string> ActiveTrinkets { get; private set; }
 
         public static GameStateSnapshot From(GameState state)
         {
@@ -112,10 +115,13 @@ namespace BobCoach.Engine.Decision
                 FreeRefreshCount = state.FreeRefreshCount,
                 FirstPurchaseUsedThisTurn = state.FirstPurchaseUsedThisTurn,
                 FirstMinionPurchaseUsedThisTurn = state.FirstMinionPurchaseUsedThisTurn,
+                CurrentCompGuideTier = state.CurrentCompGuideTier ?? "",
                 AvailableTribes = ReadOnlyStrings(state.AvailableTribes),
                 BoardMinions = ReadOnlyMinions(state.BoardMinions),
                 HandMinions = ReadOnlyMinions(state.HandMinions),
-                ShopMinions = ReadOnlyMinions(state.ShopMinions)
+                ShopMinions = ReadOnlyMinions(state.ShopMinions),
+                TrinketOffer = ReadOnlyTrinkets(state.TrinketOffer),
+                ActiveTrinkets = ReadOnlyStrings(state.ActiveTrinkets)
             };
         }
 
@@ -140,6 +146,15 @@ namespace BobCoach.Engine.Decision
                 .Select(MinionSnapshot.From)
                 .ToList();
             return new ReadOnlyCollection<MinionSnapshot>(copy);
+        }
+
+        private static IList<TrinketSnapshot> ReadOnlyTrinkets(IEnumerable<TrinketOption> values)
+        {
+            var copy = (values ?? Enumerable.Empty<TrinketOption>())
+                .Where(value => value != null)
+                .Select(TrinketSnapshot.From)
+                .ToList();
+            return new ReadOnlyCollection<TrinketSnapshot>(copy);
         }
     }
 
@@ -194,6 +209,37 @@ namespace BobCoach.Engine.Decision
         }
     }
 
+    public sealed class TrinketSnapshot
+    {
+        public string CardId { get; private set; }
+        public string TrinketName { get; private set; }
+        public int EntityId { get; private set; }
+        public bool IsLesser { get; private set; }
+        public int Tier { get; private set; }
+        public int Attack { get; private set; }
+        public int Health { get; private set; }
+        public IList<string> Tribes { get; private set; }
+
+        internal static TrinketSnapshot From(TrinketOption trinket)
+        {
+            return new TrinketSnapshot
+            {
+                CardId = trinket.CardId ?? "",
+                TrinketName = trinket.TrinketName ?? "",
+                EntityId = trinket.EntityId,
+                IsLesser = trinket.IsLesser,
+                Tier = trinket.Tier,
+                Attack = trinket.Attack,
+                Health = trinket.Health,
+                Tribes = new ReadOnlyCollection<string>(
+                    (trinket.Tribes ?? Enumerable.Empty<string>())
+                    .Select(value => value ?? "")
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToList())
+            };
+        }
+    }
+
     internal static class CanonicalJson
     {
         internal static string Serialize(GameStateSnapshot state)
@@ -220,10 +266,13 @@ namespace BobCoach.Engine.Decision
             WriteProperty(builder, "freeRefreshCount", state.FreeRefreshCount);
             WriteProperty(builder, "firstPurchaseUsedThisTurn", state.FirstPurchaseUsedThisTurn);
             WriteProperty(builder, "firstMinionPurchaseUsedThisTurn", state.FirstMinionPurchaseUsedThisTurn);
+            WriteProperty(builder, "currentCompGuideTier", state.CurrentCompGuideTier);
             WriteProperty(builder, "availableTribes", state.AvailableTribes);
             WriteProperty(builder, "boardMinions", state.BoardMinions);
             WriteProperty(builder, "handMinions", state.HandMinions);
             WriteProperty(builder, "shopMinions", state.ShopMinions, false);
+            WriteProperty(builder, "trinketOffer", state.TrinketOffer);
+            WriteProperty(builder, "activeTrinkets", state.ActiveTrinkets, false);
             builder.Append('}');
             return builder.ToString();
         }
@@ -242,8 +291,10 @@ namespace BobCoach.Engine.Decision
             builder.Append(':');
             var strings = value as IEnumerable<string>;
             var minions = value as IEnumerable<MinionSnapshot>;
+            var trinkets = value as IEnumerable<TrinketSnapshot>;
             if (strings != null) WriteStrings(builder, strings);
             else if (minions != null) WriteMinions(builder, minions);
+            else if (trinkets != null) WriteTrinkets(builder, trinkets);
             else if (value is string) builder.Append(JsonConvert.ToString((string)value));
             else if (value is bool) builder.Append((bool)value ? "true" : "false");
             else builder.Append(Convert.ToString(value, CultureInfo.InvariantCulture));
@@ -291,6 +342,28 @@ namespace BobCoach.Engine.Decision
                 WriteProperty(builder, "isSpell", minion.IsSpell);
                 WriteProperty(builder, "cost", minion.Cost);
                 WriteProperty(builder, "tribe", minion.Tribe, false);
+                builder.Append('}');
+                first = false;
+            }
+            builder.Append(']');
+        }
+
+        private static void WriteTrinkets(StringBuilder builder, IEnumerable<TrinketSnapshot> trinkets)
+        {
+            builder.Append('[');
+            var first = true;
+            foreach (var trinket in trinkets ?? Enumerable.Empty<TrinketSnapshot>())
+            {
+                if (!first) builder.Append(',');
+                builder.Append('{');
+                WriteProperty(builder, "cardId", trinket.CardId);
+                WriteProperty(builder, "trinketName", trinket.TrinketName);
+                WriteProperty(builder, "entityId", trinket.EntityId);
+                WriteProperty(builder, "isLesser", trinket.IsLesser);
+                WriteProperty(builder, "tier", trinket.Tier);
+                WriteProperty(builder, "attack", trinket.Attack);
+                WriteProperty(builder, "health", trinket.Health);
+                WriteProperty(builder, "tribes", trinket.Tribes, false);
                 builder.Append('}');
                 first = false;
             }
