@@ -37,6 +37,10 @@ namespace BobCoach.Engine
             int observedTurn,
             Season14RulesEvaluator evaluator)
         {
+            if (evaluator != null
+                && evaluator.IsLoaded
+                && !evaluator.IsMechanicEnabled("trinket"))
+                return null;
             if (evaluator == null || !evaluator.IsLoaded)
                 return Observe(batch, observedTurn);
             return ObserveInternal(batch, observedTurn, true);

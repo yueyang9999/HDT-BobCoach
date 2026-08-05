@@ -63,7 +63,22 @@ namespace BobCoach.Engine
             FishbaitRegistry fishbaitRegistry,
             DarkGiftRegistry darkGiftRegistry)
         {
-            _mechanicProfile = null;
+            LoadFromRegistries(
+                activateRegistry,
+                lockboxRegistry,
+                fishbaitRegistry,
+                darkGiftRegistry,
+                null);
+        }
+
+        internal void LoadFromRegistries(
+            ActivateRegistry activateRegistry,
+            LockboxRegistry lockboxRegistry,
+            FishbaitRegistry fishbaitRegistry,
+            DarkGiftRegistry darkGiftRegistry,
+            SeasonMechanicProfile mechanicProfile)
+        {
+            _mechanicProfile = mechanicProfile;
             _activateRegistry = activateRegistry;
             _lockboxRegistry = lockboxRegistry;
             _fishbaitRegistry = fishbaitRegistry;

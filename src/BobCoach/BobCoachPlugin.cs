@@ -3499,6 +3499,11 @@ namespace BobCoach
             int observedTurn = _cachedState != null ? _cachedState.Turn : -1;
             var binding = _trinketChoiceLifecycle.ObserveSeason14(
                 batch, observedTurn, _season14RulesEvaluator);
+            if (binding == null)
+            {
+                Log("Trinket panel: skipped by Season14 mechanic profile");
+                return;
+            }
             _trinketPanelActive = true; _trinketPanelActivatedAt = DateTime.UtcNow;
             Log(string.Format("Trinket panel: choice={0} source={1} observedTurn={2} targetTurn={3} context={4} signaled {5} options [{6}]",
                 batch.ChoiceId, batch.SourceCardId, observedTurn, binding.TargetTurn, binding.Context, candidates.Count,

@@ -964,6 +964,48 @@ internal static class Season14RegistriesHarness
             magicBatch, 5, new Season14RulesEvaluator());
         Equal(TrinketChoiceContext.AnomalyExtra, unloadedBinding.Context,
             "unloaded evaluator falls back to legacy");
+
+        const string inactiveTrinketProfileJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""inactive"",
+    ""anomaly"": ""inactive""
+  }
+}";
+        var inactiveTrinketProfile = new SeasonMechanicProfile();
+        inactiveTrinketProfile.LoadFromJson(
+            inactiveTrinketProfileJson,
+            "season14",
+            "36.2.248348",
+            "0bcc979ae21df891");
+        var inactiveTrinketEvaluator = new Season14RulesEvaluator();
+        inactiveTrinketEvaluator.LoadFromRegistries(
+            _activate,
+            _lockbox,
+            _fishbait,
+            _darkGift,
+            inactiveTrinketProfile);
+        True(inactiveTrinketEvaluator.IsLoaded,
+            "inactive trinket evaluator loaded");
+        False(inactiveTrinketEvaluator.IsMechanicEnabled("trinket"),
+            "inactive trinket evaluator disables trinket");
+
+        var disabled = new TrinketChoiceBatchLifecycle();
+        var disabledBinding = disabled.ObserveSeason14(
+            scheduledLesserBatch, 5, inactiveTrinketEvaluator);
+        Equal(null, disabledBinding,
+            "inactive trinket profile prevents lifecycle binding");
+        Equal(null, disabled.Current,
+            "inactive trinket profile leaves lifecycle current null");
     }
 
     private static void SyntheticTrinketFieldsAndLesser()
