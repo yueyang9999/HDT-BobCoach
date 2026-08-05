@@ -20,7 +20,7 @@
 
 ## Task 1: Plan Record
 
-- [ ] Create this plan and commit it as a docs-only commit.
+- [x] Create this plan and commit it as a docs-only commit.
 
 ## Task 2: Add SeasonMechanicProfile with RED/GREEN Harness Coverage
 
@@ -28,9 +28,9 @@
 - Modify: `E:\HDT-BobCoach\tests\Season14RegistriesHarness.cs`
 - Add: `E:\HDT-BobCoach\src\BobCoach\Core\SeasonMechanicProfile.cs`
 
-- [ ] Add harness tests for profile success and fail-closed cases before implementing the class.
-- [ ] Run `tests\test_season14_registries.ps1` and confirm RED because `SeasonMechanicProfile` is missing.
-- [ ] Implement the profile loader and make the harness pass.
+- [x] Add harness tests for profile success and fail-closed cases before implementing the class.
+- [x] Run `tests\test_season14_registries.ps1` and confirm RED because `SeasonMechanicProfile` is missing.
+- [x] Implement the profile loader and make the harness pass.
 
 Fail-closed profile rules:
 - Missing configured root, missing file, invalid JSON, missing `_meta`, unsupported schema version, selector identity mismatch, unknown mechanism, unknown status, incomplete mechanism set, and `BGDUO` all leave `IsLoaded=false`.
@@ -41,10 +41,10 @@ Fail-closed profile rules:
 **Files:**
 - Modify: `E:\HDT-BobCoach\src\BobCoach\Core\Season14RulesEvaluator.cs`
 
-- [ ] Add `IsMechanicEnabled(string mechanic)` and require the profile in `IsLoaded`.
-- [ ] Keep the existing four-registry `LoadFromRegistries` API for harness compatibility.
-- [ ] Load the profile in `LoadFromConfiguredRoot`.
-- [ ] Extend harness real/empty evaluator checks and verify GREEN.
+- [x] Add `IsMechanicEnabled(string mechanic)` and require the profile in `IsLoaded`.
+- [x] Keep the existing four-registry `LoadFromRegistries` API for harness compatibility.
+- [x] Load the profile in `LoadFromConfiguredRoot`.
+- [x] Extend harness real/empty evaluator checks and verify GREEN.
 
 ## Task 4: Create External Profile and Register It
 
@@ -52,8 +52,8 @@ Fail-closed profile rules:
 - Create: `E:\HDT-BobCoach-evidence\season14\generated\registries\season14_mechanic_profile.json`
 - Modify: `E:\HDT-BobCoach-evidence\season_selector.json`
 
-- [ ] Add the profile to `season14.files`.
-- [ ] Confirm the real configured-root harness still loads all Season14 registries and the evaluator reports the expected active/inactive set.
+- [x] Add the profile to `season14.files`.
+- [x] Confirm the real configured-root harness still loads all Season14 registries and the evaluator reports the expected active/inactive set.
 
 ## Task 5: Gate Trinket Lifecycle
 
@@ -61,17 +61,17 @@ Fail-closed profile rules:
 - Modify: `E:\HDT-BobCoach\src\BobCoach\Core\TrinketChoiceBatchLifecycle.cs`
 - Modify: `E:\HDT-BobCoach\src\BobCoach\BobCoachPlugin.cs` only if needed to handle an inactive trinket safely
 
-- [ ] Keep legacy fallback when evaluator is null or not loaded.
-- [ ] When the loaded profile says trinket is inactive, do not create a trinket lifecycle binding.
-- [ ] Add harness regression and verify GREEN.
+- [x] Keep legacy fallback when evaluator is null or not loaded.
+- [x] When the loaded profile says trinket is inactive, do not create a trinket lifecycle binding.
+- [x] Add harness regression and verify GREEN.
 
 ## Task 6: Gate Anomaly and Trinket State Extraction
 
 **Files:**
 - Modify: `E:\HDT-BobCoach\src\BobCoach\GameStateExtractor.cs`
 
-- [ ] When the loaded profile says anomaly is inactive, set `state.AnomalyContext = AnomalyContext.Empty` and do not activate anomaly rules.
-- [ ] When the loaded profile says trinket is inactive, skip active trinket extraction and trinket offer extraction without mutating persistent trinket state.
+- [x] When the loaded profile says anomaly is inactive, set `state.AnomalyContext = AnomalyContext.Empty` and do not activate anomaly rules.
+- [x] When the loaded profile says trinket is inactive, skip active trinket extraction and trinket offer extraction without mutating persistent trinket state.
 
 ## Task 7: Update Compile and Release Contracts
 
@@ -80,9 +80,9 @@ Fail-closed profile rules:
 - Modify: `E:\HDT-BobCoach\tests\test_season14_registries.ps1`
 - Modify: `E:\HDT-BobCoach\tests\test_release_build_contract.js`
 
-- [ ] Add `Core\SeasonMechanicProfile.cs` to the project and harness source list.
-- [ ] Update compile item count and SHA-256 digest in the release build contract.
-- [ ] Run the affected contract tests and verify GREEN.
+- [x] Add `Core\SeasonMechanicProfile.cs` to the project and harness source list.
+- [x] Update compile item count and SHA-256 digest in the release build contract.
+- [x] Run the affected contract tests and verify GREEN.
 
 ## Task 8: Full Verification
 
@@ -111,9 +111,9 @@ node tools\model\evaluate_policy.js
 
 ## Task 9: State File and Handover
 
-- [ ] Update `E:\HDT-BobCoach-evidence\season14\generated\t_session_state.md` after each commit and at completion.
-- [ ] Create `G:\software\Codex\Handover document\BobCoach_Season14_单人模式_T7_机制Profile_2026-08-06.md`.
-- [ ] Commit repository docs/plan changes only.
+- [x] Update `E:\HDT-BobCoach-evidence\season14\generated\t_session_state.md` after each commit and at completion.
+- [x] Create `G:\software\Codex\Handover document\BobCoach_Season14_单人模式_T7_机制Profile_2026-08-06.md`.
+- [x] Commit repository docs/plan changes only.
 
 ## Self-Review
 
