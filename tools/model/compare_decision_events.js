@@ -398,17 +398,11 @@ function parseActionOrdinal(event, label) {
   return ordinal;
 }
 
-function readEventFile(filePath, fileLabel) {
-  let text;
-  try {
-    text = fs.readFileSync(filePath, 'utf8');
-  } catch (error) {
-    throw new Error(`${fileLabel} decision event file is unreadable: ${filePath} (${error.message})`);
-  }
+function readEventText(text, fileLabel) {
   const rawLines = text.split(/\r?\n/);
   if (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') rawLines.pop();
   if (rawLines.every(line => line.trim().length === 0)) {
-    throw new Error(`${fileLabel} decision event file is empty: ${filePath}`);
+    throw new Error(`${fileLabel} decision event file is empty`);
   }
   const blankLine = rawLines.findIndex(line => line.trim().length === 0);
   if (blankLine >= 0) {
@@ -428,6 +422,16 @@ function readEventFile(filePath, fileLabel) {
     events.push(event);
   });
   return events;
+}
+
+function readEventFile(filePath, fileLabel) {
+  let text;
+  try {
+    text = fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    throw new Error(`${fileLabel} decision event file is unreadable: ${filePath} (${error.message})`);
+  }
+  return readEventText(text, fileLabel);
 }
 
 function indexEvents(events, fileLabel) {
@@ -667,6 +671,7 @@ if (require.main === module) {
 
 module.exports = {
   compareDecisionEventFiles,
+  readEventText,
   readEventFile,
   indexEvents,
 };
