@@ -1,8 +1,8 @@
 # BobCoach Season14 单人模式推进执行计划
 
 > 状态：2026-08-05；T0-T9 完成，Season14 规则/攻略/归档已完成；本地可调用抓取/半自动校验工具已落地，2 个别名已确认并已 apply；T10/T11 本地部分已实施（refresh wrapper + CompGuideCatalog + SeasonDataSelector + selector 运行时接入），CI/CD、插件网络抓取、发布未实施
-> 分支：`codex/season14-algorithm-prereq`
-> HEAD：`0683739`
+> 分支：`codex/season14-algorithm-iteration`
+> HEAD：`9380a77`
 > 数据根：`E:\HDT-BobCoach-evidence\season14\`
 > 交接文档：`G:\software\Codex\Handover document\BobCoach_Season14_单人模式_T4_2026-08-05.md`
 
@@ -196,13 +196,14 @@ node "E:\HDT-BobCoach-evidence\tools\select_season_data.js" set season14
 
 ## 后续任务：算法迭代优化
 
-- 状态：未开始。
-- 前置条件（全部完成后才进入算法改动）：
-  1. 数据与最新赛季同步：确认 `season14_guide_source.json`、正式 registry、`season14_guide_weight_reference.json` 为最新且无 BGDUO。
-  2. 测试环境与最新赛季同步：确认 `BOB_COACH_DATA_ROOT`、HDT 基线、season selector、行为测试套件覆盖当前赛季；未同步前不跑算法回归。
-  3. 各模块机制与最新赛季同步：确认 Activate/Lockbox/Fishbait/Dark Gift/Trinket 生命周期等模块与规则目录一致；`unresolvedOfficialRows=10` 人工核对完成。
-  4. 权重基准：用最新攻略重新生成 `season14_guide_weight_reference.json`；当前口径 `T0=3/T1=2/T2=1/T3=0`，真实权重无 null，合成 null 仅保留在测试边界。
+- 状态：前置条件已闭环，算法本体未开始。
+- 前置条件（当前基线）：
+  1. [x] 数据与最新赛季同步：`season14_guide_source.json`、正式 registry、`season14_guide_weight_reference.json` 为最新且无 BGDUO。
+  2. [x] 测试环境与最新赛季同步：`BOB_COACH_DATA_ROOT`、HDT 基线、season selector、行为测试套件覆盖当前赛季；`test_season14_guide_weights.js` 已纳入行为套件。
+  3. [x] 各模块机制与最新赛季同步：Activate/Lockbox/Fishbait/Dark Gift/Trinket 生命周期等模块与规则目录一致；`unresolvedOfficialRows=10` 保留为人工追踪项，不算已解决。
+  4. [x] 权重基准：用最新攻略重新生成 `season14_guide_weight_reference.json`；当前口径 `T0=3/T1=2/T2=1/T3=0`，真实权重无 null，合成 null 仅保留在测试边界。
 - 后续入口：`CompGuideCatalog.TryGetWeight` / `TryGetTierWeight`；算法改动需跑行为测试与离线回放。
+- 下一步：实现并回归 `TryGetWeight` / `TryGetTierWeight` 的算法消费路径，再进入算法迭代优化；CI/CD、插件网络抓取、发布仍需用户确认。
 
 ## 执行约束
 

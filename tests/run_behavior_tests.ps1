@@ -23,7 +23,8 @@ foreach ($file in @(
     "test_log_config_consent.js",
     "test_season14_guide_sync.js",
     "test_season14_guide_fetch.js",
-    "test_season14_guide_refresh.js"
+    "test_season14_guide_refresh.js",
+    "test_season14_guide_weights.js"
 )) {
     Invoke-Checked $file "node"
 }
