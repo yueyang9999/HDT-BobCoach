@@ -22,7 +22,7 @@ internal static class AlgorithmGuideWeightBehavior
   ""counts"": {
     ""guides"": 1,
     ""coreEntries"": 2,
-    ""trinketEntries"": 1
+    ""trinketEntries"": 3
   },
   ""coreCards"": {
     ""SYNTH_CARD"": {
@@ -55,6 +55,30 @@ internal static class AlgorithmGuideWeightBehavior
       ""name"": ""SYNTH_TRINKET"",
       ""officialName"": ""SYNTH_TRINKET_OFFICIAL"",
       ""officialCardId"": ""SYNTH_TRINKET_ID"",
+      ""occurrences"": 1,
+      ""uniqueGuides"": 1,
+      ""multiCopyGuides"": [],
+      ""duplicateBonus"": 0,
+      ""rawWeight"": 1000,
+      ""heuristicWeight"": 1000,
+      ""tierCounts"": { ""T0"": 0, ""T1"": 1, ""T2"": 0 }
+    },
+    ""SYNTH_TRINKET_HIGH"": {
+      ""name"": ""SYNTH_TRINKET_HIGH"",
+      ""officialName"": ""SYNTH_TRINKET_HIGH_OFFICIAL"",
+      ""officialCardId"": ""SYNTH_TRINKET_HIGH_ID"",
+      ""occurrences"": 1,
+      ""uniqueGuides"": 1,
+      ""multiCopyGuides"": [],
+      ""duplicateBonus"": 0,
+      ""rawWeight"": 2000,
+      ""heuristicWeight"": 2000,
+      ""tierCounts"": { ""T0"": 0, ""T1"": 1, ""T2"": 0 }
+    },
+    ""SYNTH_TRINKET_NULL"": {
+      ""name"": ""SYNTH_TRINKET_NULL"",
+      ""officialName"": ""SYNTH_TRINKET_NULL"",
+      ""officialCardId"": ""SYNTH_TRINKET_NULL_ID"",
       ""occurrences"": 1,
       ""uniqueGuides"": 1,
       ""multiCopyGuides"": [],
@@ -108,6 +132,9 @@ internal static class AlgorithmGuideWeightBehavior
         AssertKnownWeightConsumedByShopScores(emptyCatalog, loadedCatalog);
         AssertKnownWeightConsumedByBuyIndices(emptyCatalog, loadedCatalog);
         AssertKnownWeightConsumedByBestAction(emptyCatalog, loadedCatalog);
+        AssertKnownTrinketWeightConsumedByEvaluation(emptyCatalog, loadedCatalog);
+        AssertKnownTrinketWeightConsumedByBestAction(emptyCatalog, loadedCatalog);
+        AssertTrinketFailClosed(emptyCatalog, loadedCatalog);
         AssertDefaultGuideTierIsNull();
         AssertLoadedCatalogNullTierFailClosedAcrossDecisionPaths(
             emptyCatalog, loadedCatalog);
@@ -157,6 +184,119 @@ internal static class AlgorithmGuideWeightBehavior
             "baseline best action must not select weighted card");
         AssertEqual(1, weighted.TargetIndex,
             "known guide weight must influence best action");
+    }
+
+    private static void AssertKnownTrinketWeightConsumedByEvaluation(
+        object emptyCatalog, object loadedCatalog)
+    {
+        var emptyScores = NewEngine(emptyCatalog).EvaluateTrinkets(TrinketState());
+        var loadedScores = NewEngine(loadedCatalog).EvaluateTrinkets(TrinketState());
+        AssertEqual(2, emptyScores.Count, "empty trinket evaluation count");
+        AssertEqual(2, loadedScores.Count, "loaded trinket evaluation count");
+
+        var emptyLow = FindTrinketScore(emptyScores, "SYNTH_TRINKET");
+        var loadedLow = FindTrinketScore(loadedScores, "SYNTH_TRINKET");
+        AssertTrue(emptyLow.IsUnrated,
+            "empty catalog trinket must remain unrated");
+        AssertTrue(!loadedLow.IsUnrated,
+            "known trinket guide weight must mark rated");
+        AssertNear(20.0, loadedLow.Score - emptyLow.Score, 0.001,
+            "trinket rawWeight 1000 adds 20 score");
+
+        var emptyHigh = FindTrinketScore(emptyScores, "SYNTH_TRINKET_HIGH");
+        var loadedHigh = FindTrinketScore(loadedScores, "SYNTH_TRINKET_HIGH");
+        AssertTrue(!loadedHigh.IsUnrated,
+            "known higher trinket guide weight must mark rated");
+        AssertNear(40.0, loadedHigh.Score - emptyHigh.Score, 0.001,
+            "trinket rawWeight 2000 adds 40 score");
+    }
+
+    private static void AssertKnownTrinketWeightConsumedByBestAction(
+        object emptyCatalog, object loadedCatalog)
+    {
+        var baseline = NewEngine(emptyCatalog).GetBestAction(TrinketState());
+        var weighted = NewEngine(loadedCatalog).GetBestAction(TrinketState());
+
+        AssertTrue(baseline == null || baseline.Type != ActionType.PickTrinket,
+            "baseline best action must not pick trinket without guide weight");
+        AssertTrue(weighted != null && weighted.Type == ActionType.PickTrinket,
+            "known trinket guide weight must enable rated trinket action");
+        AssertEqual(1, weighted.TargetIndex,
+            "known trinket guide weight must select higher raw weight offer");
+    }
+
+    private static void AssertTrinketFailClosed(
+        object emptyCatalog, object loadedCatalog)
+    {
+        AssertTrinketScoresSame(
+            emptyCatalog, emptyCatalog, "SYNTH_TRINKET",
+            "unloaded catalog must fail closed for trinket");
+        AssertTrinketScoresSame(
+            emptyCatalog, loadedCatalog, "SYNTH_UNKNOWN_TRINKET",
+            "unknown trinket must fail closed");
+        AssertTrinketScoresSame(
+            emptyCatalog, loadedCatalog, "SYNTH_TRINKET_NULL",
+            "missing trinket raw weight must fail closed");
+
+        AssertTrinketActionsSame(
+            emptyCatalog, emptyCatalog, "SYNTH_TRINKET",
+            "unloaded catalog must fail closed for trinket action");
+        AssertTrinketActionsSame(
+            emptyCatalog, loadedCatalog, "SYNTH_UNKNOWN_TRINKET",
+            "unknown trinket must fail closed for trinket action");
+        AssertTrinketActionsSame(
+            emptyCatalog, loadedCatalog, "SYNTH_TRINKET_NULL",
+            "missing trinket raw weight must fail closed for trinket action");
+    }
+
+    private static void AssertTrinketScoresSame(
+        object emptyCatalog, object loadedCatalog,
+        string trinketName, string label)
+    {
+        var baseline = NewEngine(emptyCatalog).EvaluateTrinkets(
+            TrinketState(trinketName));
+        var loaded = NewEngine(loadedCatalog).EvaluateTrinkets(
+            TrinketState(trinketName));
+        AssertEqual(1, baseline.Count, label + " baseline count");
+        AssertEqual(1, loaded.Count, label + " loaded count");
+        AssertNear(baseline[0].Score, loaded[0].Score, 0.0001,
+            label + " score");
+        AssertTrue(loaded[0].IsUnrated, label + " must remain unrated");
+    }
+
+    private static void AssertTrinketActionsSame(
+        object emptyCatalog, object loadedCatalog,
+        string trinketName, string label)
+    {
+        var baseline = NewEngine(emptyCatalog).GetBestAction(
+            TrinketState(trinketName));
+        var loaded = NewEngine(loadedCatalog).GetBestAction(
+            TrinketState(trinketName));
+
+        AssertTrue(baseline == null || baseline.Type != ActionType.PickTrinket,
+            label + " baseline must not pick trinket");
+        AssertTrue(loaded == null || loaded.Type != ActionType.PickTrinket,
+            label + " loaded must not pick trinket");
+        AssertEqual(ActionLabel(baseline), ActionLabel(loaded),
+            label + " action");
+    }
+
+    private static string ActionLabel(GameAction action)
+    {
+        return action == null
+            ? "null"
+            : action.Type + ":" + action.TargetIndex;
+    }
+
+    private static DecisionEngine.TrinketScore FindTrinketScore(
+        List<DecisionEngine.TrinketScore> scores, string name)
+    {
+        foreach (var score in scores)
+        {
+            if (string.Equals(score.Name, name, StringComparison.Ordinal))
+                return score;
+        }
+        throw new InvalidOperationException("trinket score missing: " + name);
     }
 
     private static void AssertBestActionFailClosed(
@@ -391,6 +531,60 @@ internal static class AlgorithmGuideWeightBehavior
                 Health = 4,
             },
         };
+        return state;
+    }
+
+    private static GameState TrinketState()
+    {
+        return TrinketState("SYNTH_TRINKET", "SYNTH_TRINKET_HIGH");
+    }
+
+    private static GameState TrinketState(string trinketName)
+    {
+        return TrinketState(trinketName, null);
+    }
+
+    private static GameState TrinketState(
+        string lowName, string highName)
+    {
+        var state = new GameState
+        {
+            GameActive = true,
+            Gold = 2,
+            TavernTier = 6,
+            Turn = 10,
+            Phase = "shop",
+            Health = 40,
+            ShopMinions = new List<MinionData>
+            {
+                new MinionData
+                {
+                    CardId = "SYNTH_SHOP_ID",
+                    CardName = "SYNTH_SHOP",
+                    EntityId = 1,
+                    Position = 0,
+                    Tier = 6,
+                    Attack = 8,
+                    Health = 8,
+                },
+            },
+            TrinketOffer = new List<TrinketOption>(),
+        };
+        state.TrinketOffer.Add(new TrinketOption
+        {
+            CardId = lowName + "_ID",
+            TrinketName = lowName,
+            EntityId = 11,
+        });
+        if (!string.IsNullOrEmpty(highName))
+        {
+            state.TrinketOffer.Add(new TrinketOption
+            {
+                CardId = highName + "_ID",
+                TrinketName = highName,
+                EntityId = 12,
+            });
+        }
         return state;
     }
 

@@ -2274,6 +2274,33 @@ namespace BobCoach.Engine
             }
         }
 
+        private double CompGuideTrinketWeightBonus(
+            TrinketRecommendation recommendation, out bool isRated)
+        {
+            isRated = false;
+            if (recommendation == null) return 0.0;
+            try
+            {
+                if (_compGuideCatalog == null || !_compGuideCatalog.IsLoaded)
+                    return 0.0;
+
+                CompGuideCardWeight weight;
+                if (!_compGuideCatalog.TryGetWeight(
+                    CompGuideWeightKind.Trinket,
+                    recommendation.DisplayName, out weight)
+                    || weight == null || !weight.RawWeight.HasValue)
+                    return 0.0;
+
+                isRated = true;
+                return weight.RawWeight.Value * COMP_GUIDE_WEIGHT_LAMBDA;
+            }
+            catch
+            {
+                isRated = false;
+                return 0.0;
+            }
+        }
+
         private static string GetDominantTribe(GameState state)
         {
             if (state.BoardMinions == null || state.BoardMinions.Count < 2) return "";
@@ -2428,14 +2455,18 @@ namespace BobCoach.Engine
                 state.TrinketOffer, domTribe);
             foreach (var recommendation in recommendations)
             {
+                double guideWeightBonus = CompGuideTrinketWeightBonus(
+                    recommendation, out bool isGuideRated);
                 results.Add(new TrinketScore
                 {
                     Index = recommendation.Index,
                     CardId = recommendation.CardId,
                     Name = recommendation.DisplayName,
-                    Score = recommendation.RuleScore,
+                    Score = recommendation.RuleScore + guideWeightBonus,
                     IsLesser = recommendation.IsLesser,
-                    IsUnrated = recommendation.IsUnrated,
+                    IsUnrated = isGuideRated
+                        ? false
+                        : recommendation.IsUnrated,
                     MatchedRuleIds = recommendation.MatchedRuleIds,
                 });
             }
