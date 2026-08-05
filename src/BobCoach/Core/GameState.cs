@@ -84,6 +84,7 @@ namespace BobCoach.Engine
         public string GameBuild;
         public string SeasonId;
         public string CardPoolIdentity;
+        public string CurrentCompGuideTier; // Current comp guide weight tier (T0-T3)
         public string HeroCardId = "";
         public string HeroName = "";
         public string AnomalyId = "";       // 兼容字段: 当前主畸变ID

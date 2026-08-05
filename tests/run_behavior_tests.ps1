@@ -49,6 +49,7 @@ foreach ($file in @(
     "test_algorithm_beam_planner.ps1",
     "test_algorithm_explanations.ps1",
     "test_comp_strategy_exit_behavior.ps1",
+    "test_algorithm_guide_weight.ps1",
     "test_card_effect_rule_evaluator.ps1",
     "test_card_effect_source.ps1",
     "test_effect_value_table.ps1",

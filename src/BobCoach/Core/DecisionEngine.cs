@@ -88,6 +88,7 @@ namespace BobCoach.Engine
         private readonly ContextDetector _contextDetector;
         private readonly StrategyAdjuster _strategyAdjuster;
         private readonly EffectValueTable _effectTable;   // P1: 本机事实派生GEV效果表
+        private CompGuideCatalog _compGuideCatalog;
 
         // Track1(0709): EffectValueTable 嫁接 VF 作有界加法项(治 VF 不读文字效果盲区)。
         // bonus = min(λ×EffectValue, CAP)，仅随从(法术走 V1.3 差异化评分，防双算)。回滚=LAMBDA 置 0。
@@ -95,6 +96,7 @@ namespace BobCoach.Engine
         // 生产运行时(HDT 插件)不设该变量 → 恒为 0.20, 行为不变。用于 λ 终判 λ=0.20 vs λ=0 离线对比。
         private static readonly double EFFECT_BONUS_LAMBDA = ReadEffectLambda();
         private const double EFFECT_BONUS_CAP = 0.6;      // 硬上界=15%典型VF分(median≈3.95)
+        private const double COMP_GUIDE_WEIGHT_LAMBDA = 0.02;
 
         private static double ReadEffectLambda()
         {
@@ -154,6 +156,8 @@ namespace BobCoach.Engine
             _contextDetector = new ContextDetector();
             _strategyAdjuster = new StrategyAdjuster();
             _effectTable = new EffectValueTable();   // P1: 本机事实派生GEV效果表
+            _compGuideCatalog = new CompGuideCatalog();
+            _compGuideCatalog.LoadFromConfiguredRoot();
             var semanticSource = new CachedCardSemanticSource(
                 new HearthDbCardSemanticFactSource(),
                 new CardSemanticRuleEvaluator());
@@ -975,6 +979,14 @@ namespace BobCoach.Engine
                     }
                 }
 
+                // Season14: comp guide core weight as bounded additive signal after all multipliers.
+                if (action.Type == ActionType.BuyMinion
+                    && action.TargetIndex < state.ShopMinions.Count)
+                {
+                    value += CompGuideWeightBonus(
+                        state.ShopMinions[action.TargetIndex], state);
+                }
+
                 if (value > bestValue)
                 {
                     bestValue = value;
@@ -1639,6 +1651,7 @@ namespace BobCoach.Engine
                 score += EffectValueBonus(shopCard, state, dominantTribe);
                 score += (state.ActiveTrinketContext ?? ActiveTrinketContext.Empty)
                     .GetCardSynergyScore(shopCard);
+                score += CompGuideWeightBonus(shopCard, state);
 
                 ranked.Add(new RankedBuy { Index = i, Score = score });
             }
@@ -1997,6 +2010,7 @@ namespace BobCoach.Engine
                 score += EffectValueBonus(shopCard, state, dominantTribe);
                 score += (state.ActiveTrinketContext ?? ActiveTrinketContext.Empty)
                     .GetCardSynergyScore(shopCard);
+                score += CompGuideWeightBonus(shopCard, state);
 
                 // ── P1 影子: GEV 金币等价值(与VF主Score并行输出, 不改现网) ──
                 // synergy: 主导部落匹配(免锁, 单帧重放也有效) → +1.5。
@@ -2227,6 +2241,37 @@ namespace BobCoach.Engine
             double ev = _effectTable.ComputeEffectValue(card, state, dominantTribe);
             double bonus = EFFECT_BONUS_LAMBDA * ev;
             return bonus > EFFECT_BONUS_CAP ? EFFECT_BONUS_CAP : bonus;
+        }
+
+        private double CompGuideWeightBonus(MinionData card, GameState state)
+        {
+            if (card == null || card.IsSpell || state == null) return 0.0;
+            try
+            {
+                if (_compGuideCatalog == null || !_compGuideCatalog.IsLoaded)
+                    return 0.0;
+
+                CompGuideCardWeight weight;
+                if (!_compGuideCatalog.TryGetWeight(
+                    CompGuideWeightKind.Core, card.CardName, out weight)
+                    || weight == null || !weight.RawWeight.HasValue)
+                    return 0.0;
+
+                if (string.IsNullOrEmpty(state.CurrentCompGuideTier))
+                    return 0.0;
+
+                int tierWeight;
+                if (!_compGuideCatalog.TryGetTierWeight(
+                    state.CurrentCompGuideTier, out tierWeight))
+                    return 0.0;
+
+                return weight.RawWeight.Value * tierWeight
+                    * COMP_GUIDE_WEIGHT_LAMBDA;
+            }
+            catch
+            {
+                return 0.0;
+            }
         }
 
         private static string GetDominantTribe(GameState state)
