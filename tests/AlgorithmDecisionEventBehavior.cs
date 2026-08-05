@@ -76,14 +76,6 @@ namespace BobCoach.Engine
         public int Health;
         public List<string> Tribes = new List<string>();
     }
-
-    internal static class BobCoachDataPaths
-    {
-        internal static string GetPath(params string[] segments)
-        {
-            return Path.Combine(Path.GetTempPath(), Path.Combine(segments));
-        }
-    }
 }
 
 namespace BobCoach.Engine.Decision
@@ -124,6 +116,7 @@ internal static class AlgorithmDecisionEventBehavior
             AppendsIdempotentObservationEventsWithoutQualityLabels();
             WritesModelIdentityIntoEveryEnvelope();
             NormalizesMissingModelIdentityToUnknown();
+            CreateForLocalReplayRequiresTrustedExternalRoot();
             ReusesOnlyOpenUnchangedDecisionGenerations();
             AttachesGameOutcomeToLastRelevantDecision();
             RejectsMalformedPriorEventLogs();
@@ -435,6 +428,77 @@ internal static class AlgorithmDecisionEventBehavior
             "blank model checksum identity");
     }
 
+    private static void CreateForLocalReplayRequiresTrustedExternalRoot()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var originalRoot = Environment.GetEnvironmentVariable(
+            BobCoachDataPaths.RootEnvironmentVariable);
+        var trustedRoot = NewTrustedRoot(repositoryRoot);
+        try
+        {
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable, null);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot),
+                "unset decision-event root");
+
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                "relative\\data");
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot),
+                "relative decision-event root");
+
+            var appDataBobCoach = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "bob-coach");
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                appDataBobCoach);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot),
+                "appdata bob-coach decision-event root");
+
+            var systemTemp = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System), "Temp");
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                systemTemp);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot),
+                "system-drive decision-event root");
+
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                repositoryRoot);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot),
+                "repository-contained decision-event root");
+
+            var repositoryParent = Directory.GetParent(repositoryRoot).FullName;
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                repositoryParent);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot),
+                "repository-ancestor decision-event root");
+
+            Directory.CreateDirectory(trustedRoot);
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                trustedRoot);
+            var trustedPath = BobCoachDataPaths.GetTrustedDecisionEventsPath(repositoryRoot);
+            AssertEqual(Path.Combine(trustedRoot, "decision-events.jsonl"), trustedPath,
+                "trusted decision-event path");
+
+            var recorder = DecisionEventRecorder.CreateForLocalReplay(
+                "trusted-root-test", "trusted-sha256");
+            recorder.RecordCreated(DecisionEventRecord.Create(
+                "trusted-root-decision", "game-1", State(5, 4), Candidates()));
+            AssertTrue(File.Exists(trustedPath),
+                "CreateForLocalReplay writes inside the trusted external root");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                BobCoachDataPaths.RootEnvironmentVariable, originalRoot);
+            RemoveTrustedRoot(trustedRoot, repositoryRoot);
+        }
+    }
+
     private static void AssertIdentityTransitionChangesFingerprint(
         string canonicalProperty,
         string label,
@@ -611,6 +675,39 @@ internal static class AlgorithmDecisionEventBehavior
     private static string NewPath()
     {
         return Path.Combine(Path.GetTempPath(), "bobcoach_decision_events_" + Guid.NewGuid().ToString("N") + ".jsonl");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var current = new DirectoryInfo(Environment.CurrentDirectory);
+        while (current != null)
+        {
+            var marker = Path.Combine(current.FullName, ".git");
+            if (Directory.Exists(marker) || File.Exists(marker)) return current.FullName;
+            current = current.Parent;
+        }
+        throw new InvalidOperationException("repository root not found");
+    }
+
+    private static string NewTrustedRoot(string repositoryRoot)
+    {
+        var evidenceRoot = Path.Combine(
+            Directory.GetParent(repositoryRoot).FullName,
+            "HDT-BobCoach-evidence", "season14", "generated");
+        return Path.Combine(evidenceRoot,
+            "bobcoach_trusted_root_" + Guid.NewGuid().ToString("N"));
+    }
+
+    private static void RemoveTrustedRoot(string trustedRoot, string repositoryRoot)
+    {
+        if (!Directory.Exists(trustedRoot)) return;
+        var evidenceRoot = Path.Combine(
+            Directory.GetParent(repositoryRoot).FullName,
+            "HDT-BobCoach-evidence", "season14", "generated");
+        var expectedPrefix = Path.GetFullPath(evidenceRoot) + Path.DirectorySeparatorChar;
+        var resolved = Path.GetFullPath(trustedRoot);
+        if (resolved.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
+            Directory.Delete(resolved, true);
     }
 
     private static void AssertEqual<T>(T expected, T actual, string label)

@@ -22,6 +22,7 @@ if (!$jsonDll) { throw "Newtonsoft.Json.dll not found; set BOBCOACH_HDT_DIR" }
 
 $output = Join-Path $env:TEMP ("bobcoach_algorithm_orchestrator_{0}.exe" -f [Guid]::NewGuid().ToString("N"))
 $sources = @(
+    (Join-Path $root "src\BobCoach\Core\BobCoachDataPaths.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\Contracts.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\DecisionEventRecord.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\DecisionEventRecorder.cs"),

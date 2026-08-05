@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
+Push-Location $root
 $candidates = @()
 if ($env:BOBCOACH_CSC) { $candidates += $env:BOBCOACH_CSC }
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -25,6 +26,7 @@ if (!$jsonDll) { throw "Newtonsoft.Json.dll not found; set BOBCOACH_HDT_DIR" }
 
 $output = Join-Path $env:TEMP ("bobcoach_algorithm_decision_events_{0}.exe" -f [Guid]::NewGuid().ToString("N"))
 $sources = @(
+    (Join-Path $root "src\BobCoach\Core\BobCoachDataPaths.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\DecisionEventRecord.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\DecisionEventRecorder.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\DecisionLifecycleTracker.cs"),

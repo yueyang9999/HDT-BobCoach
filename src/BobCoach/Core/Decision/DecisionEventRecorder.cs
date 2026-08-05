@@ -46,7 +46,7 @@ namespace BobCoach.Engine.Decision
         public static DecisionEventRecorder CreateForLocalReplay(string modelId,
             string modelPayloadSha256)
         {
-            return new DecisionEventRecorder(BobCoachDataPaths.GetPath("decision-events.jsonl"),
+            return new DecisionEventRecorder(BobCoachDataPaths.GetTrustedDecisionEventsPath(),
                 modelId, modelPayloadSha256);
         }
 

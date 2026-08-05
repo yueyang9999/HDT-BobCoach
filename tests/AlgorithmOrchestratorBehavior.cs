@@ -99,13 +99,6 @@ namespace BobCoach.Engine
         public List<string> Tribes = new List<string>();
     }
 
-    internal static class BobCoachDataPaths
-    {
-        internal static string GetPath(params string[] segments)
-        {
-            return Path.Combine(Path.GetTempPath(), Path.Combine(segments));
-        }
-    }
 }
 
 namespace BobCoach.Engine.Decision
