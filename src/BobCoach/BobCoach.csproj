@@ -63,6 +63,7 @@
     <Compile Include="Core\TrinketEffectResolver.cs" />
     <Compile Include="Core\Season14RegistryJsonParser.cs" />
     <Compile Include="Core\SeasonDataSelector.cs" />
+    <Compile Include="Core\SeasonMechanicProfile.cs" />
     <Compile Include="Core\CompGuideCatalog.cs" />
     <Compile Include="Core\Season14CardRegistry.cs" />
     <Compile Include="Core\ActivateRegistry.cs" />

@@ -14,6 +14,7 @@ internal static class Season14RegistriesHarness
     private static TrinketDefinitionRegistry _trinket;
     private static Season14RulesEvaluator _season14;
     private static CompGuideCatalog _compGuideCatalog;
+    private static SeasonMechanicProfile _season14Profile;
 
     private static int Main()
     {
@@ -24,6 +25,8 @@ internal static class Season14RegistriesHarness
             SeasonDataSelectorTests();
             MissingConfiguredRootFailsClosed();
             RealLookupsAndCoverage();
+            RealSeasonMechanicProfile();
+            SeasonMechanicProfileFailsClosed();
             RealSeason14RulesEvaluator();
             EmptyEvaluatorFailsClosed();
             RealCompGuideCatalog();
@@ -95,6 +98,9 @@ internal static class Season14RegistriesHarness
         Equal(23, _compGuideCatalog.GuidesCount, "comp guide catalog guide count");
         Equal(138, _compGuideCatalog.CoreCardsCount, "comp guide catalog core card count");
         Equal(69, _compGuideCatalog.TrinketsCount, "comp guide catalog trinket count");
+
+        _season14Profile = new SeasonMechanicProfile();
+        _season14Profile.LoadFromConfiguredRoot();
     }
 
     private static void RealLookupsAndCoverage()
@@ -164,6 +170,8 @@ internal static class Season14RegistriesHarness
             "trinket ConfiguredRoot");
         Equal(expectedRoot, Path.GetFullPath(_compGuideCatalog.ConfiguredRoot),
             "comp guide catalog ConfiguredRoot");
+        Equal(expectedRoot, Path.GetFullPath(_season14Profile.ConfiguredRoot),
+            "season14 profile ConfiguredRoot");
 
         string appDataRoot = Path.GetFullPath(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -557,11 +565,238 @@ internal static class Season14RegistriesHarness
         False(fromWeight.IsLoaded, "BGDUO weight string rejected");
     }
 
+    private static void RealSeasonMechanicProfile()
+    {
+        True(_season14Profile.IsLoaded, "real season14 mechanic profile loaded");
+        True(_season14Profile.IsMechanicEnabled("activate"),
+            "real profile activates activate");
+        True(_season14Profile.IsMechanicEnabled("lockbox"),
+            "real profile activates lockbox");
+        True(_season14Profile.IsMechanicEnabled("fishbait"),
+            "real profile activates fishbait");
+        True(_season14Profile.IsMechanicEnabled("darkGift"),
+            "real profile activates darkGift");
+        True(_season14Profile.IsMechanicEnabled("trinket"),
+            "real profile activates trinket");
+        False(_season14Profile.IsMechanicEnabled("anomaly"),
+            "real profile deactivates anomaly");
+    }
+
+    private static void SeasonMechanicProfileFailsClosed()
+    {
+        const string validJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active"",
+    ""anomaly"": ""inactive""
+  }
+}";
+        var valid = new SeasonMechanicProfile();
+        valid.LoadFromJson(
+            validJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        True(valid.IsLoaded, "synthetic profile loaded");
+        True(valid.IsMechanicEnabled("trinket"), "synthetic trinket active");
+        False(valid.IsMechanicEnabled("anomaly"), "synthetic anomaly inactive");
+        False(valid.IsMechanicEnabled("unknown"), "unknown mechanism fails closed");
+
+        var empty = new SeasonMechanicProfile();
+        False(empty.IsLoaded, "empty profile not loaded");
+        False(empty.IsMechanicEnabled("trinket"), "empty profile fails closed");
+
+        var badJson = new SeasonMechanicProfile();
+        badJson.LoadFromJson("{", "season14", "36.2.248348", "0bcc979ae21df891");
+        False(badJson.IsLoaded, "bad profile JSON fails closed");
+
+        const string missingMetaJson = @"{
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active"",
+    ""anomaly"": ""inactive""
+  }
+}";
+        var missingMeta = new SeasonMechanicProfile();
+        missingMeta.LoadFromJson(
+            missingMetaJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(missingMeta.IsLoaded, "missing profile meta fails closed");
+
+        const string schemaMismatchJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 2,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active"",
+    ""anomaly"": ""inactive""
+  }
+}";
+        var schemaMismatch = new SeasonMechanicProfile();
+        schemaMismatch.LoadFromJson(
+            schemaMismatchJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(schemaMismatch.IsLoaded, "unsupported profile schema fails closed");
+
+        const string seasonMismatchJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season15"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active"",
+    ""anomaly"": ""inactive""
+  }
+}";
+        var seasonMismatch = new SeasonMechanicProfile();
+        seasonMismatch.LoadFromJson(
+            seasonMismatchJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(seasonMismatch.IsLoaded, "profile season mismatch fails closed");
+
+        const string unknownMechanismJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active"",
+    ""anomaly"": ""inactive"",
+    ""mystery"": ""active""
+  }
+}";
+        var unknownMechanism = new SeasonMechanicProfile();
+        unknownMechanism.LoadFromJson(
+            unknownMechanismJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(unknownMechanism.IsLoaded, "unknown profile mechanism fails closed");
+
+        const string incompleteMechanismJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active""
+  }
+}";
+        var incompleteMechanism = new SeasonMechanicProfile();
+        incompleteMechanism.LoadFromJson(
+            incompleteMechanismJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(incompleteMechanism.IsLoaded,
+            "incomplete profile mechanism set fails closed");
+
+        const string unknownStatusJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""enabled"",
+    ""anomaly"": ""inactive""
+  }
+}";
+        var unknownStatus = new SeasonMechanicProfile();
+        unknownStatus.LoadFromJson(
+            unknownStatusJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(unknownStatus.IsLoaded, "unknown profile status fails closed");
+
+        const string bgduoJson = @"{
+  ""_meta"": {
+    ""schemaVersion"": 1,
+    ""season"": ""season14"",
+    ""gameBuild"": ""36.2.248348"",
+    ""cardPoolIdentity"": ""0bcc979ae21df891""
+  },
+  ""mechanisms"": {
+    ""activate"": ""active"",
+    ""lockbox"": ""active"",
+    ""fishbait"": ""active"",
+    ""darkGift"": ""active"",
+    ""trinket"": ""active"",
+    ""anomaly"": ""bgduo""
+  }
+}";
+        var bgduo = new SeasonMechanicProfile();
+        bgduo.LoadFromJson(
+            bgduoJson, "season14", "36.2.248348", "0bcc979ae21df891");
+        False(bgduo.IsLoaded, "profile BGDUO rejected");
+
+        string previousRoot = Environment.GetEnvironmentVariable(
+            BobCoachDataPaths.RootEnvironmentVariable);
+        string previousSelector = Environment.GetEnvironmentVariable(
+            BobCoachDataPaths.SeasonSelectorEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable, null);
+            Environment.SetEnvironmentVariable(
+                BobCoachDataPaths.SeasonSelectorEnvironmentVariable,
+                Path.Combine(Path.GetTempPath(),
+                    "bobcoach-missing-profile-selector-"
+                        + Guid.NewGuid().ToString("N") + ".json"));
+            var missingRoot = new SeasonMechanicProfile();
+            missingRoot.LoadFromConfiguredRoot();
+            False(missingRoot.IsLoaded,
+                "missing configured root profile fails closed");
+            Equal(null, missingRoot.ConfiguredRoot,
+                "missing configured root profile has no root");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(
+                BobCoachDataPaths.RootEnvironmentVariable, previousRoot);
+            Environment.SetEnvironmentVariable(
+                BobCoachDataPaths.SeasonSelectorEnvironmentVariable, previousSelector);
+        }
+    }
+
     private static void RealSeason14RulesEvaluator()
     {
         _season14 = new Season14RulesEvaluator();
         _season14.LoadFromConfiguredRoot();
         True(_season14.IsLoaded, "season14 evaluator loaded");
+        True(_season14.IsMechanicEnabled("trinket"),
+            "season14 evaluator trinket active");
+        False(_season14.IsMechanicEnabled("anomaly"),
+            "season14 evaluator anomaly inactive");
+        False(_season14.IsMechanicEnabled("unknown"),
+            "season14 evaluator unknown mechanism fails closed");
         Equal(1, _season14.ExcludedAnomalyIds.Count, "season14 excluded anomaly count");
         Equal("BG36_Anomaly_002", _season14.ExcludedAnomalyIds[0],
             "season14 excluded anomaly id");
@@ -625,6 +860,10 @@ internal static class Season14RegistriesHarness
     {
         var evaluator = new Season14RulesEvaluator();
         False(evaluator.IsLoaded, "empty evaluator not loaded");
+        False(evaluator.IsMechanicEnabled("trinket"),
+            "empty evaluator trinket fails closed");
+        False(evaluator.IsMechanicEnabled("anomaly"),
+            "empty evaluator anomaly fails closed");
 
         ActivateFact activate;
         False(evaluator.TryGetActivate("BG36_180", out activate),
@@ -653,6 +892,8 @@ internal static class Season14RegistriesHarness
             new FishbaitRegistry(),
             new DarkGiftRegistry());
         False(unloadedRegistries.IsLoaded, "unloaded registries evaluator not loaded");
+        False(unloadedRegistries.IsMechanicEnabled("trinket"),
+            "unloaded registries evaluator trinket fails closed");
         False(unloadedRegistries.TryGetActivate("BG36_180", out activate),
             "unloaded registries activate fails");
     }

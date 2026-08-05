@@ -25,6 +25,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\BobCoachDataPaths.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14RegistryJsonParser.cs"),
     (Join-Path $root "src\BobCoach\Core\SeasonDataSelector.cs"),
+    (Join-Path $root "src\BobCoach\Core\SeasonMechanicProfile.cs"),
     (Join-Path $root "src\BobCoach\Core\CompGuideCatalog.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14CardRegistry.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatContext.cs"),

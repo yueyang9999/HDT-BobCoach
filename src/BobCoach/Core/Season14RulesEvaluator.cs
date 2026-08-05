@@ -18,6 +18,7 @@ namespace BobCoach.Engine
         private LockboxRegistry _lockboxRegistry;
         private FishbaitRegistry _fishbaitRegistry;
         private DarkGiftRegistry _darkGiftRegistry;
+        private SeasonMechanicProfile _mechanicProfile;
 
         internal Season14RulesEvaluator()
         {
@@ -30,7 +31,8 @@ namespace BobCoach.Engine
                 return _activateRegistry != null && _activateRegistry.IsLoaded
                     && _lockboxRegistry != null && _lockboxRegistry.IsLoaded
                     && _fishbaitRegistry != null && _fishbaitRegistry.IsLoaded
-                    && _darkGiftRegistry != null && _darkGiftRegistry.IsLoaded;
+                    && _darkGiftRegistry != null && _darkGiftRegistry.IsLoaded
+                    && _mechanicProfile != null && _mechanicProfile.IsLoaded;
             }
         }
 
@@ -41,6 +43,8 @@ namespace BobCoach.Engine
 
         internal void LoadFromConfiguredRoot()
         {
+            var mechanicProfile = new SeasonMechanicProfile();
+            mechanicProfile.LoadFromConfiguredRoot();
             var activate = new ActivateRegistry();
             activate.LoadFromConfiguredRoot();
             var lockbox = new LockboxRegistry();
@@ -50,6 +54,7 @@ namespace BobCoach.Engine
             var darkGift = new DarkGiftRegistry();
             darkGift.LoadFromConfiguredRoot();
             LoadFromRegistries(activate, lockbox, fishbait, darkGift);
+            _mechanicProfile = mechanicProfile;
         }
 
         internal void LoadFromRegistries(
@@ -58,10 +63,17 @@ namespace BobCoach.Engine
             FishbaitRegistry fishbaitRegistry,
             DarkGiftRegistry darkGiftRegistry)
         {
+            _mechanicProfile = null;
             _activateRegistry = activateRegistry;
             _lockboxRegistry = lockboxRegistry;
             _fishbaitRegistry = fishbaitRegistry;
             _darkGiftRegistry = darkGiftRegistry;
+        }
+
+        internal bool IsMechanicEnabled(string mechanic)
+        {
+            return _mechanicProfile != null
+                && _mechanicProfile.IsMechanicEnabled(mechanic);
         }
 
         internal bool TryGetActivate(string cardId, out ActivateFact fact)

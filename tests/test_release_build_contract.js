@@ -72,9 +72,9 @@ assert.ok(compileItems.includes("Core\\CompGuideCatalog.cs"),
     "comp guide catalog must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\SeasonDataSelector.cs"),
     "season data selector must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 212, "unexpected compile item count");
+assert.strictEqual(compileItems.length, 213, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "f84d15ed944357a5a5170a6661928eb0de9c2f18a0971149164c680551d521a1",
+    "5d01c67a54914ce0b7e3bec7d3a5050154148cdf884a21ea902bd36ec4ae8c27",
     "compile set changed");
 
 for (const token of [
