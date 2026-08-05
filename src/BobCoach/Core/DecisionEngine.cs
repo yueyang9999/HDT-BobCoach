@@ -2430,7 +2430,7 @@ namespace BobCoach.Engine
         private GameAction TryGetRatedTrinketAction(GameState state)
         {
             // 合法性 by-construction: 仅当 state.TrinketOffer 非空(游戏正在提供饰品选择)才返回 PickTrinket;
-            // 无报价→null。ActionEnumerator 不枚举 PickTrinket, 但"有报价即可选"是确定性合法, 无需入枚举集。
+            // 无报价→null。ActionEnumerator 已将每个 TrinketOffer 枚举为 PickTrinket 候选。
             if (state.TrinketOffer == null || state.TrinketOffer.Count == 0) return null;
             var scores = EvaluateTrinkets(state);
             if (scores.Count == 0 || scores[0].IsUnrated) return null;

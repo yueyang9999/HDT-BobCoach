@@ -194,6 +194,23 @@ namespace BobCoach.Engine
                 }
             }
 
+            // 饰品报价: 与发现面板同源, 有报价即可选。
+            if (state.TrinketOffer != null && state.TrinketOffer.Count > 0)
+            {
+                for (int i = 0; i < state.TrinketOffer.Count; i++)
+                {
+                    var offer = state.TrinketOffer[i];
+                    if (offer == null) continue;
+                    actions.Add(new GameAction
+                    {
+                        Type = ActionType.PickTrinket,
+                        TargetIndex = i,
+                        CardId = offer.CardId,
+                        Description = "选择饰品: " + offer.TrinketName
+                    });
+                }
+            }
+
             // 发现选择 (3选1, 三连奖励等)
             if (state.DiscoverOptions != null && state.DiscoverOptions.Count > 0)
             {

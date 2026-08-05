@@ -10,6 +10,8 @@ internal static class AlgorithmObservedActionInferenceBehavior
     {
         try
         {
+            EnumeratesTrinketOffersAsPickActions();
+            DoesNotEnumerateTrinketsWithoutAnOffer();
             IgnoresTurnStartShopReplacement();
             InfersPaidRefreshWithinTheSameTurn();
             InfersFreeRefreshWithinTheSameTurn();
@@ -26,6 +28,42 @@ internal static class AlgorithmObservedActionInferenceBehavior
             Console.Error.WriteLine("FAIL " + ex.Message);
             return 1;
         }
+    }
+
+    private static void EnumeratesTrinketOffersAsPickActions()
+    {
+        var state = State(4, 5, 0);
+        state.TrinketOffer.Add(new TrinketOption
+        {
+            CardId = "TRINKET_A",
+            TrinketName = "Trinket A",
+            EntityId = 101,
+        });
+        state.TrinketOffer.Add(new TrinketOption
+        {
+            CardId = "TRINKET_B",
+            TrinketName = "Trinket B",
+            EntityId = 102,
+        });
+
+        var actions = new ActionEnumerator().Enumerate(state);
+        var picks = actions.Where(action => action.Type == ActionType.PickTrinket).ToList();
+
+        AssertTrue(picks.Count == 2,
+            "trinket offer enumerates two PickTrinket actions");
+        AssertTrue(picks[0].TargetIndex == 0 && picks[0].CardId == "TRINKET_A",
+            "first PickTrinket target maps to first trinket offer");
+        AssertTrue(picks[1].TargetIndex == 1 && picks[1].CardId == "TRINKET_B",
+            "second PickTrinket target maps to second trinket offer");
+    }
+
+    private static void DoesNotEnumerateTrinketsWithoutAnOffer()
+    {
+        var state = State(4, 5, 0);
+        var actions = new ActionEnumerator().Enumerate(state);
+
+        AssertTrue(!actions.Any(action => action.Type == ActionType.PickTrinket),
+            "empty trinket offer fails closed");
     }
 
     private static void IgnoresTurnStartShopReplacement()
