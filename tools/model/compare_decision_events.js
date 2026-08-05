@@ -474,6 +474,12 @@ function sameJsonValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function normalizeCompGuideTier(value) {
+  if (typeof value !== 'string') return 'unknown';
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? 'unknown' : trimmed;
+}
+
 function normalizeTrinketOffer(offer) {
   return offer.map(trinket => trinket.CardId);
 }
@@ -489,7 +495,9 @@ function compareDecision(decisionId, baseline, candidate, differences) {
   const baselineState = baseline.DecisionCreated.payload.State;
   const candidateState = candidate.DecisionCreated.payload.State;
   const comparisons = [
-    ['CurrentCompGuideTier', baselineState.CurrentCompGuideTier, candidateState.CurrentCompGuideTier],
+    ['CurrentCompGuideTier',
+      normalizeCompGuideTier(baselineState.CurrentCompGuideTier),
+      normalizeCompGuideTier(candidateState.CurrentCompGuideTier)],
     ['TrinketOffer', normalizeTrinketOffer(baselineState.TrinketOffer),
       normalizeTrinketOffer(candidateState.TrinketOffer)],
     ['ActiveTrinkets', baselineState.ActiveTrinkets, candidateState.ActiveTrinkets],
@@ -674,4 +682,5 @@ module.exports = {
   readEventText,
   readEventFile,
   indexEvents,
+  normalizeCompGuideTier,
 };

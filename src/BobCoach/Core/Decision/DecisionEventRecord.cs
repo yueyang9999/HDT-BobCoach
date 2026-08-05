@@ -115,7 +115,7 @@ namespace BobCoach.Engine.Decision
                 FreeRefreshCount = state.FreeRefreshCount,
                 FirstPurchaseUsedThisTurn = state.FirstPurchaseUsedThisTurn,
                 FirstMinionPurchaseUsedThisTurn = state.FirstMinionPurchaseUsedThisTurn,
-                CurrentCompGuideTier = state.CurrentCompGuideTier ?? "",
+                CurrentCompGuideTier = NormalizeIdentity(state.CurrentCompGuideTier),
                 AvailableTribes = ReadOnlyStrings(state.AvailableTribes),
                 BoardMinions = ReadOnlyMinions(state.BoardMinions),
                 HandMinions = ReadOnlyMinions(state.HandMinions),

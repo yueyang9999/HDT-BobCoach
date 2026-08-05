@@ -243,6 +243,25 @@ assert.deepStrictEqual(directAggregate.identity.currentCompGuideTier, {
   values: ['unknown'],
 });
 
+const blankIdentityAggregate = buildAggregate(
+  Buffer.from('blank'),
+  [{
+    eventKey: 'blank|created',
+    eventType: 'DecisionCreated',
+    payload: {
+      DecisionId: 'blank',
+      State: {
+        CurrentCompGuideTier: '   ',
+      },
+    },
+  }],
+  new Map([['blank', {}]]),
+  'inputs/blank-identity.jsonl');
+assert.deepStrictEqual(blankIdentityAggregate.identity.currentCompGuideTier, {
+  distinctCount: 1,
+  values: ['unknown'],
+});
+
 const tempRoot = makeTempRoot();
 try {
   const missingArgs = run(ingestTool, []);

@@ -196,6 +196,30 @@ try {
   assert.strictEqual(identical.baseline.eventCount, 5);
   assert.strictEqual(identical.candidate.eventCount, 5);
 
+  const blankTierPath = writeJsonl(tempRoot, 'blank-tier.jsonl', [
+    decisionCreated('game-7:1', {
+      State: {
+        ...decisionCreated('game-7:1').payload.State,
+        CurrentCompGuideTier: '   ',
+      },
+      StateFingerprint: '6'.repeat(64),
+    }),
+    playerAction('game-7:1', 'Refresh|-1||'),
+  ]);
+  const unknownTierPath = writeJsonl(tempRoot, 'unknown-tier.jsonl', [
+    decisionCreated('game-7:1', {
+      State: {
+        ...decisionCreated('game-7:1').payload.State,
+        CurrentCompGuideTier: 'unknown',
+      },
+      StateFingerprint: '6'.repeat(64),
+    }),
+    playerAction('game-7:1', 'Refresh|-1||'),
+  ]);
+  const tierEquivalent = compareDecisionEventFiles(blankTierPath, unknownTierPath);
+  assert.strictEqual(tierEquivalent.equal, true);
+  assert.deepStrictEqual(tierEquivalent.differences, []);
+
   const missingFile = path.join(tempRoot, 'missing.jsonl');
   assert.throws(() => compareDecisionEventFiles(missingFile, candidatePath),
     /does not exist|ENOENT/i, 'missing baseline must fail closed');

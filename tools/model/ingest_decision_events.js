@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const path = require('path');
 
 const { assertExternalDataRoot, resolveDataPath } = require('./contracts');
-const { readEventText, indexEvents } = require('./compare_decision_events');
+const { readEventText, indexEvents, normalizeCompGuideTier } = require('./compare_decision_events');
 
 const EVENT_TYPES = [
   'DecisionCreated',
@@ -62,7 +62,9 @@ function buildAggregate(rawBytes, events, byDecision, inputRel) {
       const state = event.payload && event.payload.State;
       for (const [sourceName, outputName] of IDENTITY_FIELDS) {
         identitySets.get(outputName).add(
-          normalizeIdentity(state ? state[sourceName] : undefined));
+          outputName === 'currentCompGuideTier'
+            ? normalizeCompGuideTier(state ? state[sourceName] : undefined)
+            : normalizeIdentity(state ? state[sourceName] : undefined));
       }
       const offer = state && state.TrinketOffer;
       if (Array.isArray(offer) && offer.length > 0) trinketOfferDecisionCount += 1;

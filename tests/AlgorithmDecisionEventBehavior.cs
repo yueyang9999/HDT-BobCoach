@@ -111,6 +111,7 @@ internal static class AlgorithmDecisionEventBehavior
         {
             PreservesDetachedPreActionStateAndFingerprints();
             CapturesRuleIdentitiesAndDistinguishesUnknownValues();
+            NormalizesMissingCurrentCompGuideTierToUnknown();
             CapturesSeasonMechanicDecisionState();
             CapturesSeasonMechanicFingerprintTransitions();
             AppendsIdempotentObservationEventsWithoutQualityLabels();
@@ -335,6 +336,30 @@ internal static class AlgorithmDecisionEventBehavior
             "snapshot must detach trinket offer list");
         AssertEqual(2, record.State.ActiveTrinkets.Count,
             "snapshot must detach active trinket list");
+    }
+
+    private static void NormalizesMissingCurrentCompGuideTierToUnknown()
+    {
+        var missingValues = new string[] { null, "", "   " };
+        for (var index = 0; index < missingValues.Length; index++)
+        {
+            var state = State(5, 4);
+            state.CurrentCompGuideTier = missingValues[index];
+            var record = DecisionEventRecord.Create(
+                "comp-guide-tier-unknown-" + index, "game-1", state, Candidates());
+            AssertEqual(GameStateSnapshot.UnknownIdentity, record.State.CurrentCompGuideTier,
+                "missing comp guide tier is explicit unknown");
+            var canonical = CanonicalJson.Serialize(record.State);
+            AssertTrue(canonical.Contains("\"currentCompGuideTier\":\"unknown\""),
+                "unknown comp guide tier is inside the canonical hash domain");
+        }
+
+        var real = State(5, 4);
+        real.CurrentCompGuideTier = "T1";
+        var realRecord = DecisionEventRecord.Create(
+            "comp-guide-tier-real", "game-1", real, Candidates());
+        AssertEqual("T1", realRecord.State.CurrentCompGuideTier,
+            "real comp guide tier remains explicit");
     }
 
     private static void CapturesSeasonMechanicFingerprintTransitions()
