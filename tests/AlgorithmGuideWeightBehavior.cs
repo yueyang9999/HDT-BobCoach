@@ -108,6 +108,9 @@ internal static class AlgorithmGuideWeightBehavior
         AssertKnownWeightConsumedByShopScores(emptyCatalog, loadedCatalog);
         AssertKnownWeightConsumedByBuyIndices(emptyCatalog, loadedCatalog);
         AssertKnownWeightConsumedByBestAction(emptyCatalog, loadedCatalog);
+        AssertDefaultGuideTierIsNull();
+        AssertLoadedCatalogNullTierFailClosedAcrossDecisionPaths(
+            emptyCatalog, loadedCatalog);
         AssertBestActionFailClosed(emptyCatalog, loadedCatalog);
         AssertFailClosed(emptyCatalog, loadedCatalog);
     }
@@ -222,6 +225,50 @@ internal static class AlgorithmGuideWeightBehavior
         var baseline = Score(NewEngine(emptyCatalog), cardName, tier);
         var actual = Score(NewEngine(loadedCatalog), cardName, tier);
         AssertNear(baseline, actual, 0.0001, label);
+    }
+
+    private static void AssertDefaultGuideTierIsNull()
+    {
+        var state = new GameState();
+        AssertTrue(
+            state.CurrentCompGuideTier == null,
+            "new GameState must default CurrentCompGuideTier to null");
+    }
+
+    private static void AssertLoadedCatalogNullTierFailClosedAcrossDecisionPaths(
+        object emptyCatalog, object loadedCatalog)
+    {
+        var emptyScores = Score(NewEngine(emptyCatalog), "SYNTH_CARD", null);
+        var loadedScores = Score(NewEngine(loadedCatalog), "SYNTH_CARD", null);
+        AssertNear(emptyScores, loadedScores, 0.0001,
+            "loaded catalog with null tier must not change shop card score");
+
+        var emptyBuyState = BuyState();
+        SetTier(emptyBuyState, null);
+        var loadedBuyState = BuyState();
+        SetTier(loadedBuyState, null);
+        var emptyBuy = NewEngine(emptyCatalog)
+            .GetRecommendedBuyIndices(emptyBuyState, 1);
+        var loadedBuy = NewEngine(loadedCatalog)
+            .GetRecommendedBuyIndices(loadedBuyState, 1);
+        AssertEqual(emptyBuy.Count, loadedBuy.Count,
+            "loaded catalog with null tier must not change buy index count");
+        for (var i = 0; i < emptyBuy.Count; i++)
+        {
+            AssertEqual(emptyBuy[i], loadedBuy[i],
+                "loaded catalog with null tier must not change buy index " + i);
+        }
+
+        var emptyActionState = BestActionState();
+        SetTier(emptyActionState, null);
+        var loadedActionState = BestActionState();
+        SetTier(loadedActionState, null);
+        var emptyAction = NewEngine(emptyCatalog).GetBestAction(emptyActionState);
+        var loadedAction = NewEngine(loadedCatalog).GetBestAction(loadedActionState);
+        AssertEqual(emptyAction.Type, loadedAction.Type,
+            "loaded catalog with null tier must not change best action type");
+        AssertEqual(emptyAction.TargetIndex, loadedAction.TargetIndex,
+            "loaded catalog with null tier must not change best action target");
     }
 
     private static object CreateEmptyCatalog()
