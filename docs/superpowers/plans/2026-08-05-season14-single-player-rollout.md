@@ -2,7 +2,7 @@
 
 > 状态：2026-08-05；T0-T9 完成，Season14 规则/攻略/归档已完成；本地可调用抓取/半自动校验工具已落地，2 个别名已确认并已 apply；T10/T11 本地部分已实施（refresh wrapper + CompGuideCatalog + SeasonDataSelector + selector 运行时接入），CI/CD、插件网络抓取、发布未实施
 > 分支：`codex/season14-algorithm-iteration`
-> HEAD：`9380a77`
+> HEAD：`8feb1eb`（算法权重基线与前置条件 runbook）
 > 数据根：`E:\HDT-BobCoach-evidence\season14\`
 > 交接文档：`G:\software\Codex\Handover document\BobCoach_Season14_单人模式_T4_2026-08-05.md`
 
@@ -202,8 +202,13 @@ node "E:\HDT-BobCoach-evidence\tools\select_season_data.js" set season14
   2. [x] 测试环境与最新赛季同步：`BOB_COACH_DATA_ROOT`、HDT 基线、season selector、行为测试套件覆盖当前赛季；`test_season14_guide_weights.js` 已纳入行为套件。
   3. [x] 各模块机制与最新赛季同步：Activate/Lockbox/Fishbait/Dark Gift/Trinket 生命周期等模块与规则目录一致；`unresolvedOfficialRows=10` 保留为人工追踪项，不算已解决。
   4. [x] 权重基准：用最新攻略重新生成 `season14_guide_weight_reference.json`；当前口径 `T0=3/T1=2/T2=1/T3=0`，真实权重无 null，合成 null 仅保留在测试边界。
-- 后续入口：`CompGuideCatalog.TryGetWeight` / `TryGetTierWeight`；算法改动需跑行为测试与离线回放。
-- 下一步：实现并回归 `TryGetWeight` / `TryGetTierWeight` 的算法消费路径，再进入算法迭代优化；CI/CD、插件网络抓取、发布仍需用户确认。
+- 后续入口：`CompGuideCatalog.TryGetWeight` / `TryGetTierWeight`（只读接口与 harness 已落地，尚未接入任何决策流程）；算法改动需跑行为测试与离线回放。
+- 下一步任务清单（算法本体未开始）：
+  1. [ ] 实现算法消费路径：让实际决策流程调用权重接口，并补行为/契约回归。
+  2. [ ] 定义迭代目标与评估基线：明确评分/选牌/回放指标，先记录当前权重 baseline。
+  3. [ ] 每次迭代只改一个变量，跑行为测试与离线回放，异常时回退到上一提交。
+  4. [ ] `unresolvedOfficialRows=10` 人工核对完成后，再进入官方更新追踪自动化。
+  5. [ ] CI/CD、插件网络抓取、发布在用户确认后实施。
 
 ## 执行约束
 
