@@ -68,9 +68,13 @@ assert.ok(compileItems.includes("Core\\Decision\\ObservedActionInference.cs"),
     "observed player actions must use the evidence-based inference helper");
 assert.ok(compileItems.includes("Core\\TrinketDefinitionRegistry.cs"),
     "trinket definition registry must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 198, "unexpected compile item count");
+assert.ok(compileItems.includes("Core\\CompGuideCatalog.cs"),
+    "comp guide catalog must be compiled into BobCoach.dll");
+assert.ok(compileItems.includes("Core\\SeasonDataSelector.cs"),
+    "season data selector must be compiled into BobCoach.dll");
+assert.strictEqual(compileItems.length, 212, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "e9f70ab5025375c3ef88f5a67737265b3f58340c012a547dac972c2198ba59b5",
+    "f84d15ed944357a5a5170a6661928eb0de9c2f18a0971149164c680551d521a1",
     "compile set changed");
 
 for (const token of [

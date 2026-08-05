@@ -265,7 +265,8 @@ namespace BobCoach.Engine
                 BaseHealth = m.Health * mul,
                 DivineShield = m.DivineShield,
                 Reborn = m.Reborn,
-                Poisonous = m.Poisonous || m.Venomous,
+                Poisonous = m.Poisonous,
+                Venomous = m.Venomous,
                 Taunt = m.Taunt,
                 Tier = m.Tier,
                 Alive = true,
@@ -340,12 +341,15 @@ namespace BobCoach.Engine
                 else
                 {
                     // 通用进击: 远程造成攻击力伤害
-                    int rallyDmg = attacker.Attack;
                     if (target.DivineShield)
+                    {
                         target.DivineShield = false;
+                        if (attacker.Venomous && !attacker.VenomousUsed)
+                            attacker.VenomousUsed = true;
+                    }
                     else
                     {
-                        target.Health -= rallyDmg;
+                        ApplyPoisonOrDamage(attacker, target);
                         if (target.Health <= 0)
                         {
                             target.KilledBy = attacker;
@@ -404,13 +408,14 @@ namespace BobCoach.Engine
 
             // 1. 攻击方→目标伤害
             if (defHadDS)
+            {
                 target.DivineShield = false;
+                if (attacker.Venomous && !attacker.VenomousUsed)
+                    attacker.VenomousUsed = true;
+            }
             else
             {
-                if (attacker.Poisonous && target.Health > 0)
-                    target.Health = 0;
-                else
-                    target.Health -= attacker.Attack;
+                ApplyPoisonOrDamage(attacker, target);
                 defTookDmg = true;
             }
 
@@ -418,13 +423,14 @@ namespace BobCoach.Engine
             if (target.Alive)
             {
                 if (atkHadDS)
+                {
                     attacker.DivineShield = false;
+                    if (target.Venomous && !target.VenomousUsed)
+                        target.VenomousUsed = true;
+                }
                 else
                 {
-                    if (target.Poisonous && attacker.Health > 0)
-                        attacker.Health = 0;
-                    else
-                        attacker.Health -= target.Attack;
+                    ApplyPoisonOrDamage(target, attacker);
                     atkTookDmg = true;
                 }
             }
@@ -458,13 +464,13 @@ namespace BobCoach.Engine
 
         /// <summary>
         /// 顺劈攻击: 主目标正常同时伤害; 相邻目标只受伤害不反击。
-        /// 相邻目标受击时可触发烈毒(Poisonous)效果。
+        /// 相邻目标受击时可触发剧毒/烈毒效果。
         /// </summary>
         private void ExecuteCleave(CombatUnit attacker, CombatUnit primaryTarget,
             List<CombatUnit> attackers, List<CombatUnit> defenders, CombatContext ctx)
         {
             // 主目标: 正常同时伤害结算
-            ExecuteSingleHit(attacker, primaryTarget, attackers, defenders, ctx);
+            bool venomConsumed = false;
 
             // 相邻目标: 只受伤害不反击
             int targetIdx = defenders.IndexOf(primaryTarget);
@@ -472,24 +478,89 @@ namespace BobCoach.Engine
             if (targetIdx > 0) splashTargets.Add(defenders[targetIdx - 1]);
             if (targetIdx < defenders.Count - 1) splashTargets.Add(defenders[targetIdx + 1]);
 
+            ApplyCleaveHit(attacker, primaryTarget, ref venomConsumed);
             foreach (var st in splashTargets)
             {
                 if (!st.Alive || !attacker.Alive) continue;
-                if (st.DivineShield)
-                    st.DivineShield = false;
-                else
-                {
-                    st.Health -= attacker.Attack;
-                    if (attacker.Poisonous && st.Health > 0)
-                        st.Health = 0;
-                }
+                ApplyCleaveHit(attacker, st, ref venomConsumed);
+            }
 
+            if (primaryTarget.Health > 0 && primaryTarget.Alive && attacker.Alive)
+            {
+                ApplyOneWayHit(primaryTarget, attacker, ctx);
+            }
+
+            if (venomConsumed)
+            {
+                attacker.VenomousUsed = true;
+            }
+
+            if (primaryTarget.Health <= 0)
+            {
+                primaryTarget.KilledBy = attacker;
+                primaryTarget.Alive = false;
+                ctx.OnDeath(primaryTarget);
+            }
+
+            foreach (var st in splashTargets)
+            {
                 if (st.Health <= 0)
                 {
                     st.KilledBy = attacker;
                     st.Alive = false;
                     ctx.OnDeath(st);
                 }
+            }
+        }
+
+        private static void ApplyCleaveHit(CombatUnit source, CombatUnit target,
+            ref bool venomConsumed)
+        {
+            if (target.DivineShield)
+            {
+                target.DivineShield = false;
+                if (source.Venomous && !source.VenomousUsed)
+                    venomConsumed = true;
+                return;
+            }
+            if (source.Poisonous)
+            {
+                target.Health = 0;
+                return;
+            }
+            if (source.Venomous && !source.VenomousUsed)
+            {
+                target.Health = 0;
+                venomConsumed = true;
+                return;
+            }
+            target.Health -= source.Attack;
+        }
+
+        private void ApplyOneWayHit(CombatUnit source, CombatUnit target, CombatContext ctx)
+        {
+            bool targetTookDamage = false;
+            if (target.DivineShield)
+            {
+                target.DivineShield = false;
+                if (source.Venomous && !source.VenomousUsed)
+                    source.VenomousUsed = true;
+            }
+            else
+            {
+                ApplyPoisonOrDamage(source, target);
+                targetTookDamage = true;
+            }
+
+            if (target.Health <= 0)
+            {
+                target.KilledBy = source;
+                target.Alive = false;
+                ctx.OnDeath(target);
+            }
+            if (targetTookDamage && target.Alive)
+            {
+                ctx.TriggerWhenDamaged(target);
             }
         }
 
@@ -665,24 +736,28 @@ namespace BobCoach.Engine
             bool atkTookDmg = false;
 
             if (defHadDS)
+            {
                 target.DivineShield = false;
+                if (attacker.Venomous && !attacker.VenomousUsed)
+                    attacker.VenomousUsed = true;
+            }
             else
             {
-                target.Health -= attacker.Attack;
-                if (attacker.Poisonous && target.Health > 0)
-                    target.Health = 0;
+                ApplyPoisonOrDamage(attacker, target);
                 defTookDmg = true;
             }
 
             if (target.Alive)
             {
                 if (atkHadDS)
+                {
                     attacker.DivineShield = false;
+                    if (target.Venomous && !target.VenomousUsed)
+                        target.VenomousUsed = true;
+                }
                 else
                 {
-                    attacker.Health -= target.Attack;
-                    if (target.Poisonous && attacker.Health > 0)
-                        attacker.Health = 0;
+                    ApplyPoisonOrDamage(target, attacker);
                     atkTookDmg = true;
                 }
             }
@@ -694,6 +769,22 @@ namespace BobCoach.Engine
 
             if (defTookDmg && target.Alive) ctx.TriggerWhenDamaged(target);
             if (atkTookDmg && attacker.Alive) ctx.TriggerWhenDamaged(attacker);
+        }
+
+        private static void ApplyPoisonOrDamage(CombatUnit attacker, CombatUnit target)
+        {
+            if (attacker.Poisonous)
+            {
+                target.Health = 0;
+                return;
+            }
+            if (attacker.Venomous && !attacker.VenomousUsed)
+            {
+                target.Health = 0;
+                attacker.VenomousUsed = true;
+                return;
+            }
+            target.Health -= attacker.Attack;
         }
 
         /// <summary>

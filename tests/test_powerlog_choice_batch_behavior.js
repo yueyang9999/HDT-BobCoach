@@ -14,6 +14,17 @@ const lifecycleSource = path.join(root, "src", "BobCoach", "Core", "TrinketChoic
 const shadowSource = path.join(root, "src", "BobCoach", "Core", "TrinketShadowCaptureSession.cs");
 const combatChoicePolicySource = path.join(root, "src", "BobCoach", "Core", "CombatChoiceRenderPolicy.cs");
 const timewarpAdvisorSource = path.join(root, "src", "BobCoach", "Core", "TimewarpPurchaseAdvisor.cs");
+const season14JsonParserSource = path.join(root, "src", "BobCoach", "Core", "Season14RegistryJsonParser.cs");
+const season14CardRegistrySource = path.join(root, "src", "BobCoach", "Core", "Season14CardRegistry.cs");
+const activateRegistrySource = path.join(root, "src", "BobCoach", "Core", "ActivateRegistry.cs");
+const activateFactSource = path.join(root, "src", "BobCoach", "Core", "ActivateFactSource.cs");
+const lockboxRegistrySource = path.join(root, "src", "BobCoach", "Core", "LockboxRegistry.cs");
+const lockboxFactSource = path.join(root, "src", "BobCoach", "Core", "LockboxFactSource.cs");
+const fishbaitRegistrySource = path.join(root, "src", "BobCoach", "Core", "FishbaitRegistry.cs");
+const fishbaitFactSource = path.join(root, "src", "BobCoach", "Core", "FishbaitFactSource.cs");
+const darkGiftRegistrySource = path.join(root, "src", "BobCoach", "Core", "DarkGiftRegistry.cs");
+const darkGiftFactSource = path.join(root, "src", "BobCoach", "Core", "DarkGiftFactSource.cs");
+const season14RulesEvaluatorSource = path.join(root, "src", "BobCoach", "Core", "Season14RulesEvaluator.cs");
 const harnessSource = path.join(__dirname, "PowerLogChoiceBatchHarness.cs");
 const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "bobcoach-powerlog-choice-"));
 const outputExe = path.join(outputDir, "PowerLogChoiceBatchHarness.exe");
@@ -34,6 +45,17 @@ try {
         shadowSource,
         combatChoicePolicySource,
         timewarpAdvisorSource,
+        season14JsonParserSource,
+        season14CardRegistrySource,
+        activateRegistrySource,
+        activateFactSource,
+        lockboxRegistrySource,
+        lockboxFactSource,
+        fishbaitRegistrySource,
+        fishbaitFactSource,
+        darkGiftRegistrySource,
+        darkGiftFactSource,
+        season14RulesEvaluatorSource,
         harnessSource,
     ], { encoding: "utf8" });
 

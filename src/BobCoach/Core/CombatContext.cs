@@ -20,7 +20,9 @@ namespace BobCoach.Engine
         // 战斗关键词
         public bool DivineShield;
         public bool Reborn;
-        public bool Poisonous;  // Venomous合并到此字段
+        public bool Poisonous;
+        public bool Venomous;
+        public bool VenomousUsed;
         public bool Taunt;
         public int Tier;
         public bool Alive;
@@ -156,6 +158,32 @@ namespace BobCoach.Engine
                 MinionTypes = minionTypes ?? new List<string>(),
                 Position = 999,
             };
+        }
+
+        /// <summary>
+        /// Copies a stored combat unit as a token while preserving poison,
+        /// venom, and venom usage state.
+        /// </summary>
+        public CombatUnit BuildTokenWithKeywords(CombatUnit source)
+        {
+            if (source == null) return null;
+            var token = BuildToken(
+                source.Attack,
+                source.MaxHealth,
+                source.NameCn,
+                source.Taunt,
+                source.DivineShield,
+                source.Reborn,
+                source.Poisonous,
+                source.Tier,
+                source.MinionTypes);
+            token.Poisonous = source.Poisonous;
+            token.Venomous = source.Venomous;
+            token.VenomousUsed = source.VenomousUsed;
+            token.Attack = source.Attack;
+            token.Health = source.Health;
+            token.Alive = true;
+            return token;
         }
 
         /// <summary>

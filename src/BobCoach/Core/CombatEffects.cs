@@ -435,12 +435,7 @@ namespace BobCoach.Engine
                             var copy = u.StoredCopy as CombatUnit;
                             if (copy != null)
                             {
-                                var summoned = ctx.BuildToken(copy.Attack, copy.MaxHealth,
-                                    copy.NameCn, copy.Taunt, copy.DivineShield, copy.Reborn,
-                                    copy.Poisonous, copy.Tier, copy.MinionTypes);
-                                summoned.Attack = copy.Attack;
-                                summoned.Health = copy.Health;
-                                summoned.Alive = true;
+                                var summoned = ctx.BuildTokenWithKeywords(copy);
                                 ctx.SpawnToken(side, summoned);
                             }
                         }

@@ -7,6 +7,8 @@ namespace BobCoach.Engine
     {
         internal const string RootEnvironmentVariable = "BOB_COACH_DATA_ROOT";
 
+        internal const string SeasonSelectorEnvironmentVariable = "BOB_COACH_SEASON_SELECTOR";
+
         internal static string Root
         {
             get

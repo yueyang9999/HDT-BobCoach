@@ -29,12 +29,33 @@ namespace BobCoach.Engine
             AnomalyRegistry registry,
             bool isDuos)
         {
+            return Resolve(observedCardIds, registry, isDuos, null);
+        }
+
+        public static AnomalyContext Resolve(
+            IEnumerable<string> observedCardIds,
+            AnomalyRegistry registry,
+            bool isDuos,
+            IEnumerable<string> excludedAnomalyIds)
+        {
             if (observedCardIds == null || registry == null) return Empty;
+
+            var excluded = new HashSet<string>(StringComparer.Ordinal);
+            if (excludedAnomalyIds != null)
+            {
+                foreach (var excludedId in excludedAnomalyIds)
+                {
+                    if (!string.IsNullOrEmpty(excludedId))
+                        excluded.Add(excludedId);
+                }
+            }
 
             var active = new HashSet<string>(StringComparer.Ordinal);
             var primary = new HashSet<string>(StringComparer.Ordinal);
             foreach (var observedId in observedCardIds)
             {
+                if (!string.IsNullOrEmpty(observedId) && excluded.Contains(observedId))
+                    continue;
                 var anomaly = registry.GetById(observedId);
                 if (anomaly == null) continue;
                 if (string.Equals(anomaly.Availability, "inactive", StringComparison.OrdinalIgnoreCase)

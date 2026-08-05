@@ -371,6 +371,7 @@ namespace BobCoach.Engine
                 case "REBORN": entity.HasReborn = evt.NumericValue > 0; break;
                 case "TAUNT": entity.HasTaunt = evt.NumericValue > 0; break;
                 case "POISONOUS": entity.IsPoisonous = evt.NumericValue > 0; break;
+                case "VENOMOUS": entity.IsVenomous = evt.NumericValue > 0; break;
                 case "WINDFURY": entity.HasWindfury = evt.NumericValue > 0; break;
             }
             // 关键状态变化 → 驱动UI实时刷新 (zone/金币/位置/英雄技能)
@@ -1052,7 +1053,7 @@ namespace BobCoach.Engine
         public string Zone = ""; public int ZonePos; public int Attack; public int Health;
         public int Cost; public bool IsGolden; public bool HasDivineShield;
         public int AlternateCost;
-        public bool HasReborn; public bool HasTaunt; public bool IsPoisonous;
+        public bool HasReborn; public bool HasTaunt; public bool IsPoisonous; public bool IsVenomous;
         public bool HasWindfury; public string Race = "";
     }
 }

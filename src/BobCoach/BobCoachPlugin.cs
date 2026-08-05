@@ -74,6 +74,7 @@ namespace BobCoach
         private readonly HashSet<int> _claimedUpgradePrizeChoiceIds = new HashSet<int>();
         private readonly Engine.TrinketChoiceBatchLifecycle _trinketChoiceLifecycle =
             new Engine.TrinketChoiceBatchLifecycle();
+        private Engine.Season14RulesEvaluator _season14RulesEvaluator;
         private int _prevDiscoverCount = -1; // 上帧发现选项数, 仅用于诊断
         // v2 事件驱动标志位: Power.log ChoiceList 事件直接控制面板显隐, 替代TTL帧计数
         private bool _discoverPanelActive = false;
@@ -217,6 +218,9 @@ namespace BobCoach
                 _extractor.SetHeroPowerEngine(_heroPowerEngine);
                 _extractor.SetAnomalyRegistry(_engine.AnomalyReg);
                 _extractor.SetTrinketFactSource(_engine.TrinketFactSource);
+                _season14RulesEvaluator = new Engine.Season14RulesEvaluator();
+                _season14RulesEvaluator.LoadFromConfiguredRoot();
+                _extractor.SetSeason14RulesEvaluator(_season14RulesEvaluator);
                 Log("Offline C# engine enabled");
                 _visualizer = new DecisionVisualizer();
                 _engine.SetProfileEngine(_profileEngine);
@@ -3493,7 +3497,8 @@ namespace BobCoach
                 return;
             }
             int observedTurn = _cachedState != null ? _cachedState.Turn : -1;
-            var binding = _trinketChoiceLifecycle.Observe(batch, observedTurn);
+            var binding = _trinketChoiceLifecycle.ObserveSeason14(
+                batch, observedTurn, _season14RulesEvaluator);
             _trinketPanelActive = true; _trinketPanelActivatedAt = DateTime.UtcNow;
             Log(string.Format("Trinket panel: choice={0} source={1} observedTurn={2} targetTurn={3} context={4} signaled {5} options [{6}]",
                 batch.ChoiceId, batch.SourceCardId, observedTurn, binding.TargetTurn, binding.Context, candidates.Count,

@@ -55,6 +55,10 @@ namespace BobCoach
 
         public void SetHeroPowerEngine(HeroPowerEngine engine) { _heroPowerEngine = engine; }
         public void SetAnomalyRegistry(AnomalyRegistry reg) { _anomalyReg = reg; }
+        internal void SetSeason14RulesEvaluator(Engine.Season14RulesEvaluator evaluator)
+        {
+            _season14RulesEvaluator = evaluator;
+        }
         internal void SetTrinketFactSource(ITrinketFactSource source)
         {
             _trinketFactSource = source;
@@ -97,6 +101,7 @@ namespace BobCoach
                 rule, turn, actionCardId, actionEntityId, evidenceId, evidenceSource);
         }
         private AnomalyRegistry _anomalyReg;
+        internal Engine.Season14RulesEvaluator _season14RulesEvaluator;
         private int _prevTavernTier = 0;
         private HashSet<int> _prevHandIdsForGold = null;   // stale-buy 购买证据: 上帧手牌实体ID
         private HashSet<int> _prevShopIdsForGold = null;   // stale-buy 购买证据: 上帧商店实体ID
@@ -397,7 +402,21 @@ namespace BobCoach
                     .ToList();
                 bool isDuos = game.IsBattlegroundsDuosMatch;
                 state.IsDuos = isDuos;
-                state.AnomalyContext = AnomalyContext.Resolve(observedAnomalyIds, _anomalyReg, isDuos);
+                if (_season14RulesEvaluator != null && _season14RulesEvaluator.IsLoaded)
+                {
+                    state.AnomalyContext = AnomalyContext.Resolve(
+                        observedAnomalyIds,
+                        _anomalyReg,
+                        isDuos,
+                        _season14RulesEvaluator.ExcludedAnomalyIds);
+                }
+                else
+                {
+                    state.AnomalyContext = AnomalyContext.Resolve(
+                        observedAnomalyIds,
+                        _anomalyReg,
+                        isDuos);
+                }
                 state.AnomalyId = state.AnomalyContext.PrimaryAnomalyId;
                 state.EffectiveRules = AnomalyRuleResolver.Resolve(state.AnomalyContext, _anomalyReg);
                 state.TavernUpgradeCost = GetTavernUpgradeCost(entities);

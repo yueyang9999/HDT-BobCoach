@@ -21,6 +21,9 @@ namespace BobCoach.Engine
             internal int Cost;
             internal int Score;
             internal string Text;
+            internal string TextEn;
+            internal string TextCn;
+            internal bool IsLesser;
             internal List<EffectDefinition> Effects = new List<EffectDefinition>();
             internal List<string> Tribes = new List<string>();
         }
@@ -60,9 +63,17 @@ namespace BobCoach.Engine
                 var root = BobCoachDataPaths.ResolveRoot(configuredRoot, null);
                 if (root == null) return;
                 ConfiguredRoot = root;
-                var file = BobCoachDataPaths.Combine(root, "data", "trinket_registry.json");
-                if (!File.Exists(file)) return;
-                LoadFromJson(File.ReadAllText(file, Encoding.UTF8));
+                var generatedFile = BobCoachDataPaths.Combine(
+                    root, "generated", "registries", "trinket_registry.json");
+                if (File.Exists(generatedFile))
+                {
+                    LoadFromJson(File.ReadAllText(generatedFile, Encoding.UTF8));
+                    return;
+                }
+
+                var legacyFile = BobCoachDataPaths.Combine(root, "data", "trinket_registry.json");
+                if (!File.Exists(legacyFile)) return;
+                LoadFromJson(File.ReadAllText(legacyFile, Encoding.UTF8));
             }
             catch
             {
@@ -86,18 +97,23 @@ namespace BobCoach.Engine
 
                 var lesser = AsArray(root, "lesser");
                 var greater = AsArray(root, "greater");
-                if (lesser == null || greater == null) return;
+                if (lesser == null || greater == null
+                    || ContainsBattlegroundsDuoCard(lesser)
+                    || ContainsBattlegroundsDuoCard(greater))
+                    return;
 
-                foreach (var section in new[] { lesser, greater })
+                var sections = new[] { new { Rows = lesser, IsLesser = true },
+                    new { Rows = greater, IsLesser = false } };
+                foreach (var section in sections)
                 {
-                    foreach (var item in section)
+                    foreach (var item in section.Rows)
                     {
                         var row = item as Dictionary<string, object>;
                         if (row == null) continue;
                         string cardId = AsString(row, "cardId");
                         if (string.IsNullOrEmpty(cardId)) continue;
                         if (_byCardId.ContainsKey(cardId)) continue;
-                        _byCardId[cardId] = ParseDefinition(cardId, row);
+                        _byCardId[cardId] = ParseDefinition(cardId, row, section.IsLesser);
                     }
                 }
                 _loaded = _byCardId.Count > 0;
@@ -107,6 +123,20 @@ namespace BobCoach.Engine
                 _byCardId.Clear();
                 _loaded = false;
             }
+        }
+
+        private static bool ContainsBattlegroundsDuoCard(List<object> rows)
+        {
+            foreach (var item in rows)
+            {
+                var row = item as Dictionary<string, object>;
+                if (row == null) continue;
+                string cardId = AsString(row, "cardId");
+                if (!string.IsNullOrEmpty(cardId)
+                    && cardId.StartsWith("BGDUO", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>Exact case-sensitive CardId lookup; false when not loaded or unknown.</summary>
@@ -146,7 +176,7 @@ namespace BobCoach.Engine
         }
 
         private static TrinketDefinition ParseDefinition(
-            string cardId, Dictionary<string, object> row)
+            string cardId, Dictionary<string, object> row, bool isLesser)
         {
             var definition = new TrinketDefinition
             {
@@ -156,6 +186,9 @@ namespace BobCoach.Engine
                 Cost = AsInt(row, "cost"),
                 Score = AsInt(row, "score"),
                 Text = AsString(row, "text"),
+                TextEn = AsString(row, "text_en"),
+                TextCn = AsString(row, "text_cn"),
+                IsLesser = isLesser,
             };
 
             var effects = AsArray(row, "effects");

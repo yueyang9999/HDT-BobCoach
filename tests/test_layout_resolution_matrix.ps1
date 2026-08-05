@@ -20,7 +20,10 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\GameLayoutCalculator.cs"),
     (Join-Path $PSScriptRoot "LayoutResolutionMatrixBehavior.cs")
 )
-$webExtensions = Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\System.Web.Extensions.dll"
+$windowsRoot = if ($env:SystemRoot) { $env:SystemRoot }
+    elseif ($env:WINDIR) { $env:WINDIR }
+    else { throw "Windows root environment variable not found" }
+$webExtensions = Join-Path $windowsRoot "Microsoft.NET\Framework\v4.0.30319\System.Web.Extensions.dll"
 
 try {
     & $csc /nologo /langversion:latest /target:exe "/out:$output" "/r:$webExtensions" @sources

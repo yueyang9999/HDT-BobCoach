@@ -29,11 +29,30 @@ namespace BobCoach.Engine
 
         public TrinketChoiceBinding Observe(PowerLogChoiceBatch batch, int observedTurn)
         {
+            return ObserveInternal(batch, observedTurn, false);
+        }
+
+        internal TrinketChoiceBinding ObserveSeason14(
+            PowerLogChoiceBatch batch,
+            int observedTurn,
+            Season14RulesEvaluator evaluator)
+        {
+            if (evaluator == null || !evaluator.IsLoaded)
+                return Observe(batch, observedTurn);
+            return ObserveInternal(batch, observedTurn, true);
+        }
+
+        private TrinketChoiceBinding ObserveInternal(
+            PowerLogChoiceBatch batch,
+            int observedTurn,
+            bool season14Active)
+        {
             if (batch == null) throw new ArgumentNullException(nameof(batch));
 
             bool scheduled = !string.IsNullOrEmpty(batch.SourceCardId)
                 && batch.SourceCardId.StartsWith("BG30_Trinket_", StringComparison.Ordinal);
-            bool anomalyExtra = string.Equals(batch.SourceCardId, "BG30_MagicItem_703t", StringComparison.Ordinal);
+            bool anomalyExtra = !season14Active
+                && string.Equals(batch.SourceCardId, "BG30_MagicItem_703t", StringComparison.Ordinal);
             int targetTurn = scheduled && (observedTurn == 5 || observedTurn == 8)
                 ? observedTurn + 1
                 : observedTurn;
