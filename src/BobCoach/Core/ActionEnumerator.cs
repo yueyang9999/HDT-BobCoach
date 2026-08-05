@@ -35,7 +35,8 @@ namespace BobCoach.Engine
         /// <summary>
         /// 枚举所有合法动作。heroCardId 用于英雄特定规则（米尔豪斯刷新费等）。
         /// </summary>
-        public List<GameAction> Enumerate(GameState state, string heroCardId = "")
+        public List<GameAction> Enumerate(
+            GameState state, string heroCardId = "", bool includeTrinket = true)
         {
             var actions = new List<GameAction>();
 
@@ -195,7 +196,8 @@ namespace BobCoach.Engine
             }
 
             // 饰品报价: 与发现面板同源, 有报价即可选。
-            if (state.TrinketOffer != null && state.TrinketOffer.Count > 0)
+            if (includeTrinket && state.TrinketOffer != null
+                && state.TrinketOffer.Count > 0)
             {
                 for (int i = 0; i < state.TrinketOffer.Count; i++)
                 {

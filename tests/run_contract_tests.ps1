@@ -25,6 +25,7 @@ foreach ($file in @(
     "test_feature_showcase_contract.js"
     ,"test_algorithm_workspace_contract.js"
     ,"test_pairwise_training.js"
+    ,"test_algorithm_decision_compare.js"
     ,"test_algorithm_evaluation.js"
 )) {
     Invoke-Checked $file "node"

@@ -213,7 +213,8 @@ namespace BobCoach.Engine
             _bestTwoStepAction = null; _bestTwoStepState = null;
             BestTwoStepAction = null; BestTwoStepState = null;
 
-            var actions = _enumerator.Enumerate(state, state.HeroCardId);
+            var actions = _enumerator.Enumerate(
+                state, state.HeroCardId, includeTrinket: false);
             if (actions.Count == 0) return null;
             var effectiveRules = state.EffectiveRules ?? EffectiveGameRules.Default;
 
@@ -1129,7 +1130,8 @@ namespace BobCoach.Engine
                     if (s1.Gold < 1) continue;
 
                     explored++;
-                    var step2Actions = _enumerator.Enumerate(s1, state.HeroCardId);
+                    var step2Actions = _enumerator.Enumerate(
+                        s1, state.HeroCardId, includeTrinket: false);
                     double bestS2Val = double.NegativeInfinity;
                     GameAction bestS2 = null;
 
@@ -1180,7 +1182,8 @@ namespace BobCoach.Engine
                 var nextState = _sim.Simulate(state, bestAction);
                 if (nextState.Gold >= 1)
                 {
-                    var step2Actions = _enumerator.Enumerate(nextState, state.HeroCardId);
+                    var step2Actions = _enumerator.Enumerate(
+                        nextState, state.HeroCardId, includeTrinket: false);
                     double bestStep2Value = double.NegativeInfinity;
                     GameAction bestStep2Fallback = null;
                     foreach (var a2 in step2Actions)
@@ -1210,7 +1213,7 @@ namespace BobCoach.Engine
             {
                 try
                 {
-                    var mctsResult = _mcts.Search(state);
+                    var mctsResult = _mcts.Search(state, includeTrinket: false);
                     if (mctsResult != null && mctsResult.CompletedInBudget && mctsResult.BestAction != null)
                     {
                         // MCTS结果覆盖贪心搜索: 找到比规则层+贪心更好的全局最优

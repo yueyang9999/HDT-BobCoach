@@ -52,7 +52,7 @@ namespace BobCoach.Engine
         /// <summary>
         /// 执行MCTS搜索。成功返回结果，超时或搜索空间太小则返回null。
         /// </summary>
-        public MCTSResult Search(GameState state)
+        public MCTSResult Search(GameState state, bool includeTrinket = true)
         {
             if (state == null || !state.GameActive) return null;
             if (!CardPoolSampler.IsInitialized) return null; // 需要真实卡池采样
@@ -60,7 +60,8 @@ namespace BobCoach.Engine
             var sw = Stopwatch.StartNew();
             _evalCache.Clear();
 
-            var actions = _enumerator.Enumerate(state, state.HeroCardId);
+            var actions = _enumerator.Enumerate(
+                state, state.HeroCardId, includeTrinket);
             if (actions.Count <= 1) return null;
 
             // ── Step 1: V(s)贪心评估所有动作, 选出Top-K ──
@@ -105,7 +106,8 @@ namespace BobCoach.Engine
                 }
 
                 // 枚举第2步动作
-                var actions2 = _enumerator.Enumerate(state1, state1.HeroCardId);
+                var actions2 = _enumerator.Enumerate(
+                    state1, state1.HeroCardId, includeTrinket);
                 if (actions2.Count == 0)
                 {
                     if (totalValue > bestTotalValue)
@@ -147,7 +149,8 @@ namespace BobCoach.Engine
                     // 随机rollout: 从state2再随机走0-1步, 用V(s)估值终点
                     for (int r = 0; r < Math.Min(NUM_ROLLOUTS / topK2, 10); r++)
                     {
-                        var actions3 = _enumerator.Enumerate(state2, state2.HeroCardId);
+                        var actions3 = _enumerator.Enumerate(
+                            state2, state2.HeroCardId, includeTrinket);
                         if (actions3.Count == 0) break;
 
                         var a3 = actions3[_rng.Next(actions3.Count)];
