@@ -29,6 +29,7 @@ internal static class Season14RegistriesHarness
             SeasonMechanicProfileFailsClosed();
             RealSeason14RulesEvaluator();
             EmptyEvaluatorFailsClosed();
+            Season14ExtractionGateContract();
             RealCompGuideCatalog();
             SyntheticCompGuideCatalog();
             CompGuideCatalogFailsClosed();
@@ -896,6 +897,25 @@ internal static class Season14RegistriesHarness
             "unloaded registries evaluator trinket fails closed");
         False(unloadedRegistries.TryGetActivate("BG36_180", out activate),
             "unloaded registries activate fails");
+    }
+
+    private static void Season14ExtractionGateContract()
+    {
+        True(Season14RulesEvaluator.IsMechanicActiveOrLegacy(
+                null, "trinket"),
+            "null evaluator keeps legacy extraction");
+        True(Season14RulesEvaluator.IsMechanicActiveOrLegacy(
+                new Season14RulesEvaluator(), "trinket"),
+            "unloaded evaluator keeps legacy extraction");
+        True(Season14RulesEvaluator.IsMechanicActiveOrLegacy(
+                _season14, "trinket"),
+            "loaded active profile keeps trinket extraction");
+        False(Season14RulesEvaluator.IsMechanicActiveOrLegacy(
+                _season14, "anomaly"),
+            "loaded inactive profile disables anomaly extraction");
+        False(Season14RulesEvaluator.IsMechanicActiveOrLegacy(
+                _season14, "unknown"),
+            "loaded unknown profile disables extraction");
     }
 
     private static void SyntheticAnomalyExclusion()

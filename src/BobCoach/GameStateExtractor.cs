@@ -102,6 +102,13 @@ namespace BobCoach
         }
         private AnomalyRegistry _anomalyReg;
         internal Engine.Season14RulesEvaluator _season14RulesEvaluator;
+
+        private bool IsSeasonMechanicEnabled(string mechanic)
+        {
+            return Engine.Season14RulesEvaluator.IsMechanicActiveOrLegacy(
+                _season14RulesEvaluator, mechanic);
+        }
+
         private int _prevTavernTier = 0;
         private HashSet<int> _prevHandIdsForGold = null;   // stale-buy 购买证据: 上帧手牌实体ID
         private HashSet<int> _prevShopIdsForGold = null;   // stale-buy 购买证据: 上帧商店实体ID
@@ -404,11 +411,18 @@ namespace BobCoach
                 state.IsDuos = isDuos;
                 if (_season14RulesEvaluator != null && _season14RulesEvaluator.IsLoaded)
                 {
-                    state.AnomalyContext = AnomalyContext.Resolve(
-                        observedAnomalyIds,
-                        _anomalyReg,
-                        isDuos,
-                        _season14RulesEvaluator.ExcludedAnomalyIds);
+                    if (!IsSeasonMechanicEnabled("anomaly"))
+                    {
+                        state.AnomalyContext = AnomalyContext.Empty;
+                    }
+                    else
+                    {
+                        state.AnomalyContext = AnomalyContext.Resolve(
+                            observedAnomalyIds,
+                            _anomalyReg,
+                            isDuos,
+                            _season14RulesEvaluator.ExcludedAnomalyIds);
+                    }
                 }
                 else
                 {
@@ -539,7 +553,10 @@ namespace BobCoach
 
                 // Equipped effects are independent from quote recommendations and must be merged
                 // before resource tracking so hard cost rules affect observed purchases.
-                ExtractActiveTrinkets(entities, state);
+                if (IsSeasonMechanicEnabled("trinket"))
+                {
+                    ExtractActiveTrinkets(entities, state);
+                }
 
                 // 金币: 必须在 ShopMinions/BoardMinions 赋值之后计算 —— TrackGold 的购买/升本/售出
                 // 检测依赖 state.ShopMinions.Count / state.BoardMinions.Count。此前 TrackGold 在它们
@@ -567,7 +584,10 @@ namespace BobCoach
                 state.FrozenShop = IsFrozenShop(entities);
                 state.FreeRefreshCount = CountFreeRefresh(entities);
                 state.HeroOptions = ExtractHeroOptions(entities, turn);
-                state.TrinketOffer = ExtractTrinketOffer(entities, turn);
+                if (IsSeasonMechanicEnabled("trinket"))
+                {
+                    state.TrinketOffer = ExtractTrinketOffer(entities, turn);
+                }
                 UpdateTimewarpedNewRecruitState(entities, state);
                 state.ReplenishingShopActive = HasReplenishingShopEffect(state);
                 // 构建已知实体ID集合供发现提取排除

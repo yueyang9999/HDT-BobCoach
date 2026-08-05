@@ -91,6 +91,15 @@ namespace BobCoach.Engine
                 && _mechanicProfile.IsMechanicEnabled(mechanic);
         }
 
+        internal static bool IsMechanicActiveOrLegacy(
+            Season14RulesEvaluator evaluator,
+            string mechanic)
+        {
+            return evaluator == null
+                || !evaluator.IsLoaded
+                || evaluator.IsMechanicEnabled(mechanic);
+        }
+
         internal bool TryGetActivate(string cardId, out ActivateFact fact)
         {
             fact = null;

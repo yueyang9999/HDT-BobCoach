@@ -16,6 +16,8 @@ const combatChoicePolicySource = path.join(root, "src", "BobCoach", "Core", "Com
 const timewarpAdvisorSource = path.join(root, "src", "BobCoach", "Core", "TimewarpPurchaseAdvisor.cs");
 const season14JsonParserSource = path.join(root, "src", "BobCoach", "Core", "Season14RegistryJsonParser.cs");
 const season14CardRegistrySource = path.join(root, "src", "BobCoach", "Core", "Season14CardRegistry.cs");
+const seasonDataSelectorSource = path.join(root, "src", "BobCoach", "Core", "SeasonDataSelector.cs");
+const seasonMechanicProfileSource = path.join(root, "src", "BobCoach", "Core", "SeasonMechanicProfile.cs");
 const activateRegistrySource = path.join(root, "src", "BobCoach", "Core", "ActivateRegistry.cs");
 const activateFactSource = path.join(root, "src", "BobCoach", "Core", "ActivateFactSource.cs");
 const lockboxRegistrySource = path.join(root, "src", "BobCoach", "Core", "LockboxRegistry.cs");
@@ -47,6 +49,8 @@ try {
         timewarpAdvisorSource,
         season14JsonParserSource,
         season14CardRegistrySource,
+        seasonDataSelectorSource,
+        seasonMechanicProfileSource,
         activateRegistrySource,
         activateFactSource,
         lockboxRegistrySource,

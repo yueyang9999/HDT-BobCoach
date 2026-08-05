@@ -54,6 +54,7 @@ internal static class ActiveTrinketEffectsHarness
         if (TestEyepatchPurchaseGoldenResolution(registry) != 0) return 1;
         if (TestSimulationCopyAndOfferIsolation(registry) != 0) return 1;
         if (TestProductionExtractionBoundary() != 0) return 1;
+        if (TestSeason14MechanicProfileExtractionBoundary() != 0) return 1;
 
         Console.WriteLine("PASS active trinket effects are local, exact, and simulation-safe");
         return 0;
@@ -837,6 +838,40 @@ internal static class ActiveTrinketEffectsHarness
             || !method.Contains("_unknownTrinketDiagnosticTracker.ShouldReport(cardId)")
             || !method.Contains("ExtractorLog(\"DIAG ActiveTrinket: unknown CardId=\" + cardId)"))
             return Fail("unknown equipped CardIds must reach exact once-per-game extractor diagnostics without fact filtering");
+
+        return 0;
+    }
+
+    private static int TestSeason14MechanicProfileExtractionBoundary()
+    {
+        string sourcePath = Path.Combine(
+            Directory.GetCurrentDirectory(), "src", "BobCoach", "GameStateExtractor.cs");
+        string source = File.ReadAllText(sourcePath);
+        string compact = new string(source.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+        const string helper = "privateboolIsSeasonMechanicEnabled(stringmechanic)"
+            + "{returnEngine.Season14RulesEvaluator.IsMechanicActiveOrLegacy("
+            + "_season14RulesEvaluator,mechanic);}";
+        if (compact.IndexOf(helper, StringComparison.Ordinal) < 0)
+            return Fail("extraction helper must keep legacy for null/unloaded evaluators "
+                + "and fail closed for loaded inactive mechanics");
+
+        const string activeGuard =
+            "if(IsSeasonMechanicEnabled(\"trinket\")){ExtractActiveTrinkets(entities,state);}";
+        const string offerGuard =
+            "if(IsSeasonMechanicEnabled(\"trinket\")){state.TrinketOffer=ExtractTrinketOffer(entities,turn);}";
+        if (compact.IndexOf(activeGuard, StringComparison.Ordinal) < 0
+            || compact.IndexOf(offerGuard, StringComparison.Ordinal) < 0)
+            return Fail("active and offer extraction must be skipped when trinket is inactive");
+
+        const string anomalyGuard =
+            "if(!IsSeasonMechanicEnabled(\"anomaly\"))"
+            + "{state.AnomalyContext=AnomalyContext.Empty;}else{";
+        const string anomalyResolution =
+            "state.EffectiveRules=AnomalyRuleResolver.Resolve(state.AnomalyContext,_anomalyReg);";
+        if (compact.IndexOf(anomalyGuard, StringComparison.Ordinal) < 0
+            || compact.IndexOf(anomalyResolution, StringComparison.Ordinal) < 0)
+            return Fail("inactive anomaly must reset context then resolve rules from empty state");
 
         return 0;
     }
