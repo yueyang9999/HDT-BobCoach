@@ -30,8 +30,7 @@ namespace BobCoach.Engine
             _byCardId.Clear();
             _loaded = false;
 
-            string configuredRoot =
-                Environment.GetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable);
+            string configuredRoot = ResolveConfiguredDataRoot();
             if (string.IsNullOrWhiteSpace(configuredRoot)) return;
 
             try
@@ -49,6 +48,12 @@ namespace BobCoach.Engine
                 _byCardId.Clear();
                 _loaded = false;
             }
+        }
+
+        protected virtual string ResolveConfiguredDataRoot()
+        {
+            return Environment.GetEnvironmentVariable(
+                BobCoachDataPaths.RootEnvironmentVariable);
         }
 
         internal void LoadFromJson(string json)
@@ -144,10 +149,16 @@ namespace BobCoach.Engine
                 Armor = Season14RegistryJsonParser.AsInt(row, "armor"),
                 SpellSchool = Season14RegistryJsonParser.AsString(row, "spellSchool"),
                 Race = Season14RegistryJsonParser.AsString(row, "race"),
+                Races = Season14RegistryJsonParser.AsStringList(row, "races"),
+                BattlegroundsAssociatedRaces =
+                    Season14RegistryJsonParser.AsStringList(
+                        row, "battlegroundsAssociatedRaces"),
                 TextZhCn = Season14RegistryJsonParser.AsString(row, "text_cn"),
                 TextEnUs = Season14RegistryJsonParser.AsString(row, "text_en"),
                 IsBattlegroundsPoolMinion =
                     Season14RegistryJsonParser.AsBool(row, "isBattlegroundsPoolMinion"),
+                IsBattlegroundsPoolSpell =
+                    Season14RegistryJsonParser.AsBool(row, "isBattlegroundsPoolSpell"),
             };
         }
     }
@@ -167,8 +178,11 @@ namespace BobCoach.Engine
         internal int Armor;
         internal string SpellSchool;
         internal string Race;
+        internal List<string> Races;
+        internal List<string> BattlegroundsAssociatedRaces;
         internal string TextZhCn;
         internal string TextEnUs;
         internal bool IsBattlegroundsPoolMinion;
+        internal bool IsBattlegroundsPoolSpell;
     }
 }

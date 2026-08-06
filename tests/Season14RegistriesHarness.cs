@@ -25,6 +25,13 @@ internal static class Season14RegistriesHarness
             SeasonDataSelectorTests();
             MissingConfiguredRootFailsClosed();
             RealLookupsAndCoverage();
+            Season14MinionPurchaseSourceTests();
+            Season14MinionRegistryTests();
+            SyntheticMinionRegistryRejectsInvalidPoolEntries();
+            Season14TavernSpellPurchaseSourceTests();
+            Season14TavernSpellRegistryTests();
+            SyntheticTavernSpellRegistryRejectsInvalidPoolEntries();
+            CompositeCardPurchaseFactSourceTests();
             RealSeasonMechanicProfile();
             SeasonMechanicProfileFailsClosed();
             RealSeason14RulesEvaluator();
@@ -150,6 +157,207 @@ internal static class Season14RegistriesHarness
             "dark gift coverage");
     }
 
+    private static void Season14MinionPurchaseSourceTests()
+    {
+        var source = new Season14MinionPurchaseFactSource();
+        CardPurchaseFact fact;
+        True(source.TryGet("BG36_241", out fact), "season14 minion source BG36_241");
+        Equal("BG36_241", fact.CardId, "season14 minion source CardId");
+        Equal(ShopItemKind.Minion, fact.Kind, "season14 minion source Kind");
+        Equal(-1, fact.BaseCost, "season14 minion source BaseCost");
+        False(source.TryGet("BG36_NOT_A_REAL_CARD", out fact),
+            "season14 minion source unknown fails closed");
+    }
+
+    private static void Season14MinionRegistryTests()
+    {
+        var registry = new Season14MinionRegistry();
+        registry.LoadFromConfiguredRoot();
+        True(registry.IsLoaded, "season14 minion registry loaded");
+        Equal(246, registry.Count, "season14 minion registry count");
+
+        Season14MechanicCardFact fact;
+        True(registry.TryGetPoolMinion("BG36_241", out fact),
+            "season14 minion pool lookup");
+        Equal("MINION", fact.Type, "season14 minion pool Type");
+        Equal(0, fact.Cost, "season14 minion pool Cost");
+        Equal(6, fact.TechLevel, "season14 minion pool TechLevel");
+        True(fact.IsBattlegroundsPoolMinion,
+            "season14 minion pool IsBattlegroundsPoolMinion");
+        Equal(1, fact.Races.Count, "season14 minion pool Races count");
+        Equal("DRAGON", fact.Races[0], "season14 minion pool Races first");
+        False(registry.TryGetPoolMinion("BG36_NOT_A_REAL_CARD", out fact),
+            "season14 minion pool unknown fails closed");
+    }
+
+    private static void Season14TavernSpellPurchaseSourceTests()
+    {
+        var source = new Season14TavernSpellPurchaseFactSource();
+        CardPurchaseFact fact;
+        True(source.TryGet("BG36_246", out fact), "season14 spell source BG36_246");
+        Equal("BG36_246", fact.CardId, "season14 spell source CardId");
+        Equal(ShopItemKind.TavernSpell, fact.Kind, "season14 spell source Kind");
+        Equal(2, fact.BaseCost, "season14 spell source BaseCost");
+        False(source.TryGet("BG36_NOT_A_REAL_CARD", out fact),
+            "season14 spell source unknown fails closed");
+    }
+
+    private static void Season14TavernSpellRegistryTests()
+    {
+        var registry = new Season14TavernSpellRegistry();
+        registry.LoadFromConfiguredRoot();
+        True(registry.IsLoaded, "season14 spell registry loaded");
+        Equal(75, registry.Count, "season14 spell registry count");
+
+        Season14MechanicCardFact fact;
+        True(registry.TryGetPoolSpell("BG36_246", out fact),
+            "season14 spell pool lookup");
+        Equal("BATTLEGROUND_SPELL", fact.Type, "season14 spell pool Type");
+        Equal(2, fact.Cost, "season14 spell pool Cost");
+        Equal(4, fact.TechLevel, "season14 spell pool TechLevel");
+        True(fact.IsBattlegroundsPoolSpell,
+            "season14 spell pool IsBattlegroundsPoolSpell");
+        True(fact.BattlegroundsAssociatedRaces.Count == 1
+            && fact.BattlegroundsAssociatedRaces[0] == "DRAGON",
+            "season14 spell pool associated races");
+        False(registry.TryGetPoolSpell("BG36_NOT_A_REAL_CARD", out fact),
+            "season14 spell pool unknown fails closed");
+    }
+
+    private static void SyntheticTavernSpellRegistryRejectsInvalidPoolEntries()
+    {
+        const string json = @"{
+  ""cards"": [{
+    ""cardId"": ""BG36_SPELL_VALID"",
+    ""type"": ""BATTLEGROUND_SPELL"",
+    ""cost"": 3,
+    ""techLevel"": 5,
+    ""battlegroundsAssociatedRaces"": [""DRAGON""],
+    ""isBattlegroundsPoolSpell"": true
+  }, {
+    ""cardId"": ""BG36_SPELL_BAD_TYPE"",
+    ""type"": ""MINION"",
+    ""cost"": 3,
+    ""techLevel"": 5,
+    ""isBattlegroundsPoolSpell"": true
+  }, {
+    ""cardId"": ""BG36_SPELL_BAD_COST"",
+    ""type"": ""BATTLEGROUND_SPELL"",
+    ""cost"": -1,
+    ""techLevel"": 5,
+    ""isBattlegroundsPoolSpell"": true
+  }, {
+    ""cardId"": ""BG36_SPELL_BAD_POOL"",
+    ""type"": ""BATTLEGROUND_SPELL"",
+    ""cost"": 3,
+    ""techLevel"": 5,
+    ""isBattlegroundsPoolSpell"": false
+  }]
+}";
+
+        var registry = new Season14TavernSpellRegistry();
+        registry.LoadFromJson(json);
+        True(registry.IsLoaded, "synthetic spell registry loaded");
+        Equal(4, registry.Count, "synthetic spell registry count");
+
+        Season14MechanicCardFact fact;
+        True(registry.TryGetPoolSpell("BG36_SPELL_VALID", out fact),
+            "synthetic valid pool spell");
+        Equal(1, fact.BattlegroundsAssociatedRaces.Count,
+            "synthetic spell associated races parsed");
+        Equal("DRAGON", fact.BattlegroundsAssociatedRaces[0],
+            "synthetic spell associated races value");
+        False(registry.TryGetPoolSpell("BG36_SPELL_BAD_TYPE", out fact),
+            "synthetic non-spell rejected");
+        False(registry.TryGetPoolSpell("BG36_SPELL_BAD_COST", out fact),
+            "synthetic negative cost rejected");
+        False(registry.TryGetPoolSpell("BG36_SPELL_BAD_POOL", out fact),
+            "synthetic non-pool spell rejected");
+    }
+
+    private static void SyntheticMinionRegistryRejectsInvalidPoolEntries()
+    {
+        const string json = @"{
+  ""cards"": [{
+    ""cardId"": ""BG36_VALID"",
+    ""type"": ""MINION"",
+    ""cost"": 0,
+    ""techLevel"": 3,
+    ""race"": ""DRAGON"",
+    ""races"": [""DRAGON""],
+    ""isBattlegroundsPoolMinion"": true
+  }, {
+    ""cardId"": ""BG36_BAD_TYPE"",
+    ""type"": ""SPELL"",
+    ""cost"": 0,
+    ""techLevel"": 3,
+    ""races"": [],
+    ""isBattlegroundsPoolMinion"": true
+  }, {
+    ""cardId"": ""BG36_BAD_COST"",
+    ""type"": ""MINION"",
+    ""cost"": 3,
+    ""techLevel"": 3,
+    ""races"": [],
+    ""isBattlegroundsPoolMinion"": true
+  }, {
+    ""cardId"": ""BG36_BAD_TIER"",
+    ""type"": ""MINION"",
+    ""cost"": 0,
+    ""techLevel"": 0,
+    ""races"": [],
+    ""isBattlegroundsPoolMinion"": true
+  }, {
+    ""cardId"": ""BG36_BAD_POOL"",
+    ""type"": ""MINION"",
+    ""cost"": 0,
+    ""techLevel"": 3,
+    ""races"": [],
+    ""isBattlegroundsPoolMinion"": false
+  }]
+}";
+
+        var registry = new Season14MinionRegistry();
+        registry.LoadFromJson(json);
+        True(registry.IsLoaded, "synthetic minion registry loaded");
+        Equal(5, registry.Count, "synthetic minion registry count");
+
+        Season14MechanicCardFact fact;
+        True(registry.TryGetPoolMinion("BG36_VALID", out fact),
+            "synthetic valid pool minion");
+        Equal(1, fact.Races.Count, "synthetic minion Races parsed");
+        Equal("DRAGON", fact.Races[0], "synthetic minion Races value");
+        False(registry.TryGetPoolMinion("BG36_BAD_TYPE", out fact),
+            "synthetic non-minion rejected");
+        False(registry.TryGetPoolMinion("BG36_BAD_COST", out fact),
+            "synthetic nonzero cost rejected");
+        False(registry.TryGetPoolMinion("BG36_BAD_TIER", out fact),
+            "synthetic invalid tier rejected");
+        False(registry.TryGetPoolMinion("BG36_BAD_POOL", out fact),
+            "synthetic non-pool minion rejected");
+    }
+
+    private static void CompositeCardPurchaseFactSourceTests()
+    {
+        var composite = new CompositeCardPurchaseFactSource(
+            new SyntheticCardPurchaseFactSource("A", ShopItemKind.Minion, -1),
+            new SyntheticCardPurchaseFactSource("B", ShopItemKind.TavernSpell, 3));
+
+        CardPurchaseFact fact;
+        True(composite.TryGet("A", out fact), "composite first source wins");
+        Equal("A", fact.CardId, "composite first source CardId");
+        Equal(ShopItemKind.Minion, fact.Kind, "composite first source Kind");
+        Equal(-1, fact.BaseCost, "composite first source BaseCost");
+
+        True(composite.TryGet("B", out fact), "composite second source fallback");
+        Equal("B", fact.CardId, "composite fallback CardId");
+        Equal(ShopItemKind.TavernSpell, fact.Kind, "composite fallback Kind");
+        Equal(3, fact.BaseCost, "composite fallback BaseCost");
+
+        False(composite.TryGet("C", out fact),
+            "composite unknown fails closed");
+    }
+
     private static void ConfiguredRootIsSeason14Evidence()
     {
         string expectedRoot = Path.GetFullPath(@"E:\HDT-BobCoach-evidence\season14");
@@ -215,6 +423,20 @@ internal static class Season14RegistriesHarness
                 "comp guide loads via default selector without configured root");
             Equal(expectedRoot, Path.GetFullPath(compGuide.ConfiguredRoot),
                 "comp guide default selector root");
+
+            var minion = new Season14MinionRegistry();
+            minion.LoadFromConfiguredRoot();
+            True(minion.IsLoaded,
+                "minion registry loads via default selector without configured root");
+            Equal(expectedRoot, Path.GetFullPath(minion.ConfiguredRoot),
+                "minion registry default selector root");
+
+            var spell = new Season14TavernSpellRegistry();
+            spell.LoadFromConfiguredRoot();
+            True(spell.IsLoaded,
+                "spell registry loads via default selector without configured root");
+            Equal(expectedRoot, Path.GetFullPath(spell.ConfiguredRoot),
+                "spell registry default selector root");
         }
         finally
         {
@@ -1418,6 +1640,35 @@ internal static class Season14RegistriesHarness
 
             definition = null;
             return false;
+        }
+    }
+
+    private sealed class SyntheticCardPurchaseFactSource : ICardPurchaseFactSource
+    {
+        private readonly string _cardId;
+        private readonly ShopItemKind _kind;
+        private readonly int _baseCost;
+
+        internal SyntheticCardPurchaseFactSource(
+            string cardId, ShopItemKind kind, int baseCost)
+        {
+            _cardId = cardId;
+            _kind = kind;
+            _baseCost = baseCost;
+        }
+
+        public bool TryGet(string cardId, out CardPurchaseFact fact)
+        {
+            fact = new CardPurchaseFact();
+            if (!string.Equals(_cardId, cardId, StringComparison.Ordinal))
+                return false;
+            fact = new CardPurchaseFact
+            {
+                CardId = _cardId,
+                Kind = _kind,
+                BaseCost = _baseCost,
+            };
+            return true;
         }
     }
 

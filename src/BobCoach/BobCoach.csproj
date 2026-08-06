@@ -66,6 +66,10 @@
     <Compile Include="Core\SeasonMechanicProfile.cs" />
     <Compile Include="Core\CompGuideCatalog.cs" />
     <Compile Include="Core\Season14CardRegistry.cs" />
+    <Compile Include="Core\Season14MinionRegistry.cs" />
+    <Compile Include="Core\Season14MinionPurchaseFactSource.cs" />
+    <Compile Include="Core\Season14TavernSpellRegistry.cs" />
+    <Compile Include="Core\Season14TavernSpellPurchaseFactSource.cs" />
     <Compile Include="Core\ActivateRegistry.cs" />
     <Compile Include="Core\ActivateFactSource.cs" />
     <Compile Include="Core\LockboxRegistry.cs" />

@@ -50,8 +50,27 @@ namespace BobCoach
         // 英雄技能引擎引用 — 用于正确判断Passive/Active
         private HeroPowerEngine _heroPowerEngine;
         private ITrinketFactSource _trinketFactSource;
+        private static readonly Lazy<Season14MinionRegistry> Season14MinionLookup =
+            new Lazy<Season14MinionRegistry>(() =>
+            {
+                var registry = new Season14MinionRegistry();
+                registry.LoadFromConfiguredRoot();
+                return registry;
+            });
+        private static readonly Lazy<Season14TavernSpellRegistry>
+            Season14TavernSpellLookup =
+                new Lazy<Season14TavernSpellRegistry>(() =>
+                {
+                    var registry = new Season14TavernSpellRegistry();
+                    registry.LoadFromConfiguredRoot();
+                    return registry;
+                });
         private static readonly ShopItemFactResolver PurchaseFactResolver =
-            new ShopItemFactResolver(new HearthDbCardPurchaseFactSource());
+            new ShopItemFactResolver(new CompositeCardPurchaseFactSource(
+                new HearthDbCardPurchaseFactSource(),
+                new Season14MinionPurchaseFactSource(Season14MinionLookup.Value),
+                new Season14TavernSpellPurchaseFactSource(
+                    Season14TavernSpellLookup.Value)));
 
         public void SetHeroPowerEngine(HeroPowerEngine engine) { _heroPowerEngine = engine; }
         public void SetAnomalyRegistry(AnomalyRegistry reg) { _anomalyReg = reg; }
@@ -1962,12 +1981,52 @@ namespace BobCoach
         private List<string> GetTribes(Entity e)
         {
             var result = new List<string>();
-            var race = GetTag(e, GameTag.CARDRACE);
-            if (race > 0)
+            if (e != null)
             {
-                var raceName = RaceToString(race);
-                if (!string.IsNullOrEmpty(raceName))
-                    result.Add(raceName);
+                var race = GetTag(e, GameTag.CARDRACE);
+                if (race > 0)
+                {
+                    var raceName = RaceToString(race);
+                    if (!string.IsNullOrEmpty(raceName))
+                        result.Add(raceName);
+                }
+            }
+
+            if (result.Count == 0 && e != null)
+            {
+                Season14MechanicCardFact fact;
+                if (Season14MinionLookup.Value.TryGet(e.CardId, out fact))
+                {
+                    var races = fact.Races != null && fact.Races.Count > 0
+                        ? fact.Races
+                        : (string.IsNullOrEmpty(fact.Race)
+                            ? new List<string>()
+                            : new List<string> { fact.Race });
+                    foreach (var rawRace in races)
+                    {
+                        var raceName = MapRegistryRace(rawRace);
+                        if (!string.IsNullOrEmpty(raceName)
+                            && !result.Contains(raceName))
+                            result.Add(raceName);
+                    }
+                }
+
+                if (result.Count == 0
+                    && Season14TavernSpellLookup.Value.TryGet(
+                        e.CardId, out fact))
+                {
+                    var races = fact.BattlegroundsAssociatedRaces;
+                    if (races != null)
+                    {
+                        foreach (var rawRace in races)
+                        {
+                            var raceName = MapRegistryRace(rawRace);
+                            if (!string.IsNullOrEmpty(raceName)
+                                && !result.Contains(raceName))
+                                result.Add(raceName);
+                        }
+                    }
+                }
             }
             return result;
         }
@@ -2074,9 +2133,24 @@ namespace BobCoach
                 HearthDb.Card c;
                 if (HearthDb.Cards.All.TryGetValue(cardId, out c) && c != null && c.TechLevel > 0)
                     return c.TechLevel;
+                Season14MechanicCardFact fact;
+                if (Season14MinionLookup.Value.TryGetPoolMinion(cardId, out fact))
+                    return fact.TechLevel;
+                if (Season14TavernSpellLookup.Value.TryGetPoolSpell(
+                    cardId, out fact))
+                    return fact.TechLevel;
                 return GuessTierFromId(cardId);
             }
-            catch { return GuessTierFromId(cardId); }
+            catch
+            {
+                Season14MechanicCardFact fact;
+                if (Season14MinionLookup.Value.TryGetPoolMinion(cardId, out fact))
+                    return fact.TechLevel;
+                if (Season14TavernSpellLookup.Value.TryGetPoolSpell(
+                    cardId, out fact))
+                    return fact.TechLevel;
+                return GuessTierFromId(cardId);
+            }
         }
 
         private int GuessTierFromId(string cardId)
@@ -2101,7 +2175,42 @@ namespace BobCoach
 
         private string GetCardName(string cardId)
         {
-            return Engine.CardNameService.GetName(cardId);
+            string name = Engine.CardNameService.GetName(cardId);
+            if (!string.IsNullOrEmpty(name)
+                && !string.Equals(name, cardId, StringComparison.Ordinal))
+                return name;
+
+            Season14MechanicCardFact fact;
+            if (!string.IsNullOrEmpty(cardId)
+                && Season14MinionLookup.Value.TryGet(cardId, out fact)
+                && !string.IsNullOrEmpty(fact.NameZhCn))
+                return fact.NameZhCn;
+            if (!string.IsNullOrEmpty(cardId)
+                && Season14TavernSpellLookup.Value.TryGet(cardId, out fact)
+                && !string.IsNullOrEmpty(fact.NameZhCn))
+                return fact.NameZhCn;
+            return name;
+        }
+
+        private static string MapRegistryRace(string race)
+        {
+            if (string.IsNullOrEmpty(race)) return "";
+            switch (race.ToUpperInvariant())
+            {
+                case "BEAST": return "野兽";
+                case "MECHANICAL": return "机械";
+                case "DEMON": return "恶魔";
+                case "DRAGON": return "龙";
+                case "ELEMENTAL": return "元素";
+                case "UNDEAD": return "亡灵";
+                case "PIRATE": return "海盗";
+                case "QUILBOAR": return "野猪人";
+                case "NAGA": return "纳迦";
+                case "MURLOC": return "鱼人";
+                case "TOTEM": return "图腾";
+                case "ALL": return "全部";
+                default: return "";
+            }
         }
 
         /// <summary>HearthDb Race 值 → 中文种族名，用于饰品种族检测兜底</summary>
