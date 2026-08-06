@@ -84,6 +84,12 @@ namespace BobCoach.Engine
         private int _pendingSendChoiceId = -1;
         private string _pendingSendChoiceType = "";
         private DateTime _pendingSendChoiceAt = DateTime.MinValue;
+        private PowerLogChoiceBatch _darkGiftChoice;
+        private bool _darkGiftChoiceFired;
+        private int _darkGiftFailClosedChoiceId = -1;
+        private int _darkGiftPendingChoiceId = -1;
+        private string _darkGiftPendingChoiceType = "";
+        private DateTime _darkGiftPendingChoiceAt = DateTime.MinValue;
 
         /// <summary>从Power.log检测到阶段变化时触发 (MAIN_READY=招募, MAIN_COMBAT=战斗)</summary>
         public event Action<string> PhaseDetected;
@@ -108,6 +114,10 @@ namespace BobCoach.Engine
 
         /// <summary>DebugPrintGame中的客户端构建号；变化时触发一次。</summary>
         public event Action<int> BuildNumberDetected;
+
+        public event Action<PowerLogChoiceBatch> DarkGiftChoiceActive;
+
+        public event Action<PowerLogChoiceCompletion> DarkGiftCompleted;
 
         public int CurrentBuildNumber { get { return _currentBuildNumber; } }
 
@@ -214,35 +224,85 @@ namespace BobCoach.Engine
                 var scm = System.Text.RegularExpressions.Regex.Match(content, @"^id=(\d+) ChoiceType=(\w+)");
                 if (scm.Success && scm.Groups[2].Value != "MULLIGAN")
                 {
-                    _currentEntityChoice = null;
-                    _pendingChoiceEntityIds.Clear();
-                    _pendingSendChoiceId = int.Parse(scm.Groups[1].Value);
-                    _pendingSendChoiceType = scm.Groups[2].Value;
-                    _pendingSendChoiceAt = ts;
+                    int sendChoiceId = int.Parse(scm.Groups[1].Value);
+                    if (_darkGiftChoice != null || _darkGiftFailClosedChoiceId >= 0)
+                    {
+                        if (_darkGiftChoice != null && sendChoiceId == _darkGiftChoice.ChoiceId)
+                        {
+                            _darkGiftPendingChoiceId = sendChoiceId;
+                            _darkGiftPendingChoiceType = scm.Groups[2].Value;
+                            _darkGiftPendingChoiceAt = ts;
+                        }
+                        else if (_darkGiftFailClosedChoiceId >= 0)
+                        {
+                            _darkGiftPendingChoiceId = sendChoiceId;
+                            _darkGiftPendingChoiceType = scm.Groups[2].Value;
+                            _darkGiftPendingChoiceAt = ts;
+                        }
+                        else
+                        {
+                            ClearDarkGiftContext();
+                        }
+                        ClearOrdinaryChoiceContext();
+                    }
+                    else
+                    {
+                        _currentEntityChoice = null;
+                        _pendingChoiceEntityIds.Clear();
+                        _pendingSendChoiceId = sendChoiceId;
+                        _pendingSendChoiceType = scm.Groups[2].Value;
+                        _pendingSendChoiceAt = ts;
+                    }
                 }
-                else if (_pendingSendChoiceId >= 0)
+                else if (_darkGiftPendingChoiceId >= 0 || _pendingSendChoiceId >= 0)
                 {
                     var chosen = System.Text.RegularExpressions.Regex.Match(content,
                         @"^m_chosenEntities\[\d+\]=\[entityName=(.+) id=(\d+) zone=(\w+) zonePos=(\d+) cardId=(\w*) player=(\d+)\]");
                     if (chosen.Success)
                     {
-                        var completion = new PowerLogChoiceCompletion
+                        if (_darkGiftPendingChoiceId >= 0)
                         {
-                            ChoiceId = _pendingSendChoiceId,
-                            ChoiceType = _pendingSendChoiceType,
-                            SelectedName = chosen.Groups[1].Value,
-                            SelectedEntityId = int.Parse(chosen.Groups[2].Value),
-                            SelectedCardId = chosen.Groups[5].Value,
-                            SelectedPlayerId = int.Parse(chosen.Groups[6].Value),
-                            Timestamp = _pendingSendChoiceAt,
-                        };
-                        _pendingSendChoiceId = -1;
-                        _pendingSendChoiceType = "";
-                        _pendingSendChoiceAt = DateTime.MinValue;
-                        try { ChoiceCompleted?.Invoke(completion); } catch { }
-                        results.Add(new PLEvent { Type = PLEventType.PlayerAction, Timestamp = ts,
-                            EntityId = completion.SelectedEntityId, CardId = completion.SelectedCardId,
-                            BlockType = "CHOSEN" });
+                            if (_darkGiftChoice != null
+                                && _darkGiftPendingChoiceId == _darkGiftChoice.ChoiceId)
+                            {
+                                var darkGiftCompletion = new PowerLogChoiceCompletion
+                                {
+                                    ChoiceId = _darkGiftPendingChoiceId,
+                                    ChoiceType = _darkGiftPendingChoiceType,
+                                    SelectedName = chosen.Groups[1].Value,
+                                    SelectedEntityId = int.Parse(chosen.Groups[2].Value),
+                                    SelectedCardId = chosen.Groups[5].Value,
+                                    SelectedPlayerId = int.Parse(chosen.Groups[6].Value),
+                                    Timestamp = _darkGiftPendingChoiceAt,
+                                };
+                                try { DarkGiftCompleted?.Invoke(darkGiftCompletion); } catch { }
+                                results.Add(new PLEvent { Type = PLEventType.PlayerAction, Timestamp = ts,
+                                    EntityId = darkGiftCompletion.SelectedEntityId,
+                                    CardId = darkGiftCompletion.SelectedCardId,
+                                    BlockType = "CHOSEN" });
+                            }
+                            ClearDarkGiftContext();
+                        }
+                        else
+                        {
+                            var completion = new PowerLogChoiceCompletion
+                            {
+                                ChoiceId = _pendingSendChoiceId,
+                                ChoiceType = _pendingSendChoiceType,
+                                SelectedName = chosen.Groups[1].Value,
+                                SelectedEntityId = int.Parse(chosen.Groups[2].Value),
+                                SelectedCardId = chosen.Groups[5].Value,
+                                SelectedPlayerId = int.Parse(chosen.Groups[6].Value),
+                                Timestamp = _pendingSendChoiceAt,
+                            };
+                            _pendingSendChoiceId = -1;
+                            _pendingSendChoiceType = "";
+                            _pendingSendChoiceAt = DateTime.MinValue;
+                            try { ChoiceCompleted?.Invoke(completion); } catch { }
+                            results.Add(new PLEvent { Type = PLEventType.PlayerAction, Timestamp = ts,
+                                EntityId = completion.SelectedEntityId, CardId = completion.SelectedCardId,
+                                BlockType = "CHOSEN" });
+                        }
                     }
                 }
             }
@@ -593,12 +653,77 @@ namespace BobCoach.Engine
                 _currentEntityChoice.SourceCardId = sourceMatch.Groups[5].Value;
                 _currentEntityChoice.SourceName = sourceMatch.Groups[1].Value;
                 int.TryParse(sourceMatch.Groups[6].Value, out _currentEntityChoice.SourcePlayerId);
+
+                if (IsDarkGiftSource(_currentEntityChoice.SourceCardId))
+                {
+                    _darkGiftChoice = new PowerLogChoiceBatch
+                    {
+                        ChoiceId = _currentEntityChoice.Id,
+                        TaskList = _currentEntityChoice.TaskList,
+                        PlayerName = _currentEntityChoice.PlayerName,
+                        ChoiceType = _currentEntityChoice.ChoiceType,
+                        SourceCardId = _currentEntityChoice.SourceCardId,
+                        SourceName = _currentEntityChoice.SourceName,
+                        SourcePlayerId = _currentEntityChoice.SourcePlayerId,
+                        Timestamp = _currentEntityChoice.Timestamp,
+                        Candidates = new List<DiscoverCandidate>(),
+                    };
+                    _darkGiftChoiceFired = false;
+                    _darkGiftFailClosedChoiceId = -1;
+                    ClearOrdinaryChoiceContext();
+                }
+                else if (IsPotentialDarkGiftSource(_currentEntityChoice.SourceCardId))
+                {
+                    _darkGiftChoice = null;
+                    _darkGiftChoiceFired = false;
+                    _darkGiftFailClosedChoiceId = _currentEntityChoice.Id;
+                    ClearOrdinaryChoiceContext();
+                }
                 return null;
             }
 
             // Entities[N]行
             var entityMatch = System.Text.RegularExpressions.Regex.Match(content,
                 @"Entities\[(\d+)\]=\[entityName=(.+) id=(\d+) zone=(\w+) zonePos=(\d+) cardId=(\w+)");
+            if (entityMatch.Success && _darkGiftChoice != null)
+            {
+                int giftIdx = int.Parse(entityMatch.Groups[1].Value);
+                while (_darkGiftChoice.Candidates.Count <= giftIdx)
+                    _darkGiftChoice.Candidates.Add(null);
+                _darkGiftChoice.Candidates[giftIdx] = new DiscoverCandidate
+                {
+                    CardId = entityMatch.Groups[6].Value,
+                    CardName = entityMatch.Groups[2].Value,
+                    EntityId = int.Parse(entityMatch.Groups[3].Value),
+                };
+
+                var validGiftCandidates = _darkGiftChoice.Candidates
+                    .Where(c => c != null).ToList();
+                if (!_darkGiftChoiceFired && validGiftCandidates.Count >= 2)
+                {
+                    _darkGiftChoiceFired = true;
+                    try
+                    {
+                        DarkGiftChoiceActive?.Invoke(new PowerLogChoiceBatch
+                        {
+                            ChoiceId = _darkGiftChoice.ChoiceId,
+                            TaskList = _darkGiftChoice.TaskList,
+                            PlayerName = _darkGiftChoice.PlayerName,
+                            ChoiceType = _darkGiftChoice.ChoiceType,
+                            SourceCardId = _darkGiftChoice.SourceCardId,
+                            SourceName = _darkGiftChoice.SourceName,
+                            SourcePlayerId = _darkGiftChoice.SourcePlayerId,
+                            Timestamp = _darkGiftChoice.Timestamp,
+                            Candidates = new List<DiscoverCandidate>(validGiftCandidates),
+                        });
+                    }
+                    catch { }
+                }
+                return null;
+            }
+            if (entityMatch.Success && _darkGiftFailClosedChoiceId >= 0)
+                return null;
+
             if (entityMatch.Success && _currentEntityChoice != null)
             {
                 _lastChoiceContextAt = ts;
@@ -1015,6 +1140,48 @@ namespace BobCoach.Engine
         {
             return sourceCardId == "BG34_HERO_004p"
                 || sourceCardId == "BG34_HERO_000p";
+        }
+
+        private void ClearOrdinaryChoiceContext()
+        {
+            _currentEntityChoice = null;
+            _lastChoiceContextAt = DateTime.MinValue;
+            _pendingChoiceEntityIds.Clear();
+            _pendingChoiceId = -1;
+            _inChoiceBlock = false;
+            _discoverBuffer.Clear();
+            _lastDiscoverCandidateTime = DateTime.MinValue;
+            _pendingSendChoiceId = -1;
+            _pendingSendChoiceType = "";
+            _pendingSendChoiceAt = DateTime.MinValue;
+            _isTrinketChoice = false;
+        }
+
+        private void ClearDarkGiftContext()
+        {
+            _darkGiftChoice = null;
+            _darkGiftChoiceFired = false;
+            _darkGiftFailClosedChoiceId = -1;
+            _darkGiftPendingChoiceId = -1;
+            _darkGiftPendingChoiceType = "";
+            _darkGiftPendingChoiceAt = DateTime.MinValue;
+        }
+
+        private static bool IsDarkGiftSource(string sourceCardId)
+        {
+            return sourceCardId == "BG36_Button_DarkGift"
+                || sourceCardId == "BG36_MidGameEffect_010"
+                || sourceCardId == "BG36_MidGameEffect_000"
+                || sourceCardId == "BG36_HERO_101p";
+        }
+
+        private static bool IsPotentialDarkGiftSource(string sourceCardId)
+        {
+            if (string.IsNullOrEmpty(sourceCardId)) return false;
+            return IsDarkGiftSource(sourceCardId)
+                || sourceCardId.StartsWith("BG36_Button_", StringComparison.Ordinal)
+                || sourceCardId.StartsWith("BG36_MidGameEffect_", StringComparison.Ordinal)
+                || sourceCardId.Contains("DarkGift");
         }
 
         /// <summary>

@@ -278,6 +278,86 @@ public static class PowerLogChoiceBatchHarness
         if (lifecycle.Complete(anomalyCompletion) == null)
             return Fail("matching anomaly completion did not close its batch");
 
+        var darkGiftParser = new PowerLogParser();
+        PowerLogChoiceBatch darkGift = null;
+        PowerLogChoiceCompletion darkGiftDone = null;
+        int darkGiftActiveEvents = 0;
+        int darkGiftDiscoverLeaks = 0;
+        int darkGiftTrinketLeaks = 0;
+        int darkGiftTimewarpLeaks = 0;
+        int darkGiftChoiceCompletedLeaks = 0;
+        bool darkGiftChoiceListActiveDuringOffer = true;
+        darkGiftParser.DarkGiftChoiceActive += batch =>
+        {
+            darkGift = batch;
+            darkGiftActiveEvents++;
+            darkGiftChoiceListActiveDuringOffer = darkGiftParser.IsChoiceListActive();
+        };
+        darkGiftParser.DarkGiftCompleted += completion => darkGiftDone = completion;
+        darkGiftParser.DiscoverOffered += batch => darkGiftDiscoverLeaks++;
+        darkGiftParser.TrinketChoiceActive += batch => darkGiftTrinketLeaks++;
+        darkGiftParser.TimewarpPurchaseOffered += batch => darkGiftTimewarpLeaks++;
+        darkGiftParser.ChoiceCompleted += completion => darkGiftChoiceCompletedLeaks++;
+
+        darkGiftParser.ParseLine("D 18:09:36.8559084 GameState.DebugPrintEntityChoices() - id=101 Player=Local TaskList=9100 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        darkGiftParser.ParseLine("D 18:09:36.8559084 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1]");
+        darkGiftParser.ParseLine("D 18:09:36.8559084 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=9101 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_001 player=1]");
+        darkGiftParser.ParseLine("D 18:09:36.8559084 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=9102 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=1]");
+        if (darkGift == null || darkGiftActiveEvents != 1)
+            return Fail("dark gift active event was not emitted exactly once");
+        if (darkGift.ChoiceId != 101 || darkGift.TaskList != 9100
+            || darkGift.SourceCardId != "BG36_Button_DarkGift"
+            || darkGift.SourcePlayerId != 1)
+            return Fail("dark gift batch identity was not preserved");
+        if (darkGift.Candidates == null || darkGift.Candidates.Count != 2
+            || darkGift.Candidates[0].CardId != "BG36_SyntheticDarkGift_001"
+            || darkGift.Candidates[1].CardId != "BG36_SyntheticDarkGift_002")
+            return Fail("dark gift candidates were not preserved");
+        if (darkGiftChoiceListActiveDuringOffer)
+            return Fail("dark gift offer leaked into IsChoiceListActive()");
+        if (darkGiftDiscoverLeaks != 0 || darkGiftTrinketLeaks != 0
+            || darkGiftTimewarpLeaks != 0 || darkGiftChoiceCompletedLeaks != 0)
+            return Fail("dark gift offer leaked into ordinary choice events");
+
+        darkGiftParser.ParseLine("D 18:10:00.0000000 GameState.SendChoices() - id=101 ChoiceType=GENERAL");
+        darkGiftParser.ParseLine("D 18:10:00.0000000 GameState.SendChoices() -   m_chosenEntities[0]=[entityName=Gift B id=9102 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=1]");
+        if (darkGiftDone == null || darkGiftDone.ChoiceId != 101
+            || darkGiftDone.SelectedCardId != "BG36_SyntheticDarkGift_002"
+            || darkGiftDone.SelectedEntityId != 9102)
+            return Fail("dark gift completion was not emitted with identity");
+        if (darkGiftChoiceCompletedLeaks != 0)
+            return Fail("dark gift completion leaked into ordinary ChoiceCompleted");
+        if (darkGiftParser.IsChoiceListActive())
+            return Fail("dark gift completion left ordinary choice context active");
+
+        var unknownDarkGiftParser = new PowerLogParser();
+        int unknownDarkGiftEvents = 0;
+        int unknownDiscoverLeaks = 0;
+        int unknownTrinketLeaks = 0;
+        int unknownTimewarpLeaks = 0;
+        int unknownChoiceCompletedLeaks = 0;
+        bool unknownChoiceListActiveAfterOffer = true;
+        unknownDarkGiftParser.DarkGiftChoiceActive += batch => unknownDarkGiftEvents++;
+        unknownDarkGiftParser.DarkGiftCompleted += completion => unknownDarkGiftEvents++;
+        unknownDarkGiftParser.DiscoverOffered += batch => unknownDiscoverLeaks++;
+        unknownDarkGiftParser.TrinketChoiceActive += batch => unknownTrinketLeaks++;
+        unknownDarkGiftParser.TimewarpPurchaseOffered += batch => unknownTimewarpLeaks++;
+        unknownDarkGiftParser.ChoiceCompleted += completion => unknownChoiceCompletedLeaks++;
+        unknownDarkGiftParser.ParseLine("D 18:20:00.0000000 GameState.DebugPrintEntityChoices() - id=202 Player=Local TaskList=9200 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        unknownDarkGiftParser.ParseLine("D 18:20:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Unknown Button id=9200 zone=PLAY zonePos=0 cardId=BG36_Button_Unknown player=1]");
+        unknownDarkGiftParser.ParseLine("D 18:20:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Unknown A id=9201 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticUnknown_001 player=1]");
+        unknownDarkGiftParser.ParseLine("D 18:20:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Unknown B id=9202 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticUnknown_002 player=1]");
+        unknownChoiceListActiveAfterOffer = unknownDarkGiftParser.IsChoiceListActive();
+        unknownDarkGiftParser.ParseLine("D 18:20:05.0000000 GameState.SendChoices() - id=202 ChoiceType=GENERAL");
+        unknownDarkGiftParser.ParseLine("D 18:20:05.0000000 GameState.SendChoices() -   m_chosenEntities[0]=[entityName=Unknown B id=9202 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticUnknown_002 player=1]");
+        if (unknownDarkGiftEvents != 0)
+            return Fail("unknown dark gift source was treated as dark gift");
+        if (unknownDiscoverLeaks != 0 || unknownTrinketLeaks != 0
+            || unknownTimewarpLeaks != 0 || unknownChoiceCompletedLeaks != 0)
+            return Fail("unknown dark gift source leaked into ordinary choice events");
+        if (unknownChoiceListActiveAfterOffer)
+            return Fail("unknown dark gift source left ordinary choice context active");
+
         Console.WriteLine("PASS trinket/discover batch metadata and typed completion");
         return 0;
     }

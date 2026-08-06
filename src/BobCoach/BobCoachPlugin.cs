@@ -71,6 +71,9 @@ namespace BobCoach
         private Engine.PowerLogChoiceBatch _discoverBatchFromLog = null;
         private Engine.PowerLogChoiceBatch _timewarpPurchaseBatchFromLog = null;
         private volatile bool _timewarpPurchaseClearRequested;
+        private Engine.PowerLogChoiceBatch _darkGiftBatchFromLog = null;
+        private volatile bool _darkGiftTipActive;
+        private volatile bool _darkGiftClearRequested;
         private readonly HashSet<int> _claimedUpgradePrizeChoiceIds = new HashSet<int>();
         private readonly Engine.TrinketChoiceBatchLifecycle _trinketChoiceLifecycle =
             new Engine.TrinketChoiceBatchLifecycle();
@@ -802,6 +805,9 @@ namespace BobCoach
                 _discoverBatchFromLog = null;
                 _timewarpPurchaseBatchFromLog = null;
                 _timewarpPurchaseClearRequested = false;
+                _darkGiftBatchFromLog = null;
+                _darkGiftTipActive = false;
+                _darkGiftClearRequested = false;
                 _claimedUpgradePrizeChoiceIds.Clear();
                 _trinketChoiceLifecycle.Reset();
                 // 跨局重置面板状态机回 Idle(防止上局 Active/Fading 残留)
@@ -1263,6 +1269,13 @@ namespace BobCoach
 
         private void EvaluateAndRender()
         {
+            if (_darkGiftTipActive)
+            {
+                _renderer.RefreshCanvasSize();
+                _renderer.ShowDarkGiftTip("暗赐选择中");
+                return;
+            }
+
             // 战斗阶段不评估
             try { if (Core.Game.IsBattlegroundsCombatPhase) return; } catch { }
 
@@ -2023,6 +2036,8 @@ namespace BobCoach
             _powerLogWatcher.PhaseChanged += OnPowerLogPhaseChanged;
             _powerLogWatcher.DiscoverOffered += OnPowerLogDiscoverOffered;
             _powerLogWatcher.TimewarpPurchaseOffered += OnPowerLogTimewarpPurchaseOffered;
+            _powerLogWatcher.DarkGiftChoiceActive += OnPowerLogDarkGiftChoiceActive;
+            _powerLogWatcher.DarkGiftCompleted += OnPowerLogDarkGiftCompleted;
             _powerLogWatcher.TrinketChoiceActive += OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted += OnPowerLogChoiceCompleted;
             _powerLogWatcher.TeammateGoldTransferObserved += OnPowerLogTeammateGoldTransfer;
@@ -2038,6 +2053,8 @@ namespace BobCoach
             _powerLogWatcher.PhaseChanged -= OnPowerLogPhaseChanged;
             _powerLogWatcher.DiscoverOffered -= OnPowerLogDiscoverOffered;
             _powerLogWatcher.TimewarpPurchaseOffered -= OnPowerLogTimewarpPurchaseOffered;
+            _powerLogWatcher.DarkGiftChoiceActive -= OnPowerLogDarkGiftChoiceActive;
+            _powerLogWatcher.DarkGiftCompleted -= OnPowerLogDarkGiftCompleted;
             _powerLogWatcher.TrinketChoiceActive -= OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted -= OnPowerLogChoiceCompleted;
             _powerLogWatcher.TeammateGoldTransferObserved -= OnPowerLogTeammateGoldTransfer;
@@ -2601,8 +2618,19 @@ namespace BobCoach
                                     _timewarpPurchaseClearRequested = false;
                                     _renderer.ClearTimewarpPurchaseHint();
                                 }
+                                if (_darkGiftClearRequested)
+                                {
+                                    _darkGiftClearRequested = false;
+                                    _renderer.ClearDarkGiftTip();
+                                }
                                 bool nowInCombat = Core.Game.IsBattlegroundsCombatPhase;
-                                if (nowInCombat)
+                                if (_darkGiftTipActive)
+                                {
+                                    _eventEvalRequested = false;
+                                    _renderer.RefreshCanvasSize();
+                                    _renderer.ShowDarkGiftTip("暗赐选择中");
+                                }
+                                else if (nowInCombat)
                                 {
                                     if (_timewarpPurchaseBatchFromLog != null)
                                     {
@@ -3475,6 +3503,27 @@ namespace BobCoach
                 string.Join(", ", batch.Candidates.Select(candidate => string.Format(
                     "{0}:{1}", candidate.CardName ?? candidate.CardId ?? "?",
                     candidate.PurchaseCost)))));
+            OnPowerLogStateChanged();
+        }
+
+        private void OnPowerLogDarkGiftChoiceActive(Engine.PowerLogChoiceBatch batch)
+        {
+            if (batch == null || batch.ChoiceId < 0) return;
+            _darkGiftBatchFromLog = batch;
+            _darkGiftTipActive = true;
+            _darkGiftClearRequested = false;
+            Log("Dark Gift: choice=" + batch.ChoiceId + " source=" + batch.SourceCardId);
+            OnPowerLogStateChanged();
+        }
+
+        private void OnPowerLogDarkGiftCompleted(Engine.PowerLogChoiceCompletion completion)
+        {
+            if (completion == null || _darkGiftBatchFromLog == null
+                || _darkGiftBatchFromLog.ChoiceId != completion.ChoiceId) return;
+            _darkGiftBatchFromLog = null;
+            _darkGiftTipActive = false;
+            _darkGiftClearRequested = true;
+            Log("Dark Gift: choice=" + completion.ChoiceId + " completed selected=" + completion.SelectedCardId);
             OnPowerLogStateChanged();
         }
 

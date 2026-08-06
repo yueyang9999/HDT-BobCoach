@@ -25,6 +25,7 @@ namespace BobCoach
         private string _trinketPanelSig = null;
         private string _discoverPanelSig = null;
         private string _timewarpPurchaseSig = null;
+        private string _darkGiftTipSig = null;
         private Engine.GameLayoutCalculator _calc;
         private Engine.PhaseDetector _phase;
         private Engine.CalibrationOverlay _calib;
@@ -395,6 +396,68 @@ namespace BobCoach
         {
             ClearTaggedElements("timewarp_purchase");
             _timewarpPurchaseSig = null;
+        }
+
+        internal void ShowDarkGiftTip(string status)
+        {
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null || string.IsNullOrEmpty(status)) return;
+            bool markerPresent = _activeElements.Any(element =>
+                (element as FrameworkElement)?.Tag as string == "dark_gift_tip");
+            if (status == _darkGiftTipSig && markerPresent) return;
+            ClearDarkGiftTip();
+            _darkGiftTipSig = status;
+
+            double scaleX = canvas.ActualWidth > 0 ? canvas.ActualWidth / 3840d : 1d;
+            double scaleY = canvas.ActualHeight > 0 ? canvas.ActualHeight / 2160d : 1d;
+            scaleX = Math.Max(0.25, Math.Min(1, scaleX));
+            scaleY = Math.Max(0.25, Math.Min(1, scaleY));
+
+            double buttonLeft = 3060d * scaleX;
+            double buttonTop = 470d * scaleY;
+            double buttonWidth = (3380d - 3060d) * scaleX;
+            double buttonHeight = (710d - 470d) * scaleY;
+
+            double tipWidth = Math.Min(buttonWidth, Math.Max(160d, 320d * scaleX));
+            double tipHeight = Math.Max(22d, 34d * scaleY);
+            double margin = 12d * scaleX;
+            double left = buttonLeft - tipWidth - margin;
+            if (left < 0) left = Math.Max(0, buttonLeft - tipWidth - margin);
+            double top = buttonTop + buttonHeight - tipHeight;
+            if (top < 0) top = 0;
+
+            var tip = new Border
+            {
+                Width = tipWidth,
+                Height = tipHeight,
+                CornerRadius = new CornerRadius(Math.Max(3d, 6d * scaleX)),
+                Background = new SolidColorBrush(Color.FromArgb(230, 12, 12, 14)),
+                BorderBrush = ParseBrush("#8B7CFF") ?? Brushes.White,
+                BorderThickness = new Thickness(Math.Max(0.8, 1.2 * scaleX)),
+                IsHitTestVisible = false,
+                Tag = "dark_gift_tip",
+                Child = new TextBlock
+                {
+                    Text = status,
+                    FontSize = Math.Max(11d, 14d * scaleX),
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
+                    IsHitTestVisible = false,
+                },
+            };
+            Canvas.SetLeft(tip, left);
+            Canvas.SetTop(tip, top);
+            Panel.SetZIndex(tip, 1006);
+            canvas.Children.Add(tip);
+            _activeElements.Add(tip);
+        }
+
+        internal void ClearDarkGiftTip()
+        {
+            ClearTaggedElements("dark_gift_tip");
+            _darkGiftTipSig = null;
         }
 
         /// <summary>
@@ -1671,7 +1734,7 @@ namespace BobCoach
                 // 保留饰品/发现面板(它们自行管理生命周期)
                 var tag = (el as FrameworkElement)?.Tag as string;
                 if (tag == "status_strip" || tag == "trinket_panel" || tag == "discover_panel"
-                    || tag == "timewarp_purchase") continue;
+                    || tag == "timewarp_purchase" || tag == "dark_gift_tip") continue;
                 try { el.BeginAnimation(UIElement.OpacityProperty, null); } catch { }
                 try { canvas.Children.Remove(el); } catch { }
                 _activeElements.Remove(el);
@@ -1694,6 +1757,7 @@ namespace BobCoach
             _shopTagElements.Clear();  // 清空购买标签跟随注册
             _trinketPanelSig = null; _discoverPanelSig = null;
             _timewarpPurchaseSig = null;
+            _darkGiftTipSig = null;
             _handMarkerElement = null;  // 防止悬空引用
             foreach (var el in snapshot)
             {

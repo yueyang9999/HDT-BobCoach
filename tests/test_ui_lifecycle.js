@@ -457,7 +457,9 @@ function warn(name, msg) {
         if (!completeBlock.includes("OnPowerLogStateChanged();"))
             return "ChoiceCompleted 须主动请求评估以即时清面板";
         const timerStart = pluginSrc.indexOf("_combatWatchTimer.Tick +=");
-        const timerBlock = pluginSrc.slice(timerStart, timerStart + 2400);
+        const timerStartMarker = "_combatWatchTimer.Start();";
+        const timerEnd = pluginSrc.indexOf(timerStartMarker, timerStart);
+        const timerBlock = pluginSrc.slice(timerStart, timerEnd > timerStart ? timerEnd + timerStartMarker.length : timerStart + 2400);
         if (!timerBlock.includes("_eventEvalRequested") || !timerBlock.includes("EvaluateAndRender();"))
             return "Dispatcher定时器未消费Power.log评估请求 — 标志仍只能等待不保证到来的HDT OnUpdate";
     });
@@ -947,7 +949,8 @@ function warn(name, msg) {
         if (!src.includes('line.Contains("SendChoices()")'))
             return "ParseLine 须分发 SendChoices";
         const si = src.indexOf('else if (line.Contains("SendChoices()"))');
-        const sblock = si >= 0 ? src.slice(si, si + 2800) : "";
+        const sEnd = src.indexOf("\n        private PLEvent ParseTagChange(", si + 10);
+        const sblock = si >= 0 ? src.slice(si, sEnd > si ? sEnd : si + 2800) : "";
         if (!sblock.includes("m_chosenEntities") || !sblock.includes("PowerLogChoiceCompletion"))
             return "SendChoices 分支须解析 choiceId + chosen entity 为 typed completion";
         if (!sblock.includes("ChoiceCompleted?.Invoke(completion)"))

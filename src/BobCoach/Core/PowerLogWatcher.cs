@@ -51,6 +51,10 @@ namespace BobCoach.Engine
         /// <summary>饰品/发现选择完成 (ChoiceList=CHOSEN)</summary>
         public event Action<PowerLogChoiceCompletion> ChoiceCompleted;
 
+        public event Action<PowerLogChoiceBatch> DarkGiftChoiceActive;
+
+        public event Action<PowerLogChoiceCompletion> DarkGiftCompleted;
+
         public event Action<PLEvent> TeammateGoldTransferObserved;
 
         /// <summary>关键状态变化 (ZONE/金币/技能), 驱动UI实时刷新</summary>
@@ -190,6 +194,8 @@ namespace BobCoach.Engine
                 _parser.TimewarpPurchaseOffered += OnTimewarpPurchaseOffered;
                 _parser.TrinketChoiceActive += OnTrinketChoiceActive;
                 _parser.ChoiceCompleted += OnChoiceCompleted;
+                _parser.DarkGiftChoiceActive += OnDarkGiftChoiceActive;
+                _parser.DarkGiftCompleted += OnDarkGiftCompleted;
                 _parser.TeammateGoldTransferObserved += OnTeammateGoldTransferObserved;
                 _parser.RelevantTagChanged += OnRelevantTagChanged;
                 _parser.BuildNumberDetected += OnBuildNumberDetected;
@@ -227,6 +233,8 @@ namespace BobCoach.Engine
                 _parser.TimewarpPurchaseOffered -= OnTimewarpPurchaseOffered;
                 _parser.TrinketChoiceActive -= OnTrinketChoiceActive;
                 _parser.ChoiceCompleted -= OnChoiceCompleted;
+                _parser.DarkGiftChoiceActive -= OnDarkGiftChoiceActive;
+                _parser.DarkGiftCompleted -= OnDarkGiftCompleted;
                 _parser.TeammateGoldTransferObserved -= OnTeammateGoldTransferObserved;
                 _parser.RelevantTagChanged -= OnRelevantTagChanged;
                 _parser.BuildNumberDetected -= OnBuildNumberDetected;
@@ -296,6 +304,23 @@ namespace BobCoach.Engine
                 completion?.ChoiceId ?? -1, completion?.SelectedCardId ?? ""));
             _censusRaiseChosen++;
             try { ChoiceCompleted?.Invoke(completion); } catch { }
+        }
+
+        private void OnDarkGiftChoiceActive(PowerLogChoiceBatch batch)
+        {
+            var candidates = batch?.Candidates;
+            Log(string.Format("PowerLog dark gift active: choice={0} source={1} {2} candidates [{3}]",
+                batch?.ChoiceId ?? -1, batch?.SourceCardId ?? "",
+                candidates?.Count ?? 0,
+                candidates != null ? string.Join(", ", candidates.Select(c => c.CardName ?? c.CardId ?? "?")) : "null"));
+            try { DarkGiftChoiceActive?.Invoke(batch); } catch { }
+        }
+
+        private void OnDarkGiftCompleted(PowerLogChoiceCompletion completion)
+        {
+            Log(string.Format("PowerLog dark gift completed: choice={0} selected={1}",
+                completion?.ChoiceId ?? -1, completion?.SelectedCardId ?? ""));
+            try { DarkGiftCompleted?.Invoke(completion); } catch { }
         }
 
         private void OnTeammateGoldTransferObserved(PLEvent evt)
