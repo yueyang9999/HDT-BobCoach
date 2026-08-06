@@ -13,7 +13,7 @@ if ([string]::IsNullOrWhiteSpace($hdtDirectory)) {
         $executable = Join-Path $candidate "HearthstoneDeckTracker.exe"
         if (Test-Path -LiteralPath $executable -PathType Leaf) {
             try {
-                if ([Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString() -eq "1.54.0.7376") {
+                if ([Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString() -eq "1.55.0.0") {
                     $candidate
                 }
             } catch { }

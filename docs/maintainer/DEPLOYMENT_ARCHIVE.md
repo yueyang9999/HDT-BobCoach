@@ -15,13 +15,13 @@ HDT 真实插件目录只接受从当前源码重新构建并通过离线包完�
 ## 真实部署
 
 ```powershell
-$env:BOBCOACH_HDT_DIR = 'E:\HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker'
+$env:BOBCOACH_HDT_DIR = 'D:\software\game\HDT-V2.7.0\HDT'
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\release\deploy_local_release.ps1
 ```
 
 脚本默认行为：
 
-1. 校验 HDT 1.54.0.7376 构建引用。
+1. 校验 HDT 1.55.0.0 构建引用。
 2. 校验目标为 HDT AppData `Plugins` 且链路无 reparse point。
 3. 校验 HDT 已退出。
 4. 从当前 HEAD 执行 Release x64 构建。
@@ -69,7 +69,7 @@ E:\HDT-BobCoach-evidence\dll-archive
 ## 验证
 
 ```powershell
-$env:BOBCOACH_HDT_DIR = 'E:\HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker'
+$env:BOBCOACH_HDT_DIR = 'D:\software\game\HDT-V2.7.0\HDT'
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run_package_tests.ps1
 ```
 

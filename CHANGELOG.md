@@ -12,7 +12,7 @@ All notable changes are recorded here. The project follows Semantic Versioning f
 - Added an adjustable status-guidance font size with immediate preview and persisted settings.
 - Added an explicit unlock mode so the status panel can be dragged in the Hearthstone window, then automatically returns to mouse passthrough when settings close.
 - Persisted the custom status-panel position, added restore-default behavior, and kept the panel locked on startup.
-- Updated the build and dependency contracts for Hearthstone Deck Tracker `1.54.0.7376` while preserving the offline-only runtime boundary.
+- Updated the build and dependency contracts for Hearthstone Deck Tracker `1.55.0.0` while preserving the offline-only runtime boundary.
 - Fixed shop UI timing and layout handling so recommendations remain aligned through shop refreshes, purchases, and current HDT overlay lifecycle events.
 
 ## 1.0.0 - 2026-07-28

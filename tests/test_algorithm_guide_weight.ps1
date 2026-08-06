@@ -12,7 +12,7 @@ if (!$csc) { throw "Roslyn csc.exe not found" }
 $hdtCandidates = @()
 if ($env:BOBCOACH_HDT_DIR) { $hdtCandidates += $env:BOBCOACH_HDT_DIR }
 if ($env:LOCALAPPDATA) {
-    $hdtCandidates += Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0"
+    $hdtCandidates += Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.55.0"
     $hdtCandidates += Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.1"
 }
 $hdtDirectory = $hdtCandidates | Where-Object {

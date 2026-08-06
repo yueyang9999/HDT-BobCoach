@@ -7,7 +7,7 @@ const expected = {
   assemblyVersion: '1.1.0.0',
   targetFramework: 'net472',
   runtimeIdentifier: 'win-x64',
-  hdtBaselineVersion: '1.54.0.7376',
+  hdtBaselineVersion: '1.55.0.0',
 };
 
 const errors = [];
@@ -86,4 +86,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('PASS release identity package=1.1.0 assembly=1.1.0.0 framework=net472 rid=win-x64 hdt=1.54.0.7376');
+console.log('PASS release identity package=1.1.0 assembly=1.1.0.0 framework=net472 rid=win-x64 hdt=1.55.0.0');

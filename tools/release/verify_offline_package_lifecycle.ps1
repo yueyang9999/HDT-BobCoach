@@ -208,7 +208,7 @@ function Assert-ManifestContract($Manifest, [hashtable]$EntryHashes, [hashtable]
         informationalVersion = "1.1.0"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
-        hdtBaselineVersion = "1.54.0.7376"
+        hdtBaselineVersion = "1.55.0.0"
         pluginFile = "BobCoach.dll"
         pluginChecksumFile = "BobCoach.dll.sha256"
     }

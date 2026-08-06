@@ -29,7 +29,7 @@ Windows 10 和 Windows 11 使用同一个 64 位安装包：
 
 - 1.1.0 候选包：尚未发布；Windows 11 24H2 x64 最终实机 smoke 未完成
 - 目标兼容环境：Windows 10 22H2 x64（技术兼容，尚未完成专用实机验证）
-- Hearthstone Deck Tracker `1.54.0.7376` x64
+- Hearthstone Deck Tracker `1.55.0.0` x64
 - 系统提供的 .NET Framework 4.8/4.8.1 运行时
 - 标准 Windows 用户权限
 
@@ -56,7 +56,7 @@ GitHub 仓库中的代码、文档、规则快照、议题、PR、镜像、fork�
 
 ## 构建与测试
 
-仓库不包含 HDT 二进制。构建需要本机安装 .NET Framework 4.7.2 Developer Pack，并提供 HDT `1.54.0.7376` 目录：
+仓库不包含 HDT 二进制。构建需要本机安装 .NET Framework 4.7.2 Developer Pack，并提供 HDT `1.55.0.0` 目录：
 
 ```powershell
 $env:BOBCOACH_HDT_DIR = 'C:\path\to\HDT'

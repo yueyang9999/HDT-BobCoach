@@ -29,7 +29,7 @@ First-time users should follow the illustrated [Chinese installation guide](docs
 
 - 1.1.0 release candidate: not published; dedicated physical validation has not been completed on Windows 11 24H2 x64
 - Target compatibility: Windows 10 22H2 x64 (technically compatible, but not yet verified on dedicated physical hardware)
-- Hearthstone Deck Tracker `1.54.0.7376` x64
+- Hearthstone Deck Tracker `1.55.0.0` x64
 - The .NET Framework 4.8/4.8.1 runtime supplied by Windows
 - Standard Windows user permissions
 
@@ -56,7 +56,7 @@ GitHub repository code, documentation, rule snapshots, issues, pull requests, mi
 
 ## Build and Test
 
-The repository does not contain HDT binaries. Building requires the .NET Framework 4.7.2 Developer Pack and a local HDT `1.54.0.7376` directory:
+The repository does not contain HDT binaries. Building requires the .NET Framework 4.7.2 Developer Pack and a local HDT `1.55.0.0` directory:
 
 ```powershell
 $env:BOBCOACH_HDT_DIR = 'C:\path\to\HDT'

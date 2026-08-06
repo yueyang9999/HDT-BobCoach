@@ -6,9 +6,9 @@
 > 本包是 GitHub `v1.1.0` 的未发布候选离线安装包。Windows 11 24H2 最终实机 smoke 尚未完成；任何未来发布仍需项目所有者单独授权。请仅从项目 GitHub Releases 下载 ZIP 和同名 `.sha256` 文件。
 {{/RELEASE_NOTICE}}
 
-Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.54.0.7376 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
+Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.55.0.0 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
 
-当前候选尚未完成 Windows 11 24H2 x64 + HDT 1.54.0.7376 游戏内 smoke。Windows 10 22H2 x64 是目标兼容环境，当前尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
+当前候选尚未完成 Windows 11 24H2 x64 + HDT 1.55.0.0 游戏内 smoke。Windows 10 22H2 x64 是目标兼容环境，当前尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
 
 ## 安装前
 

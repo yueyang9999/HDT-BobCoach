@@ -186,7 +186,7 @@ if ($hasApprovedCandidate) {
 }
 if ($identity.packageVersion -ne "1.1.0" -or $identity.assemblyVersion -ne "1.1.0.0" -or
     $identity.targetFramework -ne "net472" -or $identity.runtimeIdentifier -ne "win-x64" -or
-    $identity.hdtBaselineVersion -ne "1.54.0.7376") {
+    $identity.hdtBaselineVersion -ne "1.55.0.0") {
     throw "Unsupported release identity"
 }
 

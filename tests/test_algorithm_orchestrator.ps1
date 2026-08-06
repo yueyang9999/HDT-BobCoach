@@ -14,7 +14,7 @@ if (!$csc) { throw "Roslyn csc.exe not found; install Visual Studio Build Tools 
 $jsonCandidates = @()
 if ($env:BOBCOACH_HDT_DIR) { $jsonCandidates += Join-Path $env:BOBCOACH_HDT_DIR "Newtonsoft.Json.dll" }
 if ($env:LOCALAPPDATA) {
-    $jsonCandidates += Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0\Newtonsoft.Json.dll"
+    $jsonCandidates += Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.55.0\Newtonsoft.Json.dll"
     $jsonCandidates += Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.1\Newtonsoft.Json.dll"
 }
 $jsonDll = $jsonCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1

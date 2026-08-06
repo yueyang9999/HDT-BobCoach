@@ -12,7 +12,7 @@ $csc = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object 
 if (!$csc) { throw "Roslyn csc.exe not found; install Visual Studio Build Tools or set BOBCOACH_CSC" }
 
 $hdtDir = $env:BOBCOACH_HDT_DIR
-if (!$hdtDir) { $hdtDir = "E:\HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker" }
+if (!$hdtDir) { $hdtDir = "D:\software\game\HDT-V2.7.0\HDT" }
 $newtonsoft = Join-Path $hdtDir "Newtonsoft.Json.dll"
 if (!(Test-Path -LiteralPath $newtonsoft)) { throw "Newtonsoft.Json.dll not found; set BOBCOACH_HDT_DIR" }
 

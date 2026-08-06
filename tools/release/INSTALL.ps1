@@ -155,7 +155,7 @@ function Assert-PackageIntegrity {
     if ([string]$manifest.informationalVersion -ne "1.1.0") { throw "Informational version contract mismatch" }
     if ([string]$manifest.targetFramework -ne ".NETFramework,Version=v4.7.2") { throw "Target framework contract mismatch" }
     if ([string]$manifest.runtimeIdentifier -ne "win-x64") { throw "Runtime identifier contract mismatch" }
-    if ([string]$manifest.hdtBaselineVersion -ne "1.54.0.7376") { throw "HDT baseline contract mismatch" }
+    if ([string]$manifest.hdtBaselineVersion -ne "1.55.0.0") { throw "HDT baseline contract mismatch" }
     if ([string]$manifest.pluginFile -ne "BobCoach.dll") { throw "Plugin file contract mismatch" }
     if ([string]$manifest.pluginChecksumFile -ne "BobCoach.dll.sha256") { throw "Plugin checksum file contract mismatch" }
     if (@($manifest.files).Count -ne $PackageFiles.Count -or (@($manifest.files) -join "`n") -ne ($PackageFiles -join "`n")) {

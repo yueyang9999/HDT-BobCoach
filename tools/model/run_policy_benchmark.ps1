@@ -29,7 +29,7 @@ function Resolve-HdtDirectory([string]$ConfiguredPath) {
         }
     }
     $repositoryDrive = Split-Path -Qualifier $repoRoot
-    $evidenceReference = Join-Path $repositoryDrive "HDT-BobCoach-evidence\dependencies\HDT-1.54.0\build-reference\Hearthstone Deck Tracker"
+    $evidenceReference = "D:\software\game\HDT-V2.7.0\HDT"
     if (Test-Path -LiteralPath $evidenceReference -PathType Container) {
         $candidateDirectories.Add($evidenceReference)
     }
@@ -38,7 +38,7 @@ function Resolve-HdtDirectory([string]$ConfiguredPath) {
         $executable = Join-Path $candidate "HearthstoneDeckTracker.exe"
         if (Test-Path -LiteralPath $executable -PathType Leaf) {
             try {
-                if ([Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString() -eq "1.54.0.7376") {
+                if ([Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString() -eq "1.55.0.0") {
                     $candidate
                 }
             } catch { }
@@ -70,7 +70,7 @@ if (!(Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Benchmark sou
 
 $resolvedHdt = Resolve-HdtDirectory $HdtDirectory
 if ([string]::IsNullOrWhiteSpace($resolvedHdt)) {
-    throw "HDT 1.54.0.7376 not found; set BOBCOACH_HDT_DIR"
+    throw "HDT 1.55.0.0 not found; set BOBCOACH_HDT_DIR"
 }
 foreach ($name in @("HearthstoneDeckTracker.exe", "HearthDb.dll", "Newtonsoft.Json.dll")) {
     if (!(Test-Path -LiteralPath (Join-Path $resolvedHdt $name) -PathType Leaf)) {
