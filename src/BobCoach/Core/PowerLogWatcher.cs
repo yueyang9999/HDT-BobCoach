@@ -71,6 +71,12 @@ namespace BobCoach.Engine
 
         internal void StartWatchingAtConfigPath(string configPath)
         {
+            if (!string.IsNullOrWhiteSpace(configPath))
+            {
+                var configDir = Path.GetDirectoryName(Path.GetFullPath(configPath));
+                if (!string.IsNullOrEmpty(configDir))
+                    LogConfigEnsurer.HearthstoneConfigDir = configDir;
+            }
             StartWatchingWithConfigInspector(() => LogConfigEnsurer.InspectAtPath(configPath));
         }
 
@@ -398,7 +404,24 @@ namespace BobCoach.Engine
             {
                 try
                 {
-                    if (!File.Exists(_logPath)) { Thread.Sleep(500); continue; }
+                    var latestLogPath = LogConfigEnsurer.FindPowerLog();
+                    if (string.IsNullOrEmpty(latestLogPath) || !File.Exists(latestLogPath))
+                        latestLogPath = FindPowerLogPath();
+                    if (!string.IsNullOrEmpty(latestLogPath)
+                        && !string.Equals(latestLogPath, _logPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log("PowerLogWatcher switched session: " + latestLogPath);
+                        _parser.ResetForNewSession();
+                        _lastPosition = 0;
+                        _logPath = latestLogPath;
+                        ScanInitialBuildNumber();
+                    }
+
+                    if (string.IsNullOrEmpty(_logPath) || !File.Exists(_logPath))
+                    {
+                        Thread.Sleep(500);
+                        continue;
+                    }
                     using (var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     {
                         if (fs.Length < _lastPosition) { _lastPosition = fs.Length; }

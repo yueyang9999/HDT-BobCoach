@@ -121,6 +121,33 @@ namespace BobCoach.Engine
 
         public int CurrentBuildNumber { get { return _currentBuildNumber; } }
 
+        internal void ResetForNewSession()
+        {
+            _entities.Clear();
+            _alternateCurrencyByPlayer.Clear();
+            _currentTurn = 0;
+            _currentPhase = "shop";
+            _currentBuildNumber = 0;
+            _discoverBuffer.Clear();
+            _lastDiscoverCandidateTime = DateTime.MinValue;
+            _currentBlockType = null;
+            _pendingChoiceEntityIds.Clear();
+            _pendingChoiceId = -1;
+            _inChoiceBlock = false;
+            _lastChoiceContextAt = DateTime.MinValue;
+            _pendingSendChoiceId = -1;
+            _pendingSendChoiceType = "";
+            _pendingSendChoiceAt = DateTime.MinValue;
+            _darkGiftChoice = null;
+            _darkGiftChoiceFired = false;
+            _darkGiftFailClosedChoiceId = -1;
+            _darkGiftPendingChoiceId = -1;
+            _darkGiftPendingChoiceType = "";
+            _darkGiftPendingChoiceAt = DateTime.MinValue;
+            _currentEntityChoice = null;
+            _isTrinketChoice = false;
+        }
+
         public List<PLEvent> ParseLine(string line)
         {
             var results = new List<PLEvent>();

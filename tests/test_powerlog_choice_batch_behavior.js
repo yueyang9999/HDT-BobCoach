@@ -8,8 +8,10 @@ const { findRoslynCompiler, skipOrFail } = require("./dotnet_test_env");
 
 const root = path.resolve(__dirname, "..");
 const dataPathsSource = path.join(root, "src", "BobCoach", "Core", "BobCoachDataPaths.cs");
+const logConfigSource = path.join(root, "src", "BobCoach", "Core", "LogConfigEnsurer.cs");
 const parserSource = path.join(root, "src", "BobCoach", "Core", "PowerLogParser.cs");
 const buildScannerSource = path.join(root, "src", "BobCoach", "Core", "PowerLogInitialBuildScanner.cs");
+const watcherSource = path.join(root, "src", "BobCoach", "Core", "PowerLogWatcher.cs");
 const lifecycleSource = path.join(root, "src", "BobCoach", "Core", "TrinketChoiceBatchLifecycle.cs");
 const shadowSource = path.join(root, "src", "BobCoach", "Core", "TrinketShadowCaptureSession.cs");
 const combatChoicePolicySource = path.join(root, "src", "BobCoach", "Core", "CombatChoiceRenderPolicy.cs");
@@ -41,8 +43,10 @@ try {
         "/langversion:7.3",
         `/out:${outputExe}`,
         dataPathsSource,
+        logConfigSource,
         parserSource,
         buildScannerSource,
+        watcherSource,
         lifecycleSource,
         shadowSource,
         combatChoicePolicySource,

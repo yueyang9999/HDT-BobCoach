@@ -72,7 +72,7 @@ namespace BobCoach.Engine
             },
         };
 
-        public static string HearthstoneConfigDir { get; private set; }
+        public static string HearthstoneConfigDir { get; internal set; }
         public static string LogConfigPath { get; private set; }
         public static List<string> MissingModules { get; private set; } = new List<string>();
 

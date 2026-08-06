@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using BobCoach.Engine;
 
 public static class PowerLogChoiceBatchHarness
@@ -22,6 +23,8 @@ public static class PowerLogChoiceBatchHarness
                 return ReplayTimewarpPurchase20260713(args[0]);
             if (args.Length >= 2 && args[1] == "--upgrade-prize-20260713")
                 return ReplayUpgradePrize20260713(args[0]);
+            if (args.Length >= 2 && args[1] == "--watcher-session-switch")
+                return RunWatcherSessionSwitchTest(args[0]);
             return ReplayCapturedLog(args[0]);
         }
 
@@ -358,14 +361,166 @@ public static class PowerLogChoiceBatchHarness
         if (unknownChoiceListActiveAfterOffer)
             return Fail("unknown dark gift source left ordinary choice context active");
 
+        var watcherExit = RunWatcherSessionSwitchTest(null);
+        if (watcherExit != 0) return watcherExit;
+
         Console.WriteLine("PASS trinket/discover batch metadata and typed completion");
         return 0;
+    }
+
+    private static int RunWatcherSessionSwitchTest(string explicitRoot)
+    {
+        var root = string.IsNullOrWhiteSpace(explicitRoot)
+            ? Path.Combine(Path.GetTempPath(), "bobcoach-watcher-session-" + Guid.NewGuid().ToString("N"))
+            : Path.GetFullPath(explicitRoot);
+        try
+        {
+            var appData = Path.Combine(root, "appdata");
+            var hearthstoneDir = Path.Combine(root, "hearthstone");
+            var logsDir = Path.Combine(hearthstoneDir, "Logs");
+            var oldSessionDir = Path.Combine(logsDir, "Hearthstone_old");
+            Directory.CreateDirectory(oldSessionDir);
+
+            var hdtConfigPath = Path.Combine(appData, "HearthstoneDeckTracker", "config.xml");
+            Directory.CreateDirectory(Path.GetDirectoryName(hdtConfigPath));
+            File.WriteAllText(hdtConfigPath,
+                "<Config><HearthstoneDirectory>" + hearthstoneDir
+                + "</HearthstoneDirectory></Config>");
+
+            var logConfigPath = Path.Combine(hearthstoneDir, "log.config");
+            var plan = LogConfigEnsurer.InspectAtPath(logConfigPath);
+            if (plan.Status != LogConfigStatus.Missing)
+                return Fail("watcher test log.config was not reported missing");
+            if (LogConfigEnsurer.Apply(plan) != LogConfigStatus.Created)
+                return Fail("watcher test could not create isolated log.config");
+
+            Environment.SetEnvironmentVariable("APPDATA", appData);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(root, "local-appdata"));
+            Environment.SetEnvironmentVariable("BOB_COACH_DATA_ROOT", Path.Combine(root, "bob-coach-data"));
+
+            var oldLogPath = Path.Combine(oldSessionDir, "Power_old.log");
+            File.WriteAllText(oldLogPath, "");
+
+            using (var watcher = new PowerLogWatcher())
+            {
+                int darkGiftEvents = 0;
+                PowerLogChoiceBatch lastDarkGift = null;
+                int discoverLeaks = 0;
+                int trinketLeaks = 0;
+                int timewarpLeaks = 0;
+                int choiceCompletedLeaks = 0;
+                int buildEvents = 0;
+                watcher.DarkGiftChoiceActive += batch =>
+                {
+                    darkGiftEvents++;
+                    lastDarkGift = batch;
+                };
+                watcher.DiscoverOffered += batch =>
+                {
+                    if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                        discoverLeaks++;
+                };
+                watcher.TrinketChoiceActive += batch =>
+                {
+                    if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                        trinketLeaks++;
+                };
+                watcher.TimewarpPurchaseOffered += batch =>
+                {
+                    if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                        timewarpLeaks++;
+                };
+                watcher.ChoiceCompleted += completion => choiceCompletedLeaks++;
+                watcher.BuildNumberChanged += build => buildEvents++;
+
+                watcher.StartWatchingAtConfigPath(logConfigPath);
+                if (!WaitUntil(() => watcher.IsWatching, 3000))
+                    return Fail("watcher did not start against the isolated old session");
+
+                File.AppendAllText(oldLogPath,
+                    "D 18:09:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=10\r\n");
+                File.AppendAllText(oldLogPath,
+                    "D 18:09:01.0000000 GameState.DebugPrintGame() - BuildNumber=100\r\n");
+                File.AppendAllText(oldLogPath,
+                    "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() - id=900 Player=Local TaskList=100 ChoiceType=GENERAL CountMin=1 CountMax=1\r\n"
+                    + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift id=900 zone=PLAY zonePos=0 cardId=BG36_MidGameEffect_010 player=1]\r\n"
+                    + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=9001 zone=SETASIDE zonePos=0 cardId=BG34_865_G player=1]\r\n"
+                    + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=9002 zone=SETASIDE zonePos=0 cardId=BG32_111 player=1]\r\n"
+                    + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Gift C id=9003 zone=SETASIDE zonePos=0 cardId=BG32_820 player=1]\r\n");
+
+                if (!WaitUntil(() => darkGiftEvents >= 1, 5000))
+                    return Fail("old session dark gift was not captured by the watcher");
+                if (lastDarkGift == null || lastDarkGift.SourceCardId != "BG36_MidGameEffect_010"
+                    || lastDarkGift.Candidates.Count < 2)
+                    return Fail("old session dark gift batch was malformed");
+                if (watcher.Parser.CurrentTurn != 10)
+                    return Fail("old session turn was not captured");
+                if (watcher.Parser.CurrentBuildNumber != 100)
+                    return Fail("old session build was not captured");
+                if (watcher.IsChoiceListActive)
+                    return Fail("dark gift offer leaked into ordinary choice-list state");
+                if (discoverLeaks != 0 || trinketLeaks != 0
+                    || timewarpLeaks != 0 || choiceCompletedLeaks != 0)
+                    return Fail("old session dark gift leaked into ordinary choice events");
+
+                var newSessionDir = Path.Combine(logsDir, "Hearthstone_new");
+                Directory.CreateDirectory(newSessionDir);
+                var newLogPath = Path.Combine(newSessionDir, "Power_old.log");
+                File.WriteAllText(newLogPath,
+                    "D 18:20:00.0000000 GameState.DebugPrintGame() - BuildNumber=200\r\n"
+                    + "D 18:20:01.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=3\r\n"
+                    + "D 18:20:02.0000000 GameState.DebugPrintEntityChoices() - id=901 Player=Local TaskList=101 ChoiceType=GENERAL CountMin=1 CountMax=1\r\n"
+                    + "D 18:20:02.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift Button id=901 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1]\r\n"
+                    + "D 18:20:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift X id=9101 zone=SETASIDE zonePos=0 cardId=BG34_865_G player=1]\r\n"
+                    + "D 18:20:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift Y id=9102 zone=SETASIDE zonePos=0 cardId=BG32_111 player=1]\r\n");
+
+                if (!WaitUntil(() => darkGiftEvents >= 2, 5000))
+                    return Fail("watcher did not follow the new Hearthstone Power session");
+                if (lastDarkGift == null || lastDarkGift.SourceCardId != "BG36_Button_DarkGift"
+                    || lastDarkGift.ChoiceId != 901)
+                    return Fail("new session dark gift batch identity was not preserved");
+                if (watcher.Parser.CurrentBuildNumber != 200)
+                    return Fail("new session build number was not applied");
+                if (watcher.Parser.CurrentTurn != 3)
+                    return Fail("new session did not reset turn state");
+                if (watcher.IsChoiceListActive)
+                    return Fail("new session dark gift leaked into ordinary choice-list state");
+                if (discoverLeaks != 0 || trinketLeaks != 0
+                    || timewarpLeaks != 0 || choiceCompletedLeaks != 0)
+                    return Fail("new session dark gift leaked into ordinary choice events");
+
+                watcher.StopWatching();
+            }
+
+            Console.WriteLine("PASS watcher follows latest Hearthstone Power session");
+            return 0;
+        }
+        finally
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(root) && Directory.Exists(root))
+                    Directory.Delete(root, true);
+            }
+            catch { }
+        }
     }
 
     private static int Fail(string message)
     {
         Console.Error.WriteLine("FAIL " + message);
         return 1;
+    }
+
+    private static bool WaitUntil(Func<bool> predicate, int timeoutMilliseconds)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (predicate()) return true;
+            Thread.Sleep(10);
+        }
+        return predicate();
     }
 
     private static int ReplayCapturedLog(string path)
@@ -668,5 +823,16 @@ public static class PowerLogChoiceBatchHarness
 
         Console.WriteLine("PASS 20260712 turn-8 greater timewarp five-option batch and completion");
         return 0;
+    }
+}
+
+namespace BobCoach.Engine
+{
+    // PowerLogWatcher.ExportReplay only needs type identity in this isolated harness.
+    public sealed class TurnSnapshot { }
+
+    internal static class FastJsonWriter
+    {
+        public static void Write(string path, object value) { }
     }
 }
