@@ -135,3 +135,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\build_of
 ```
 
 包生成与本地验证不等于可发布。GitHub Release 仍需在所有验收完成后取得单独明确授权。
+
+真实 HDT 插件部署与外部 DLL 归档见 [本地部署与 DLL 归档](DEPLOYMENT_ARCHIVE.md)。

@@ -46,7 +46,8 @@ try {
         "test_offline_installer.ps1",
         "test_offline_uninstaller.ps1",
         "test_offline_package_builder.ps1",
-        "test_offline_package_lifecycle_consumer.ps1"
+        "test_offline_package_lifecycle_consumer.ps1",
+        "test_local_deploy_archive.ps1"
     )) {
         Invoke-Checked $file
     }
