@@ -93,6 +93,7 @@ for (const [token, label] of [
   ['RemoveUserData', 'uninstaller explicit user-data switch'],
   ['ReparsePoint', 'uninstaller reparse-point gate'],
   ['"BobCoach.dll"', 'uninstaller exact DLL target'],
+  ['BobCoach.trusted-repository-root', 'uninstaller trusted repository-root sidecar'],
 ]) requireText(uninstaller, token, label);
 
 for (const [token, label] of [

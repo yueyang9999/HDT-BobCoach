@@ -177,6 +177,13 @@ try {
     Assert-TestEqual 0 $successfulDeploy.ExitCode "successful deploy exit"
     Assert-FileHashEqual $candidateDll (Join-Path $plugins "BobCoach.dll") "deployed DLL hash"
     Assert-PluginChecksum (Join-Path $plugins "BobCoach.dll") (Join-Path $plugins "BobCoach.dll.sha256") "deployed sidecar"
+    $trustedRepositoryRoot = Join-Path $plugins "BobCoach.trusted-repository-root"
+    Assert-TestTrue (Test-Path -LiteralPath $trustedRepositoryRoot -PathType Leaf) "trusted repository-root sidecar exists"
+    Assert-TestEqual (
+        [IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
+    ) (
+        [IO.File]::ReadAllText($trustedRepositoryRoot).Trim()
+    ) "trusted repository-root sidecar content"
 
     foreach ($snapshotPath in $snapshotFiles) {
         Assert-TestTrue (Test-Path -LiteralPath $snapshotPath -PathType Leaf) "historical plugin file retained $snapshotPath"
@@ -207,6 +214,12 @@ try {
     $firstManifestAfterSecond = Assert-ArchiveManifestValid $firstArchive
     Assert-TestEqual ([string]$firstManifest.capturedAtUtc) ([string]$firstManifestAfterSecond.capturedAtUtc) "first archive manifest unchanged"
     Assert-PluginChecksum (Join-Path $plugins "BobCoach.dll") (Join-Path $plugins "BobCoach.dll.sha256") "second deployed sidecar"
+    Assert-TestTrue (Test-Path -LiteralPath $trustedRepositoryRoot -PathType Leaf) "trusted repository-root sidecar exists after second deploy"
+    Assert-TestEqual (
+        [IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
+    ) (
+        [IO.File]::ReadAllText($trustedRepositoryRoot).Trim()
+    ) "trusted repository-root sidecar content after second deploy"
 
     Write-Host "PASS local deploy and DLL archive contract assertions=$assertions"
 } catch {

@@ -14,6 +14,7 @@ $releaseBuilder = Join-Path $repoRoot "tools\build\build_release.ps1"
 $packageBuilder = Join-Path $PSScriptRoot "build_offline_package.ps1"
 $identityPath = Join-Path $repoRoot "release_identity.json"
 $tempRoot = Join-Path $env:TEMP ("bobcoach-local-release-deploy-" + [Guid]::NewGuid().ToString("N"))
+$TrustedRepositoryRootFileName = "BobCoach.trusted-repository-root"
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
@@ -77,6 +78,72 @@ function Assert-HdtBaseline([string]$Path) {
     $version = [Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString()
     if ($version -ne "1.55.0.0") {
         throw "HDT baseline mismatch: expected 1.55.0.0, got $version"
+    }
+}
+
+function Clear-ReadOnlyAttribute([string]$Path) {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw "Expected a regular file before clearing ReadOnly: $Path"
+    }
+    if (($item.Attributes -band [IO.FileAttributes]::ReadOnly) -eq 0) { return }
+    $updated = [IO.FileAttributes](
+        ([int]$item.Attributes) -band (-bnot [int][IO.FileAttributes]::ReadOnly)
+    )
+    [IO.File]::SetAttributes($item.FullName, $updated)
+}
+
+function Assert-TrustedRepositoryRootSidecar([string]$PluginDirectory) {
+    $sidecar = Join-Path $PluginDirectory $TrustedRepositoryRootFileName
+    if (!(Test-Path -LiteralPath $sidecar -PathType Leaf)) {
+        throw "Trusted repository-root sidecar missing: $sidecar"
+    }
+    $item = Get-Item -LiteralPath $sidecar -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw "Trusted repository-root sidecar must be a regular file: $sidecar"
+    }
+    $actual = [IO.File]::ReadAllText($sidecar).Trim()
+    $expected = [IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
+    if (!$actual.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Trusted repository-root sidecar mismatch: expected=$expected actual=$actual"
+    }
+}
+
+function Write-TrustedRepositoryRootSidecar([string]$PluginDirectory) {
+    $sidecar = Join-Path $PluginDirectory $TrustedRepositoryRootFileName
+    if (Test-Path -LiteralPath $sidecar) {
+        $existing = Get-Item -LiteralPath $sidecar -Force -ErrorAction Stop
+        if ($existing.PSIsContainer -or (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+            throw "Trusted repository-root sidecar must be a regular file: $sidecar"
+        }
+        Clear-ReadOnlyAttribute $sidecar
+    }
+    $temporary = Join-Path $PluginDirectory (
+        "BobCoach.trusted-repository-root.installing-" + [Guid]::NewGuid().ToString("N")
+    )
+    $replacementBackup = Join-Path $PluginDirectory (
+        "BobCoach.trusted-repository-root.replace-backup-" + [Guid]::NewGuid().ToString("N")
+    )
+    try {
+        [IO.File]::WriteAllText(
+            $temporary,
+            ($repoRoot + "`r`n"),
+            (New-Object Text.UTF8Encoding($false))
+        )
+        if (Test-Path -LiteralPath $sidecar -PathType Leaf) {
+            [IO.File]::Replace($temporary, $sidecar, $replacementBackup, $true)
+        } else {
+            [IO.File]::Move($temporary, $sidecar)
+        }
+        Assert-TrustedRepositoryRootSidecar $PluginDirectory
+        Write-Host "PASS wrote trusted repository-root sidecar: $sidecar"
+    } finally {
+        if (Test-Path -LiteralPath $temporary) {
+            Remove-Item -LiteralPath $temporary -Force
+        }
+        if (Test-Path -LiteralPath $replacementBackup -PathType Leaf) {
+            Remove-Item -LiteralPath $replacementBackup -Force
+        }
     }
 }
 
@@ -256,6 +323,7 @@ try {
     if ($deployedHash -ne $candidateHash) {
         throw "Deployed DLL hash mismatch"
     }
+    Write-TrustedRepositoryRootSidecar $resolvedPlugin
     Write-Host "PASS deployed latest release DLL bytes=$candidateSize sha256=$deployedHash archive=$($archiveInfo.Path)"
 } catch {
     Write-Host "FAIL local release deployment"

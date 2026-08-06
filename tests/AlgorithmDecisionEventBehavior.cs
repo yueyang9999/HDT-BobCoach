@@ -118,6 +118,7 @@ internal static class AlgorithmDecisionEventBehavior
             WritesModelIdentityIntoEveryEnvelope();
             NormalizesMissingModelIdentityToUnknown();
             CreateForLocalReplayRequiresTrustedExternalRoot();
+            ResolvesTrustedRepositoryRootFromPluginSidecar();
             ReusesOnlyOpenUnchangedDecisionGenerations();
             AttachesGameOutcomeToLastRelevantDecision();
             RejectsMalformedPriorEventLogs();
@@ -129,6 +130,85 @@ internal static class AlgorithmDecisionEventBehavior
         {
             Console.Error.WriteLine("FAIL " + ex.Message);
             return 1;
+        }
+    }
+
+    private static void ResolvesTrustedRepositoryRootFromPluginSidecar()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var originalRoot = Environment.GetEnvironmentVariable(
+            BobCoachDataPaths.RootEnvironmentVariable);
+        var originalDirectory = Environment.CurrentDirectory;
+        var nonRepositoryRoot = Path.Combine(
+            Path.GetTempPath(), "bobcoach_non_repository_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(nonRepositoryRoot);
+        var trustedRoot = NewTrustedRoot(repositoryRoot);
+        var sidecarPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            BobCoachDataPaths.TrustedRepositoryRootFileName);
+        var sidecarExisted = File.Exists(sidecarPath);
+        var sidecarOriginal = sidecarExisted ? File.ReadAllText(sidecarPath) : null;
+        try
+        {
+            Directory.CreateDirectory(trustedRoot);
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                trustedRoot);
+            Environment.CurrentDirectory = nonRepositoryRoot;
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(),
+                "missing trusted repository sidecar");
+
+            File.WriteAllText(sidecarPath, repositoryRoot + Environment.NewLine);
+            var trustedPath = BobCoachDataPaths.GetTrustedDecisionEventsPath();
+            AssertEqual(Path.Combine(trustedRoot, "decision-events.jsonl"), trustedPath,
+                "sidecar resolves trusted repository root");
+
+            var recorder = DecisionEventRecorder.CreateForLocalReplay(
+                "sidecar-test", "sidecar-sha256");
+            recorder.RecordCreated(DecisionEventRecord.Create(
+                "sidecar-decision", "game-1", State(5, 4), Candidates()));
+            AssertTrue(File.Exists(trustedPath),
+                "sidecar local replay writes inside the trusted external root");
+
+            File.WriteAllText(sidecarPath, "relative\\repository");
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(),
+                "relative sidecar repository root");
+
+            var missingRoot = Path.Combine(nonRepositoryRoot, "missing-repository");
+            File.WriteAllText(sidecarPath, missingRoot);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(),
+                "missing sidecar repository root");
+
+            File.WriteAllText(sidecarPath, nonRepositoryRoot);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(),
+                "non-repository sidecar root");
+
+            File.WriteAllText(sidecarPath,
+                repositoryRoot + Environment.NewLine + repositoryRoot);
+            AssertThrows<InvalidOperationException>(() =>
+                BobCoachDataPaths.GetTrustedDecisionEventsPath(),
+                "multi-line sidecar repository root");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(BobCoachDataPaths.RootEnvironmentVariable,
+                originalRoot);
+            Environment.CurrentDirectory = originalDirectory;
+            if (sidecarExisted)
+                File.WriteAllText(sidecarPath, sidecarOriginal);
+            else if (File.Exists(sidecarPath))
+                File.Delete(sidecarPath);
+            RemoveTrustedRoot(trustedRoot, repositoryRoot);
+            if (Directory.Exists(nonRepositoryRoot))
+            {
+                var resolved = Path.GetFullPath(nonRepositoryRoot);
+                var tempPrefix = Path.GetFullPath(Path.GetTempPath());
+                if (resolved.StartsWith(tempPrefix, StringComparison.OrdinalIgnoreCase))
+                    Directory.Delete(resolved, true);
+            }
         }
     }
 

@@ -79,6 +79,7 @@ Assert-HdtStopped $resolvedPluginDirectory
 $userDataPath = if ($RemoveUserData) { Resolve-UserDataPath } else { $null }
 $targetDll = Join-Path $resolvedPluginDirectory.Path "BobCoach.dll"
 $targetChecksum = Join-Path $resolvedPluginDirectory.Path "BobCoach.dll.sha256"
+$targetTrustedRepositoryRoot = Join-Path $resolvedPluginDirectory.Path "BobCoach.trusted-repository-root"
 
 if (Test-Path -LiteralPath $targetDll -PathType Leaf) {
     if ($PSCmdlet.ShouldProcess($targetDll, "Uninstall Bob Coach plugin DLL")) {
@@ -96,6 +97,15 @@ if (Test-Path -LiteralPath $targetChecksum -PathType Leaf) {
     }
 } else {
     Write-Host "PASS Bob Coach plugin checksum is already absent: $targetChecksum"
+}
+
+if (Test-Path -LiteralPath $targetTrustedRepositoryRoot -PathType Leaf) {
+    if ($PSCmdlet.ShouldProcess($targetTrustedRepositoryRoot, "Uninstall Bob Coach trusted repository-root sidecar")) {
+        Remove-Item -LiteralPath $targetTrustedRepositoryRoot -Force
+        Write-Host "PASS removed Bob Coach trusted repository-root sidecar: $targetTrustedRepositoryRoot"
+    }
+} else {
+    Write-Host "PASS Bob Coach trusted repository-root sidecar is already absent: $targetTrustedRepositoryRoot"
 }
 
 if ($RemoveUserData) {

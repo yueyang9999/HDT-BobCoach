@@ -23,6 +23,8 @@ try {
     New-TestManagedBobCoach -Path $targetDll | Out-Null
     $targetChecksum = Join-Path $plugins "BobCoach.dll.sha256"
     Write-PluginChecksumFile $targetDll $targetChecksum
+    $targetTrustedRepositoryRoot = Join-Path $plugins "BobCoach.trusted-repository-root"
+    Write-Utf8NoBom $targetTrustedRepositoryRoot ([IO.Path]::GetFullPath($repoRoot).TrimEnd('\'))
     Write-Utf8NoBom (Join-Path $plugins "BobCoach.dll.backup-20260101T000000000Z-1111111111111111") "backup one"
     Write-Utf8NoBom (Join-Path $plugins "BobCoach.dll.backup-20260102T000000000Z-2222222222222222") "backup two"
 
@@ -37,6 +39,7 @@ try {
     Assert-Equal 0 $defaultResult.ExitCode "default uninstall exit"
     Assert-False (Test-Path -LiteralPath $targetDll) "default removes DLL"
     Assert-False (Test-Path -LiteralPath $targetChecksum) "default removes DLL checksum sidecar"
+    Assert-False (Test-Path -LiteralPath $targetTrustedRepositoryRoot) "default removes trusted repository-root sidecar"
     Assert-Equal 2 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "default retains backups"
     Assert-True (Test-Path -LiteralPath $userDataFile) "default retains user data"
     Assert-True (Test-Path -LiteralPath $logConfig) "default retains log.config"
@@ -46,18 +49,24 @@ try {
 
     New-TestManagedBobCoach -Path $targetDll | Out-Null
     Write-PluginChecksumFile $targetDll $targetChecksum
+    Write-Utf8NoBom $targetTrustedRepositoryRoot ([IO.Path]::GetFullPath($repoRoot).TrimEnd('\'))
     $whatIf = Invoke-TestPowerShell $uninstaller @("-PluginDirectory", $plugins, "-WhatIf", "-Confirm:`$false")
     Assert-Equal 0 $whatIf.ExitCode "uninstall WhatIf exit"
     Assert-True (Test-Path -LiteralPath $targetDll) "WhatIf retains DLL"
     Assert-True (Test-Path -LiteralPath $targetChecksum) "WhatIf retains DLL checksum sidecar"
+    Assert-True (Test-Path -LiteralPath $targetTrustedRepositoryRoot) "WhatIf retains trusted repository-root sidecar"
     Assert-True (Test-Path -LiteralPath $userDataFile) "WhatIf retains user data"
 
+    New-TestManagedBobCoach -Path $targetDll | Out-Null
+    Write-PluginChecksumFile $targetDll $targetChecksum
+    Write-Utf8NoBom $targetTrustedRepositoryRoot ([IO.Path]::GetFullPath($repoRoot).TrimEnd('\'))
     $removeData = Invoke-TestPowerShell $uninstaller @(
         "-PluginDirectory", $plugins, "-RemoveUserData", "-Confirm:`$false"
     )
     Assert-Equal 0 $removeData.ExitCode "explicit data uninstall exit"
     Assert-False (Test-Path -LiteralPath $targetDll) "explicit data uninstall removes DLL"
     Assert-False (Test-Path -LiteralPath $targetChecksum) "explicit data uninstall removes DLL checksum sidecar"
+    Assert-False (Test-Path -LiteralPath $targetTrustedRepositoryRoot) "explicit data uninstall removes trusted repository-root sidecar"
     Assert-False (Test-Path -LiteralPath $userData) "explicit data uninstall removes exact user data"
     Assert-Equal 2 @(Get-ChildItem -LiteralPath $plugins -Filter "BobCoach.dll.backup-*" -File).Count "explicit data uninstall retains backups"
     Assert-True (Test-Path -LiteralPath $logConfig) "explicit data uninstall retains log.config"

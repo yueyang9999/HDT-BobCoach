@@ -9,6 +9,9 @@ namespace BobCoach.Engine
 
         internal const string SeasonSelectorEnvironmentVariable = "BOB_COACH_SEASON_SELECTOR";
 
+        internal const string TrustedRepositoryRootFileName =
+            "BobCoach.trusted-repository-root";
+
         internal static string Root
         {
             get
@@ -118,6 +121,11 @@ namespace BobCoach.Engine
 
         private static string FindRepositoryRoot()
         {
+            var assemblyDirectory = Path.GetDirectoryName(
+                typeof(BobCoachDataPaths).Assembly.Location);
+            var sidecarRoot = ResolveRepositoryRootFromPluginSidecar(assemblyDirectory);
+            if (sidecarRoot != null) return sidecarRoot;
+
             foreach (var start in new[]
             {
                 AppDomain.CurrentDomain.BaseDirectory,
@@ -133,6 +141,78 @@ namespace BobCoach.Engine
             }
             throw new InvalidOperationException(
                 "repository root not found for trusted decision-event recording");
+        }
+
+        internal static string ResolveRepositoryRootFromPluginSidecar(
+            string pluginDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(pluginDirectory)) return null;
+
+            var sidecarPath = Path.Combine(
+                pluginDirectory, TrustedRepositoryRootFileName);
+            if (!File.Exists(sidecarPath))
+            {
+                if (Directory.Exists(sidecarPath))
+                    throw new InvalidOperationException(
+                        "Trusted repository-root sidecar is not a regular file: "
+                        + sidecarPath);
+                return null;
+            }
+
+            var attributes = File.GetAttributes(sidecarPath);
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar must not be a reparse point: "
+                    + sidecarPath);
+
+            string content;
+            try
+            {
+                content = File.ReadAllText(sidecarPath);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar cannot be read: " + sidecarPath, ex);
+            }
+
+            var value = "";
+            var nonEmptyLineCount = 0;
+            foreach (var line in content.Split(
+                new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                nonEmptyLineCount++;
+                value = line.Trim();
+            }
+            if (nonEmptyLineCount != 1)
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar must contain exactly one path: "
+                    + sidecarPath);
+            if (!Path.IsPathRooted(value))
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar path must be absolute: " + value);
+
+            string resolved;
+            try
+            {
+                resolved = Path.GetFullPath(value);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar path is invalid: " + value, ex);
+            }
+            if (!Directory.Exists(resolved))
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar directory does not exist: " + resolved);
+            if (!IsRepositoryRoot(resolved))
+                throw new InvalidOperationException(
+                    "Trusted repository-root sidecar directory is not a repository root: "
+                    + resolved);
+
+            RequireNoReparsePoint(resolved);
+            return resolved;
         }
 
         private static bool IsRepositoryRoot(string path)
