@@ -25,6 +25,7 @@
 - [依赖说明](maintainer/DEPENDENCIES.md)
 - [发布流程](maintainer/RELEASE.md)
 - [快速更新验证流程](maintainer/UPDATE_VALIDATION.md)
+- [决策事件采集与离线聚合](maintainer/DECISION_EVENT_COLLECTION.md)
 - [迁移工具说明](../tools/migrate/README.md)
 
 ## 贡献者
