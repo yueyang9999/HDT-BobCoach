@@ -58,6 +58,17 @@ namespace BobCoach.Engine
         public DateTime Timestamp;
     }
 
+    /// <summary>BG36 dark gift button pressable signal from Power.log.</summary>
+    public sealed class PowerLogDarkGiftPressable
+    {
+        public int EntityId;
+        public string EntityName = "";
+        public string CardId = "";
+        public string Tag = "";
+        public bool Pressable;
+        public DateTime Timestamp;
+    }
+
     /// <summary>
     /// Power.log 逐行解析器 — 提取所有 TAG_CHANGE / BLOCK / ENTITY 事件
     /// </summary>
@@ -90,6 +101,7 @@ namespace BobCoach.Engine
         private int _darkGiftPendingChoiceId = -1;
         private string _darkGiftPendingChoiceType = "";
         private DateTime _darkGiftPendingChoiceAt = DateTime.MinValue;
+        private PowerLogDarkGiftPressable _lastDarkGiftPressable;
 
         /// <summary>从Power.log检测到阶段变化时触发 (MAIN_READY=招募, MAIN_COMBAT=战斗)</summary>
         public event Action<string> PhaseDetected;
@@ -119,6 +131,9 @@ namespace BobCoach.Engine
 
         public event Action<PowerLogChoiceCompletion> DarkGiftCompleted;
 
+        /// <summary>BG36_Button_DarkGift pressable state observed from Power.log.</summary>
+        public event Action<PowerLogDarkGiftPressable> DarkGiftPressableChanged;
+
         public int CurrentBuildNumber { get { return _currentBuildNumber; } }
 
         internal void ResetForNewSession()
@@ -144,6 +159,7 @@ namespace BobCoach.Engine
             _darkGiftPendingChoiceId = -1;
             _darkGiftPendingChoiceType = "";
             _darkGiftPendingChoiceAt = DateTime.MinValue;
+            _lastDarkGiftPressable = null;
             _currentEntityChoice = null;
             _isTrinketChoice = false;
         }
@@ -348,6 +364,7 @@ namespace BobCoach.Engine
                 if (numericEntity.Success) int.TryParse(numericEntity.Groups[1].Value, out evt.EntityId);
             }
             evt.EntityName = ExtractString(content, "entityName=", " ");
+            evt.CardId = ExtractString(content, "cardId=", " ");
             evt.Tag = ExtractString(content, "tag=", " ");
             evt.Value = ExtractString(content, "value=", " ");
             int.TryParse(evt.Value, out evt.NumericValue);
@@ -357,6 +374,7 @@ namespace BobCoach.Engine
                 _entities[evt.EntityId] = new PLEntityState { Id = evt.EntityId };
             var entity = _entities[evt.EntityId];
             if (!string.IsNullOrEmpty(evt.EntityName)) entity.Name = evt.EntityName;
+            if (!string.IsNullOrEmpty(evt.CardId)) entity.CardId = evt.CardId;
 
             // 分类标签
             switch (evt.Tag)
@@ -461,6 +479,10 @@ namespace BobCoach.Engine
                 case "VENOMOUS": entity.IsVenomous = evt.NumericValue > 0; break;
                 case "WINDFURY": entity.HasWindfury = evt.NumericValue > 0; break;
             }
+
+            if (evt.Tag == "BACON_DARK_GIFT_PRESSABLE_VFX")
+                TryEmitDarkGiftPressable(evt, entity, ts);
+
             // 关键状态变化 → 驱动UI实时刷新 (zone/金币/位置/英雄技能)
             if (evt.Type == PLEventType.ZoneChange || evt.Type == PLEventType.GoldChange
                 || evt.Type == PLEventType.HeroPowerUsed)
@@ -468,6 +490,33 @@ namespace BobCoach.Engine
                 try { RelevantTagChanged?.Invoke(); } catch { }
             }
             return evt;
+        }
+
+        private void TryEmitDarkGiftPressable(PLEvent evt, PLEntityState entity, DateTime ts)
+        {
+            if (evt == null) return;
+            var cardId = evt.CardId;
+            if (string.IsNullOrEmpty(cardId))
+                cardId = entity?.CardId ?? "";
+            if (cardId != "BG36_Button_DarkGift") return;
+
+            bool pressable = evt.NumericValue > 0;
+            if (_lastDarkGiftPressable != null
+                && _lastDarkGiftPressable.EntityId == evt.EntityId
+                && _lastDarkGiftPressable.CardId == cardId
+                && _lastDarkGiftPressable.Pressable == pressable)
+                return;
+
+            _lastDarkGiftPressable = new PowerLogDarkGiftPressable
+            {
+                EntityId = evt.EntityId,
+                EntityName = evt.EntityName,
+                CardId = cardId,
+                Tag = evt.Tag,
+                Pressable = pressable,
+                Timestamp = ts,
+            };
+            try { DarkGiftPressableChanged?.Invoke(_lastDarkGiftPressable); } catch { }
         }
 
         private PLEvent ParseFullEntity(string content, DateTime ts)

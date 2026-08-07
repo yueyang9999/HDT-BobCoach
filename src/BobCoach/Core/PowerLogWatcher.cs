@@ -56,6 +56,8 @@ namespace BobCoach.Engine
 
         public event Action<PowerLogChoiceCompletion> DarkGiftCompleted;
 
+        public event Action<PowerLogDarkGiftPressable> DarkGiftPressableChanged;
+
         public event Action<PLEvent> TeammateGoldTransferObserved;
 
         /// <summary>关键状态变化 (ZONE/金币/技能), 驱动UI实时刷新</summary>
@@ -203,6 +205,7 @@ namespace BobCoach.Engine
                 _parser.ChoiceCompleted += OnChoiceCompleted;
                 _parser.DarkGiftChoiceActive += OnDarkGiftChoiceActive;
                 _parser.DarkGiftCompleted += OnDarkGiftCompleted;
+                _parser.DarkGiftPressableChanged += OnDarkGiftPressableChanged;
                 _parser.TeammateGoldTransferObserved += OnTeammateGoldTransferObserved;
                 _parser.RelevantTagChanged += OnRelevantTagChanged;
                 _parser.BuildNumberDetected += OnBuildNumberDetected;
@@ -243,6 +246,7 @@ namespace BobCoach.Engine
                 _parser.ChoiceCompleted -= OnChoiceCompleted;
                 _parser.DarkGiftChoiceActive -= OnDarkGiftChoiceActive;
                 _parser.DarkGiftCompleted -= OnDarkGiftCompleted;
+                _parser.DarkGiftPressableChanged -= OnDarkGiftPressableChanged;
                 _parser.TeammateGoldTransferObserved -= OnTeammateGoldTransferObserved;
                 _parser.RelevantTagChanged -= OnRelevantTagChanged;
                 _parser.BuildNumberDetected -= OnBuildNumberDetected;
@@ -331,6 +335,14 @@ namespace BobCoach.Engine
             try { DarkGiftCompleted?.Invoke(completion); } catch { }
         }
 
+        private void OnDarkGiftPressableChanged(PowerLogDarkGiftPressable pressable)
+        {
+            Log(string.Format("PowerLog dark gift pressable: entity={0} card={1} pressable={2}",
+                pressable?.EntityId ?? -1, pressable?.CardId ?? "",
+                pressable != null && pressable.Pressable));
+            try { DarkGiftPressableChanged?.Invoke(pressable); } catch { }
+        }
+
         private void OnTeammateGoldTransferObserved(PLEvent evt)
         {
             try { TeammateGoldTransferObserved?.Invoke(evt); } catch { }
@@ -372,10 +384,20 @@ namespace BobCoach.Engine
                     return;
                 }
 
-                string headerLine;
                 int headerLineIndex;
-                if (!FindLatestDarkGiftHeaderLine(tailStart, out headerLine, out headerLineIndex))
+                int pressableLineIndex;
+                if (!FindLatestDarkGiftBackfillPoints(tailStart,
+                    out headerLineIndex, out pressableLineIndex))
                     return;
+
+                int backfillStart = -1;
+                if (headerLineIndex >= 0 && pressableLineIndex >= 0)
+                    backfillStart = Math.Min(headerLineIndex, pressableLineIndex);
+                else if (headerLineIndex >= 0)
+                    backfillStart = headerLineIndex;
+                else if (pressableLineIndex >= 0)
+                    backfillStart = pressableLineIndex;
+                if (backfillStart < 0) return;
 
                 using (var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
@@ -383,21 +405,27 @@ namespace BobCoach.Engine
                     using (var reader = new StreamReader(fs))
                     {
                         var backfillParser = new PowerLogParser();
+                        PowerLogDarkGiftPressable latestBackfilledPressable = null;
                         backfillParser.DarkGiftChoiceActive += OnDarkGiftChoiceActive;
                         backfillParser.DarkGiftCompleted += OnDarkGiftCompleted;
+                        backfillParser.DarkGiftPressableChanged += pressable =>
+                            latestBackfilledPressable = pressable;
 
                         string line;
                         int lineIndex = 0;
                         while ((line = reader.ReadLine()) != null)
                         {
-                            if (lineIndex >= headerLineIndex)
+                            if (lineIndex >= backfillStart)
                                 backfillParser.ParseLine(line);
                             lineIndex++;
                         }
+
+                        if (latestBackfilledPressable != null)
+                            OnDarkGiftPressableChanged(latestBackfilledPressable);
                     }
                 }
 
-                Log("PowerLogWatcher backfilled recent dark gift choices");
+                Log("PowerLogWatcher backfilled recent dark gift choices/pressable");
             }
             catch (Exception ex)
             {
@@ -405,10 +433,11 @@ namespace BobCoach.Engine
             }
         }
 
-        private bool FindLatestDarkGiftHeaderLine(long tailStart, out string headerLine, out int headerLineIndex)
+        private bool FindLatestDarkGiftBackfillPoints(long tailStart,
+            out int headerLineIndex, out int pressableLineIndex)
         {
-            headerLine = null;
             headerLineIndex = -1;
+            pressableLineIndex = -1;
             try
             {
                 using (var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -416,7 +445,6 @@ namespace BobCoach.Engine
                     fs.Seek(tailStart, SeekOrigin.Begin);
                     using (var reader = new StreamReader(fs))
                     {
-                        string lastHeaderLine = null;
                         int lastHeaderLineIndex = -1;
                         string line;
                         int lineIndex = 0;
@@ -424,24 +452,31 @@ namespace BobCoach.Engine
                         {
                             if (line.IndexOf("DebugPrintEntityChoices() - id=", StringComparison.Ordinal) >= 0)
                             {
-                                lastHeaderLine = line;
                                 lastHeaderLineIndex = lineIndex;
                             }
                             if (IsDarkGiftSourceLine(line))
                             {
-                                headerLine = lastHeaderLine;
                                 headerLineIndex = lastHeaderLineIndex;
                             }
+                            if (IsDarkGiftPressableLine(line))
+                                pressableLineIndex = lineIndex;
                             lineIndex++;
                         }
                     }
                 }
-                return !string.IsNullOrEmpty(headerLine) && headerLineIndex >= 0;
+                return headerLineIndex >= 0 || pressableLineIndex >= 0;
             }
             catch
             {
                 return false;
             }
+        }
+
+        private static bool IsDarkGiftPressableLine(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return false;
+            return line.IndexOf("cardId=BG36_Button_DarkGift", StringComparison.Ordinal) >= 0
+                && line.IndexOf("tag=BACON_DARK_GIFT_PRESSABLE_VFX", StringComparison.Ordinal) >= 0;
         }
 
         private static bool IsDarkGiftSourceLine(string line)

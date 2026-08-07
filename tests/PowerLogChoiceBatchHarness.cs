@@ -368,8 +368,87 @@ public static class PowerLogChoiceBatchHarness
         if (watcherExit != 0) return watcherExit;
         var lateStartExit = RunWatcherLateStartTest(null);
         if (lateStartExit != 0) return lateStartExit;
+        var pressableExit = RunDarkGiftPressableTest();
+        if (pressableExit != 0) return pressableExit;
 
         Console.WriteLine("PASS trinket/discover batch metadata and typed completion");
+        return 0;
+    }
+
+    private static int RunDarkGiftPressableTest()
+    {
+        var parser = new PowerLogParser();
+        int pressableEvents = 0;
+        int darkGiftChoiceActiveEvents = 0;
+        int darkGiftCompletedEvents = 0;
+        int discoverLeaks = 0;
+        int trinketLeaks = 0;
+        int timewarpLeaks = 0;
+        int choiceCompletedLeaks = 0;
+        PowerLogDarkGiftPressable lastPressable = null;
+        bool choiceListActiveDuringPressable = true;
+        parser.DarkGiftPressableChanged += pressable =>
+        {
+            pressableEvents++;
+            lastPressable = pressable;
+            choiceListActiveDuringPressable = parser.IsChoiceListActive();
+        };
+        parser.DarkGiftChoiceActive += batch => darkGiftChoiceActiveEvents++;
+        parser.DarkGiftCompleted += completion => darkGiftCompletedEvents++;
+        parser.DiscoverOffered += batch => discoverLeaks++;
+        parser.TrinketChoiceActive += batch => trinketLeaks++;
+        parser.TimewarpPurchaseOffered += batch => timewarpLeaks++;
+        parser.ChoiceCompleted += completion => choiceCompletedLeaks++;
+
+        parser.ParseLine("D 18:09:36.8559084 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=7] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1");
+        if (pressableEvents != 1)
+            return Fail("dark gift pressable event was not emitted exactly once");
+        if (lastPressable == null || !lastPressable.Pressable
+            || lastPressable.CardId != "BG36_Button_DarkGift"
+            || lastPressable.EntityId != 9100)
+            return Fail("dark gift pressable payload was not preserved");
+        if (choiceListActiveDuringPressable || parser.IsChoiceListActive())
+            return Fail("dark gift pressable leaked into IsChoiceListActive()");
+        if (darkGiftChoiceActiveEvents != 0 || darkGiftCompletedEvents != 0
+            || discoverLeaks != 0 || trinketLeaks != 0
+            || timewarpLeaks != 0 || choiceCompletedLeaks != 0)
+            return Fail("dark gift pressable leaked into choice events");
+
+        parser.ParseLine("D 18:09:36.8560000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=7] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1");
+        if (pressableEvents != 1)
+            return Fail("duplicate dark gift pressable=true emitted a second event");
+
+        parser.ParseLine("D 18:09:37.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=7] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=0");
+        if (pressableEvents != 2 || lastPressable == null || lastPressable.Pressable)
+            return Fail("dark gift pressable=false was not emitted");
+
+        parser.ParseLine("D 18:09:37.1000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=7] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=0");
+        if (pressableEvents != 2)
+            return Fail("duplicate dark gift pressable=false emitted a second event");
+
+        parser.ParseLine("D 18:09:38.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Unknown Button id=9200 zone=PLAY zonePos=0 cardId=BG36_Button_Unknown player=7] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1");
+        parser.ParseLine("D 18:09:38.1000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Mid Game Gift id=9300 zone=PLAY zonePos=0 cardId=BG36_MidGameEffect_010 player=7] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1");
+        parser.ParseLine("D 18:09:38.2000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=7] tag=OTHER_TAG value=1");
+        if (pressableEvents != 2)
+            return Fail("unknown or non-pressable dark gift source emitted a pressable event");
+
+        parser.ParseLine("D 18:09:39.0000000 GameState.DebugPrintEntityChoices() - id=101 Player=Local TaskList=9100 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 18:09:39.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift Button id=9100 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=7]");
+        parser.ParseLine("D 18:09:39.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=9101 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_001 player=7]");
+        parser.ParseLine("D 18:09:39.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=9102 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=7]");
+        if (darkGiftChoiceActiveEvents != 1 || parser.IsChoiceListActive())
+            return Fail("dark gift choice did not stay independent from pressable state");
+        if (pressableEvents != 2)
+            return Fail("dark gift choice changed the pressable event stream");
+
+        parser.ParseLine("D 18:09:40.0000000 GameState.SendChoices() - id=101 ChoiceType=GENERAL");
+        parser.ParseLine("D 18:09:40.0000000 GameState.SendChoices() -   m_chosenEntities[0]=[entityName=Gift B id=9102 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=7]");
+        if (darkGiftCompletedEvents != 1 || parser.IsChoiceListActive())
+            return Fail("dark gift completion did not stay independent from pressable state");
+        if (pressableEvents != 2)
+            return Fail("dark gift completion changed the pressable event stream");
+
+        Console.WriteLine("PASS dark gift pressable stays independent from choice state");
         return 0;
     }
 
@@ -407,6 +486,9 @@ public static class PowerLogChoiceBatchHarness
             File.WriteAllText(logPath,
                 "D 18:09:00.0000000 GameState.DebugPrintGame() - BuildNumber=246003\r\n"
                 + "D 18:09:01.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=6\r\n"
+                + "D 18:09:01.5000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=10486 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1\r\n"
+                + "D 18:09:01.6000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=10486 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=0\r\n"
+                + "D 18:09:01.7000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=10486 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1\r\n"
                 + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() - id=10487 Player=Local TaskList=900 ChoiceType=GENERAL CountMin=1 CountMax=1\r\n"
                 + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift id=10487 zone=PLAY zonePos=0 cardId=BG36_MidGameEffect_010 player=1]\r\n"
                 + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=10488 zone=SETASIDE zonePos=0 cardId=BG31_809 player=1]\r\n"
@@ -421,6 +503,8 @@ public static class PowerLogChoiceBatchHarness
                 int darkGiftCompletedEvents = 0;
                 PowerLogChoiceBatch lastDarkGift = null;
                 PowerLogChoiceCompletion lastDarkGiftCompletion = null;
+                int darkGiftPressableEvents = 0;
+                PowerLogDarkGiftPressable lastDarkGiftPressable = null;
                 int discoverLeaks = 0;
                 int trinketLeaks = 0;
                 int timewarpLeaks = 0;
@@ -434,6 +518,11 @@ public static class PowerLogChoiceBatchHarness
                 {
                     darkGiftCompletedEvents++;
                     lastDarkGiftCompletion = completion;
+                };
+                watcher.DarkGiftPressableChanged += pressable =>
+                {
+                    darkGiftPressableEvents++;
+                    lastDarkGiftPressable = pressable;
                 };
                 watcher.DiscoverOffered += batch =>
                 {
@@ -460,6 +549,10 @@ public static class PowerLogChoiceBatchHarness
                     return Fail("late-start watcher did not backfill one dark gift active event");
                 if (darkGiftCompletedEvents != 1)
                     return Fail("late-start watcher did not backfill one dark gift completion event");
+                if (darkGiftPressableEvents != 1 || lastDarkGiftPressable == null
+                    || !lastDarkGiftPressable.Pressable
+                    || lastDarkGiftPressable.CardId != "BG36_Button_DarkGift")
+                    return Fail("late-start watcher did not backfill the latest dark gift pressable state");
                 if (lastDarkGift == null || lastDarkGift.SourceCardId != "BG36_MidGameEffect_010"
                     || lastDarkGift.ChoiceId != 10487 || lastDarkGift.Candidates.Count < 2)
                     return Fail("late-start dark gift batch was malformed: source="

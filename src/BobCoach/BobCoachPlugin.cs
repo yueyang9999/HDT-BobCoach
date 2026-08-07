@@ -74,6 +74,7 @@ namespace BobCoach
         private Engine.PowerLogChoiceBatch _darkGiftBatchFromLog = null;
         private volatile bool _darkGiftTipActive;
         private volatile bool _darkGiftClearRequested;
+        private volatile bool _darkGiftPressableActive;
         private readonly HashSet<int> _claimedUpgradePrizeChoiceIds = new HashSet<int>();
         private readonly Engine.TrinketChoiceBatchLifecycle _trinketChoiceLifecycle =
             new Engine.TrinketChoiceBatchLifecycle();
@@ -822,6 +823,7 @@ namespace BobCoach
                 _darkGiftBatchFromLog = null;
                 _darkGiftTipActive = false;
                 _darkGiftClearRequested = false;
+                _darkGiftPressableActive = false;
                 _claimedUpgradePrizeChoiceIds.Clear();
                 _trinketChoiceLifecycle.Reset();
                 // 跨局重置面板状态机回 Idle(防止上局 Active/Fading 残留)
@@ -1283,6 +1285,13 @@ namespace BobCoach
             {
                 _renderer.RefreshCanvasSize();
                 _renderer.ShowDarkGiftTip("暗赐选择中");
+                return;
+            }
+
+            if (_darkGiftPressableActive)
+            {
+                _renderer.RefreshCanvasSize();
+                _renderer.ShowDarkGiftTip("暗赐可发现");
                 return;
             }
 
@@ -2048,6 +2057,7 @@ namespace BobCoach
             _powerLogWatcher.TimewarpPurchaseOffered += OnPowerLogTimewarpPurchaseOffered;
             _powerLogWatcher.DarkGiftChoiceActive += OnPowerLogDarkGiftChoiceActive;
             _powerLogWatcher.DarkGiftCompleted += OnPowerLogDarkGiftCompleted;
+            _powerLogWatcher.DarkGiftPressableChanged += OnPowerLogDarkGiftPressableChanged;
             _powerLogWatcher.TrinketChoiceActive += OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted += OnPowerLogChoiceCompleted;
             _powerLogWatcher.TeammateGoldTransferObserved += OnPowerLogTeammateGoldTransfer;
@@ -2065,6 +2075,7 @@ namespace BobCoach
             _powerLogWatcher.TimewarpPurchaseOffered -= OnPowerLogTimewarpPurchaseOffered;
             _powerLogWatcher.DarkGiftChoiceActive -= OnPowerLogDarkGiftChoiceActive;
             _powerLogWatcher.DarkGiftCompleted -= OnPowerLogDarkGiftCompleted;
+            _powerLogWatcher.DarkGiftPressableChanged -= OnPowerLogDarkGiftPressableChanged;
             _powerLogWatcher.TrinketChoiceActive -= OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted -= OnPowerLogChoiceCompleted;
             _powerLogWatcher.TeammateGoldTransferObserved -= OnPowerLogTeammateGoldTransfer;
@@ -2639,6 +2650,12 @@ namespace BobCoach
                                     _eventEvalRequested = false;
                                     _renderer.RefreshCanvasSize();
                                     _renderer.ShowDarkGiftTip("暗赐选择中");
+                                }
+                                else if (_darkGiftPressableActive)
+                                {
+                                    _eventEvalRequested = false;
+                                    _renderer.RefreshCanvasSize();
+                                    _renderer.ShowDarkGiftTip("暗赐可发现");
                                 }
                                 else if (nowInCombat)
                                 {
@@ -3532,8 +3549,20 @@ namespace BobCoach
                 || _darkGiftBatchFromLog.ChoiceId != completion.ChoiceId) return;
             _darkGiftBatchFromLog = null;
             _darkGiftTipActive = false;
+            _darkGiftPressableActive = false;
             _darkGiftClearRequested = true;
             Log("Dark Gift: choice=" + completion.ChoiceId + " completed selected=" + completion.SelectedCardId);
+            OnPowerLogStateChanged();
+        }
+
+        private void OnPowerLogDarkGiftPressableChanged(Engine.PowerLogDarkGiftPressable pressable)
+        {
+            if (pressable == null || pressable.CardId != "BG36_Button_DarkGift") return;
+            _darkGiftPressableActive = pressable.Pressable;
+            if (_darkGiftBatchFromLog == null)
+                _darkGiftClearRequested = !pressable.Pressable;
+            Log(string.Format("Dark Gift: pressable={0} entity={1}",
+                pressable.Pressable, pressable.EntityId));
             OnPowerLogStateChanged();
         }
 
