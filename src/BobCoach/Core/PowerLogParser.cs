@@ -66,6 +66,7 @@ namespace BobCoach.Engine
         public string CardId = "";
         public string Tag = "";
         public bool Pressable;
+        public bool Backfilled;
         public DateTime Timestamp;
     }
 
@@ -386,25 +387,19 @@ namespace BobCoach.Engine
                     if (_discoverBuffer.Count > 0
                         && _discoverBuffer.Any(c => c.EntityId == evt.EntityId))
                     {
-                        if (evt.Value == "HAND" || evt.Value == "REMOVEDFROMGAME"
-                            || evt.Value == "GRAVEYARD" || evt.Value == "DECK")
+                        if (!IsOrdinaryDiscoverZone(evt.Value))
                         {
                             _discoverBuffer.RemoveAll(c => c.EntityId == evt.EntityId);
-                            if (_discoverBuffer.Count == 0 && HasActiveChoiceContext())
-                            {
-                                EmitDiscoverOffered(new List<DiscoverCandidate>(), ts);
-                            }
                         }
                     }
                     // 发现候选进入展示区 → 补充检测(FULL_ENTITY时zone未设置, 补在这里)
                     // SETASIDE(6) + PLAY(1, 对手侧可能是商店/发现实体) 都可能包含发现选项
                     var zoneVal = evt.Value;
-                    bool isDiscoverZone = zoneVal == "SETASIDE" || zoneVal == "6"
-                        || zoneVal == "PLAY" || zoneVal == "1";
+                    bool isDiscoverZone = IsOrdinaryDiscoverZone(zoneVal);
                     if (HasActiveChoiceContext()
                         && isDiscoverZone
                         && !string.IsNullOrEmpty(entity.CardId)
-                        && IsDiscoverCandidateCardId(entity.CardId))
+                        && IsOrdinaryDiscoverCandidate(entity.CardId, zoneVal))
                     {
                         // 时间窗口重置
                         if (_discoverBuffer.Count > 0
@@ -571,7 +566,7 @@ namespace BobCoach.Engine
             // 比FULL_ENTITY更精确(FULL_ENTITY创建实体原因很多, SHOW_ENTITY只表示展示)
             if (HasActiveChoiceContext()
                 && entityId > 0 && !string.IsNullOrEmpty(cardId)
-                && IsDiscoverCandidateCardId(cardId)
+                && IsOrdinaryDiscoverCandidate(cardId, GetEntityZone(entityId))
                 && !cardId.Contains("MagicItem") && !cardId.Contains("Trinket"))
             {
                 if (_discoverBuffer.Count > 0
@@ -802,6 +797,9 @@ namespace BobCoach.Engine
 
             if (entityMatch.Success && _currentEntityChoice != null)
             {
+                if (!IsOrdinaryDiscoverCandidate(entityMatch.Groups[6].Value,
+                    entityMatch.Groups[4].Value))
+                    return null;
                 _lastChoiceContextAt = ts;
                 int idx = int.Parse(entityMatch.Groups[1].Value);
                 var candidate = new DiscoverCandidate
@@ -1006,7 +1004,7 @@ namespace BobCoach.Engine
                                 catch { }
                             }
                         }
-                        else if (IsDiscoverCandidateCardId(entity.CardId))
+                        else if (IsOrdinaryDiscoverCandidate(entity.CardId, entity.Zone))
                         {
                             if (!_discoverBuffer.Any(c => c.EntityId == entityId))
                             {
@@ -1091,8 +1089,26 @@ namespace BobCoach.Engine
 
         private static string ExtractContent(string line)
         {
-            int idx = line.LastIndexOf("- ");
-            return idx >= 0 ? line.Substring(idx + 1).TrimStart() : line;
+            // Power.log uses "FULL_ENTITY - Creating", so LastIndexOf("- ") would
+            // strip the event marker and break dispatch. Cut after the known log
+            // carrier prefix instead.
+            string[] prefixes =
+            {
+                "GameState.DebugPrintPower() - ",
+                "GameState.DebugPrintEntityChoices() - ",
+                "GameState.DebugPrintGame() - ",
+                "GameState.SendChoices() - ",
+                "PowerTaskList.DebugPrintPower() - ",
+                "PowerProcessor.DebugPrintPower() - ",
+            };
+            foreach (string prefix in prefixes)
+            {
+                int idx = line.IndexOf(prefix, StringComparison.Ordinal);
+                if (idx >= 0)
+                    return line.Substring(idx + prefix.Length).TrimStart();
+            }
+            int fallback = line.LastIndexOf("- ");
+            return fallback >= 0 ? line.Substring(fallback + 1).TrimStart() : line;
         }
 
         private static int ExtractInt(string text, string key)
@@ -1130,12 +1146,7 @@ namespace BobCoach.Engine
             if (!_entities.TryGetValue(fe.EntityId, out var entity)) return;
             string zone = entity.Zone ?? "";
 
-            // zone过滤(替代BLOCK门控): 仅接受已进入SETASIDE(6)或zone尚未设置的实体
-            // zone=""→允许(TAG_CHANGE会补设); zone="6"/"SETASIDE"→明确是发现区
-            if (!string.IsNullOrEmpty(zone)
-                && zone != "6" && zone != "SETASIDE"
-                && zone != "PLAY" && zone != "1")  // PLAY可能是过渡态
-                return;
+            if (!IsOrdinaryDiscoverCandidate(fe.CardId, zone)) return;
 
             // 时间窗口重置: 超过批次窗口 → 清空旧缓冲
             if (_discoverBuffer.Count > 0
@@ -1209,7 +1220,27 @@ namespace BobCoach.Engine
                 || cardId.Contains("token") || cardId.Contains("Token")
                 || cardId.EndsWith("_PH") || cardId.Contains("_PH_"))
                 return false;
+            if (cardId.Contains("_Button") || cardId.StartsWith("BG36_MidGameEffect_"))
+                return false;
             return true;
+        }
+
+        private static bool IsOrdinaryDiscoverZone(string zone)
+        {
+            if (string.IsNullOrEmpty(zone)) return true;
+            return zone == "SETASIDE" || zone == "6";
+        }
+
+        private static bool IsOrdinaryDiscoverCandidate(string cardId, string zone)
+        {
+            if (!IsDiscoverCandidateCardId(cardId)) return false;
+            return IsOrdinaryDiscoverZone(zone);
+        }
+
+        private string GetEntityZone(int entityId)
+        {
+            if (_entities.TryGetValue(entityId, out var entity)) return entity.Zone ?? "";
+            return "";
         }
 
         public static bool IsTimewarpPurchaseSource(string sourceCardId)

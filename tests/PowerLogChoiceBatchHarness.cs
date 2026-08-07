@@ -370,8 +370,97 @@ public static class PowerLogChoiceBatchHarness
         if (lateStartExit != 0) return lateStartExit;
         var pressableExit = RunDarkGiftPressableTest();
         if (pressableExit != 0) return pressableExit;
+        var darkGiftTipGateExit = RunDarkGiftTipGateTest();
+        if (darkGiftTipGateExit != 0) return darkGiftTipGateExit;
+        var ordinaryDiscoverLeakExit = RunOrdinaryDiscoverLeakFilterTest();
+        if (ordinaryDiscoverLeakExit != 0) return ordinaryDiscoverLeakExit;
 
         Console.WriteLine("PASS trinket/discover batch metadata and typed completion");
+        return 0;
+    }
+
+    private static int RunOrdinaryDiscoverLeakFilterTest()
+    {
+        var parser = new PowerLogParser();
+        var offers = new List<PowerLogChoiceBatch>();
+        int darkGiftEvents = 0;
+        parser.DiscoverOffered += batch => offers.Add(batch);
+        parser.DarkGiftChoiceActive += batch => darkGiftEvents++;
+
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() - id=9001 Player=Local TaskList=9101 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Discover Source id=9001 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Upgrade Button id=9101 zone=PLAY zonePos=0 cardId=TB_BaconShopTechUp02_Button player=8]");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Hand Minion id=9102 zone=HAND zonePos=0 cardId=BG26_523_G player=8]");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Board Minion id=9103 zone=PLAY zonePos=0 cardId=BG26_523 player=8]");
+        if (offers.Count != 0)
+            return Fail("ordinary discover fired from PLAY/HAND/button candidates");
+
+        offers.Clear();
+        parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() - id=9002 Player=Local TaskList=9102 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Discover Source id=9002 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
+        parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Board Minion id=9201 zone=PLAY zonePos=0 cardId=BG26_523 player=8]");
+        parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Valid A id=9202 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
+        parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Valid B id=9203 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        if (offers.Count != 1)
+            return Fail("mixed ordinary discover did not emit exactly one filtered batch");
+        if (offers[0].Candidates.Count != 2
+            || offers[0].Candidates.Any(c => c.EntityId == 9201)
+            || !offers[0].Candidates.Any(c => c.EntityId == 9202)
+            || !offers[0].Candidates.Any(c => c.EntityId == 9203))
+            return Fail("mixed ordinary discover retained non-SETASIDE candidates");
+
+        offers.Clear();
+        parser.ParseLine("D 18:32:00.0000000 GameState.DebugPrintEntityChoices() - id=9003 Player=Local TaskList=9103 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 18:32:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Discover Source id=9003 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
+        parser.ParseLine("D 18:32:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Board Minion id=9301 zone=PLAY zonePos=0 cardId=BG26_523 player=8] tag=ZONE value=PLAY");
+        parser.ParseLine("D 18:32:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Hand Minion id=9302 zone=HAND zonePos=0 cardId=BG26_524 player=8] tag=ZONE value=HAND");
+        if (offers.Count != 0)
+            return Fail("TAG_CHANGE PLAY/HAND added ordinary discover candidates");
+
+        offers.Clear();
+        parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintEntityChoices() - id=9004 Player=Local TaskList=9104 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Discover Source id=9004 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
+        parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=9401 CardID=BG26_525");
+        parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Transitional A id=9401 zone=PLAY zonePos=0 cardId=BG26_525 player=8] tag=ZONE value=PLAY");
+        parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=9402 CardID=BG26_524");
+        parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=9403 CardID=BG26_528");
+        if (offers.Count != 1)
+            return Fail("PLAY-zone candidate was not removed from ordinary discover buffer: offers="
+                + offers.Count);
+        if (offers[0].Candidates.Any(c => c.EntityId == 9401)
+            || !offers[0].Candidates.Any(c => c.EntityId == 9402)
+            || !offers[0].Candidates.Any(c => c.EntityId == 9403))
+            return Fail("ordinary discover buffer kept a PLAY-zone candidate");
+
+        var showParser = new PowerLogParser();
+        offers.Clear();
+        showParser.DiscoverOffered += batch => offers.Add(batch);
+        showParser.ParseLine("D 18:34:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Board Minion id=9501 zone=PLAY zonePos=0 cardId=BG26_525 player=8] tag=ZONE value=PLAY");
+        showParser.ParseLine("D 18:34:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Hand Minion id=9502 zone=HAND zonePos=0 cardId=BG26_524 player=8] tag=ZONE value=HAND");
+        showParser.ParseLine("D 18:34:00.0000000 GameState.DebugPrintEntityChoices() - id=9005 Player=Local TaskList=9105 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        showParser.ParseLine("D 18:34:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Discover Source id=9005 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
+        showParser.ParseLine("D 18:34:00.0000000 GameState.DebugPrintPower() - SHOW_ENTITY - Updating [entityName=Board Minion id=9501 zone=PLAY zonePos=0 cardId=BG26_525 player=8] CardID=BG26_525");
+        showParser.ParseLine("D 18:34:00.0000000 GameState.DebugPrintPower() - SHOW_ENTITY - Updating [entityName=Hand Minion id=9502 zone=HAND zonePos=0 cardId=BG26_524 player=8] CardID=BG26_524");
+        if (offers.Count != 0)
+            return Fail("SHOW_ENTITY PLAY/HAND added ordinary discover candidates");
+
+        var choiceParser = new PowerLogParser();
+        offers.Clear();
+        choiceParser.DiscoverOffered += batch => offers.Add(batch);
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Upgrade Button id=9601 zone=PLAY zonePos=0 cardId=TB_BaconShopTechUp02_Button player=8] tag=ZONE value=PLAY");
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Hand Minion id=9602 zone=HAND zonePos=0 cardId=BG26_523_G player=8] tag=ZONE value=HAND");
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Board Minion id=9603 zone=PLAY zonePos=0 cardId=BG26_523 player=8] tag=ZONE value=PLAY");
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - ChoiceList=CHOICE id=9006 ChoiceType=GENERAL");
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - ChoiceList=ENTITY id=9601");
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - ChoiceList=ENTITY id=9602");
+        choiceParser.ParseLine("D 18:35:00.0000000 GameState.DebugPrintPower() - ChoiceList=ENTITY id=9603");
+        if (offers.Count != 0)
+            return Fail("ChoiceList=ENTITY PLAY/HAND/button candidates leaked into ordinary discover");
+
+        if (darkGiftEvents != 0)
+            return Fail("ordinary discover leak filter disturbed dark gift source handling");
+
+        Console.WriteLine("PASS ordinary discover rejects non-SETASIDE and button/midgame candidates");
         return 0;
     }
 
@@ -449,6 +538,61 @@ public static class PowerLogChoiceBatchHarness
             return Fail("dark gift completion changed the pressable event stream");
 
         Console.WriteLine("PASS dark gift pressable stays independent from choice state");
+        return 0;
+    }
+
+    private static int RunDarkGiftTipGateTest()
+    {
+        var t0 = new DateTime(2026, 8, 7, 10, 0, 0, DateTimeKind.Local);
+        var gate = new DarkGiftTipGate(TimeSpan.FromSeconds(6));
+        if (gate.ShouldShow(t0))
+            return Fail("dark gift tip gate opened before pressable");
+
+        gate.OnPressableChanged(true, t0, false);
+        if (!gate.ShouldShow(t0))
+            return Fail("dark gift tip gate did not open on pressable");
+
+        gate.OnPressableChanged(true, t0.AddSeconds(3), false);
+        if (!gate.ShouldShow(t0.AddSeconds(3)))
+            return Fail("dark gift tip gate closed while still inside its window");
+
+        gate.OnPressableChanged(true, t0.AddSeconds(5), false);
+        if (!gate.ShouldShow(t0.AddSeconds(5)))
+            return Fail("dark gift tip gate closed before the original window ended");
+        if (gate.ShouldShow(t0.AddSeconds(6)))
+            return Fail("repeated pressable=true extended the dark gift tip window");
+        if (gate.ShouldShow(t0.AddSeconds(7)))
+            return Fail("dark gift tip gate stayed open after its window");
+
+        var falseGate = new DarkGiftTipGate(TimeSpan.FromSeconds(6));
+        falseGate.OnPressableChanged(true, t0, false);
+        falseGate.OnPressableChanged(false, t0.AddSeconds(1), false);
+        if (falseGate.ShouldShow(t0.AddSeconds(1)))
+            return Fail("dark gift tip gate stayed open after pressable=false");
+
+        var backfillGate = new DarkGiftTipGate(TimeSpan.FromSeconds(6));
+        backfillGate.OnPressableChanged(true, t0, true);
+        if (backfillGate.ShouldShow(t0))
+            return Fail("backfilled dark gift pressable opened the tip gate");
+
+        var choiceGate = new DarkGiftTipGate(TimeSpan.FromSeconds(6));
+        choiceGate.OnPressableChanged(true, t0, false);
+        choiceGate.OnDarkGiftChoiceActive(t0.AddSeconds(1));
+        if (choiceGate.ShouldShow(t0.AddSeconds(1)))
+            return Fail("dark gift choice active did not close the tip gate");
+
+        var completedGate = new DarkGiftTipGate(TimeSpan.FromSeconds(6));
+        completedGate.OnPressableChanged(true, t0, false);
+        completedGate.OnDarkGiftCompleted(t0.AddSeconds(1));
+        if (completedGate.ShouldShow(t0.AddSeconds(1)))
+            return Fail("dark gift completion did not close the tip gate");
+
+        completedGate.OnPressableChanged(true, t0.AddSeconds(2), false);
+        completedGate.Reset();
+        if (completedGate.ShouldShow(t0.AddSeconds(2)))
+            return Fail("dark gift tip gate did not reset");
+
+        Console.WriteLine("PASS dark gift tip gate only shows a bounded pressable window");
         return 0;
     }
 
@@ -551,6 +695,7 @@ public static class PowerLogChoiceBatchHarness
                     return Fail("late-start watcher did not backfill one dark gift completion event");
                 if (darkGiftPressableEvents != 1 || lastDarkGiftPressable == null
                     || !lastDarkGiftPressable.Pressable
+                    || !lastDarkGiftPressable.Backfilled
                     || lastDarkGiftPressable.CardId != "BG36_Button_DarkGift")
                     return Fail("late-start watcher did not backfill the latest dark gift pressable state");
                 if (lastDarkGift == null || lastDarkGift.SourceCardId != "BG36_MidGameEffect_010"

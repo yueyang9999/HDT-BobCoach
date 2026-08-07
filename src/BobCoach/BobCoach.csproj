@@ -78,6 +78,7 @@
     <Compile Include="Core\FishbaitFactSource.cs" />
     <Compile Include="Core\DarkGiftRegistry.cs" />
     <Compile Include="Core\DarkGiftFactSource.cs" />
+    <Compile Include="Core\DarkGiftTipGate.cs" />
     <Compile Include="Core\AnomalyContext.cs" />
     <Compile Include="Core\Season14RulesEvaluator.cs" />
     <Compile Include="Core\EffectiveGameRules.cs" />

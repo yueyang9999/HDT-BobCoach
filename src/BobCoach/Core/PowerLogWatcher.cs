@@ -421,7 +421,10 @@ namespace BobCoach.Engine
                         }
 
                         if (latestBackfilledPressable != null)
+                        {
+                            latestBackfilledPressable.Backfilled = true;
                             OnDarkGiftPressableChanged(latestBackfilledPressable);
+                        }
                     }
                 }
 
