@@ -771,6 +771,20 @@ namespace BobCoach
             _suggestionsActive = false;
             try
             {
+                EnsureBattlegroundsInitialized();
+            }
+            catch { }
+        }
+
+        private void EnsureBattlegroundsInitialized()
+        {
+            if (_inBattlegrounds) return;
+            _inBattlegrounds = false;
+            _lastStateHash = null; _lastRenderedHash = null;
+            _trinketShadowCaptureSession.Reset();
+            _suggestionsActive = false;
+            try
+            {
                 if (Core.Game == null || !Core.Game.IsBattlegroundsMatch) return;
                 _inBattlegrounds = true;
                 Log("BG game started");
@@ -1183,11 +1197,7 @@ namespace BobCoach
             {
                 try
                 {
-                    if (Core.Game != null && Core.Game.IsBattlegroundsMatch)
-                    {
-                        _inBattlegrounds = true;
-                        Log("OnTurnStart: detected BG match");
-                    }
+                    EnsureBattlegroundsInitialized();
                 }
                 catch { }
             }

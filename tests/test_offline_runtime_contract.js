@@ -369,3 +369,38 @@ if ([extractPlacementIndex, attachOutcomeIndex, resetRecordingIndex].some(index 
 }
 
 console.log("PASS ranking stays Shadow with ordered local lifecycle and legacy-visible fallback");
+
+const delayedInitStart = plugin.indexOf("private void EnsureBattlegroundsInitialized()");
+if (delayedInitStart < 0) {
+    console.error("FAIL plugin must provide a shared delayed Battlegrounds initialization helper");
+    process.exit(1);
+}
+if (!gameStartBody.includes("EnsureBattlegroundsInitialized();")) {
+    console.error("FAIL OnGameStart must delegate BG watcher and decision recording setup to the shared helper");
+    process.exit(1);
+}
+const turnStartStart = plugin.indexOf("private void OnTurnStart(");
+const turnStartEnd = plugin.indexOf("private void OnInMenu()", turnStartStart);
+const turnStartBody = plugin.slice(turnStartStart, turnStartEnd);
+if (!turnStartBody.includes("EnsureBattlegroundsInitialized();")) {
+    console.error("FAIL late BG detection on OnTurnStart must run the same watcher and decision recording setup");
+    process.exit(1);
+}
+const initPoolStart = plugin.indexOf("private void InitPoolTracker()", delayedInitStart);
+const delayedInitBody = plugin.slice(delayedInitStart, initPoolStart);
+const delayedStartWatchingIndex = delayedInitBody.indexOf("_powerLogWatcher.StartWatching()");
+const delayedConfigOkIndex = delayedInitBody.indexOf("_powerLogWatcher.ConfigStatus == LogConfigStatus.OK");
+const delayedCreateRecorderIndex = delayedInitBody.indexOf("DecisionEventRecorder.CreateForLocalReplay(");
+if ([delayedStartWatchingIndex, delayedConfigOkIndex, delayedCreateRecorderIndex].some(index => index < 0)
+    || !(delayedStartWatchingIndex < delayedConfigOkIndex
+        && delayedConfigOkIndex < delayedCreateRecorderIndex)) {
+    console.error("FAIL delayed BG initialization must preserve watcher-start -> config-OK -> recorder order");
+    process.exit(1);
+}
+if (!delayedInitBody.includes("Core.Game.IsBattlegroundsMatch")
+    || !delayedInitBody.includes("_inBattlegrounds = true")) {
+    console.error("FAIL delayed BG initialization must gate on the live BG match flag and mark BG active");
+    process.exit(1);
+}
+
+console.log("PASS delayed BG initialization can start watcher and decision recording after OnTurnStart detection");

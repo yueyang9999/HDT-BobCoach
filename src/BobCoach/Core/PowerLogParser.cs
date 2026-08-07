@@ -1194,7 +1194,7 @@ namespace BobCoach.Engine
             _darkGiftPendingChoiceAt = DateTime.MinValue;
         }
 
-        private static bool IsDarkGiftSource(string sourceCardId)
+        internal static bool IsDarkGiftSource(string sourceCardId)
         {
             return sourceCardId == "BG36_Button_DarkGift"
                 || sourceCardId == "BG36_MidGameEffect_010"

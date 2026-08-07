@@ -15,6 +15,7 @@ namespace BobCoach.Engine
         private readonly List<PLEvent> _events = new List<PLEvent>();
         private string _logPath;
         private long _lastPosition;
+        private const int LateStartDarkGiftBackfillBytes = 64 * 1024 * 1024;
         private Thread _watchThread;
         private Thread _startThread;
         private volatile bool _running;
@@ -209,6 +210,7 @@ namespace BobCoach.Engine
                 // watcher通常在GameStart之后才启动，而BuildNumber位于本会话Power.log开头。
                 // 只回扫首个BuildNumber，不重放旧游戏事件；随后从文件末尾增量读取。
                 ScanInitialBuildNumber();
+                BackfillRecentDarkGiftChoices();
                 try { _lastPosition = new FileInfo(_logPath).Length; } catch { _lastPosition = 0; }
                 Log("PowerLogWatcher started: " + _logPath + " at pos " + _lastPosition);
 
@@ -353,6 +355,102 @@ namespace BobCoach.Engine
                     Log("PowerLog initial BuildNumber not found");
             }
             catch (Exception ex) { Log("PowerLog initial BuildNumber scan failed: " + ex.Message); }
+        }
+
+        private void BackfillRecentDarkGiftChoices()
+        {
+            try
+            {
+                long tailStart;
+                try
+                {
+                    var fileLength = new FileInfo(_logPath).Length;
+                    tailStart = Math.Max(0, fileLength - LateStartDarkGiftBackfillBytes);
+                }
+                catch
+                {
+                    return;
+                }
+
+                string headerLine;
+                int headerLineIndex;
+                if (!FindLatestDarkGiftHeaderLine(tailStart, out headerLine, out headerLineIndex))
+                    return;
+
+                using (var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    fs.Seek(tailStart, SeekOrigin.Begin);
+                    using (var reader = new StreamReader(fs))
+                    {
+                        var backfillParser = new PowerLogParser();
+                        backfillParser.DarkGiftChoiceActive += OnDarkGiftChoiceActive;
+                        backfillParser.DarkGiftCompleted += OnDarkGiftCompleted;
+
+                        string line;
+                        int lineIndex = 0;
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (lineIndex >= headerLineIndex)
+                                backfillParser.ParseLine(line);
+                            lineIndex++;
+                        }
+                    }
+                }
+
+                Log("PowerLogWatcher backfilled recent dark gift choices");
+            }
+            catch (Exception ex)
+            {
+                Log("PowerLogWatcher dark gift backfill failed: " + ex.Message);
+            }
+        }
+
+        private bool FindLatestDarkGiftHeaderLine(long tailStart, out string headerLine, out int headerLineIndex)
+        {
+            headerLine = null;
+            headerLineIndex = -1;
+            try
+            {
+                using (var fs = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    fs.Seek(tailStart, SeekOrigin.Begin);
+                    using (var reader = new StreamReader(fs))
+                    {
+                        string lastHeaderLine = null;
+                        int lastHeaderLineIndex = -1;
+                        string line;
+                        int lineIndex = 0;
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (line.IndexOf("DebugPrintEntityChoices() - id=", StringComparison.Ordinal) >= 0)
+                            {
+                                lastHeaderLine = line;
+                                lastHeaderLineIndex = lineIndex;
+                            }
+                            if (IsDarkGiftSourceLine(line))
+                            {
+                                headerLine = lastHeaderLine;
+                                headerLineIndex = lastHeaderLineIndex;
+                            }
+                            lineIndex++;
+                        }
+                    }
+                }
+                return !string.IsNullOrEmpty(headerLine) && headerLineIndex >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsDarkGiftSourceLine(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return false;
+            var sourceMatch = System.Text.RegularExpressions.Regex.Match(line,
+                @"Source=\[entityName=.+ cardId=(\w*) player=(\d+)\]");
+            return sourceMatch.Success
+                && PowerLogParser.IsDarkGiftSource(sourceMatch.Groups[1].Value);
         }
 
         /// <summary>游戏结束时导出完整回放JSON</summary>
