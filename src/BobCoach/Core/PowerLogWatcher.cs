@@ -425,6 +425,10 @@ namespace BobCoach.Engine
                             latestBackfilledPressable.Backfilled = true;
                             OnDarkGiftPressableChanged(latestBackfilledPressable);
                         }
+
+                        var active = backfillParser.GetActiveDarkGiftForBackfill();
+                        if (active != null)
+                            _parser.ApplyBackfilledDarkGift(active);
                     }
                 }
 

@@ -28,6 +28,9 @@ public static class PowerLogChoiceBatchHarness
             if (args[0] == "--watcher-late-start"
                 || (args.Length >= 2 && args[1] == "--watcher-late-start"))
                 return RunWatcherLateStartTest(null);
+            if (args[0] == "--watcher-late-start-live-completion"
+                || (args.Length >= 2 && args[1] == "--watcher-late-start-live-completion"))
+                return RunWatcherLateStartLiveCompletionTest(null);
             return ReplayCapturedLog(args[0]);
         }
 
@@ -368,6 +371,8 @@ public static class PowerLogChoiceBatchHarness
         if (watcherExit != 0) return watcherExit;
         var lateStartExit = RunWatcherLateStartTest(null);
         if (lateStartExit != 0) return lateStartExit;
+        var lateStartLiveCompletionExit = RunWatcherLateStartLiveCompletionTest(null);
+        if (lateStartLiveCompletionExit != 0) return lateStartLiveCompletionExit;
         var pressableExit = RunDarkGiftPressableTest();
         if (pressableExit != 0) return pressableExit;
         var darkGiftTipGateExit = RunDarkGiftTipGateTest();
@@ -812,6 +817,133 @@ public static class PowerLogChoiceBatchHarness
             }
 
             Console.WriteLine("PASS watcher backfills recent dark gift choices after late start");
+            return 0;
+        }
+        finally
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(root) && Directory.Exists(root))
+                    Directory.Delete(root, true);
+            }
+            catch { }
+        }
+    }
+
+    private static int RunWatcherLateStartLiveCompletionTest(string explicitRoot)
+    {
+        var root = string.IsNullOrWhiteSpace(explicitRoot)
+            ? Path.Combine(Path.GetTempPath(), "bobcoach-watcher-late-start-live-" + Guid.NewGuid().ToString("N"))
+            : Path.GetFullPath(explicitRoot);
+        try
+        {
+            var appData = Path.Combine(root, "appdata");
+            var hearthstoneDir = Path.Combine(root, "hearthstone");
+            var logsDir = Path.Combine(hearthstoneDir, "Logs");
+            var sessionDir = Path.Combine(logsDir, "Hearthstone_late");
+            Directory.CreateDirectory(sessionDir);
+
+            var hdtConfigPath = Path.Combine(appData, "HearthstoneDeckTracker", "config.xml");
+            Directory.CreateDirectory(Path.GetDirectoryName(hdtConfigPath));
+            File.WriteAllText(hdtConfigPath,
+                "<Config><HearthstoneDirectory>" + hearthstoneDir
+                + "</HearthstoneDirectory></Config>");
+
+            var logConfigPath = Path.Combine(hearthstoneDir, "log.config");
+            var plan = LogConfigEnsurer.InspectAtPath(logConfigPath);
+            if (plan.Status != LogConfigStatus.Missing)
+                return Fail("late-start-live log.config was not reported missing");
+            if (LogConfigEnsurer.Apply(plan) != LogConfigStatus.Created)
+                return Fail("late-start-live watcher could not create isolated log.config");
+
+            Environment.SetEnvironmentVariable("APPDATA", appData);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(root, "local-appdata"));
+            Environment.SetEnvironmentVariable("BOB_COACH_DATA_ROOT", Path.Combine(root, "bob-coach-data"));
+
+            var logPath = Path.Combine(sessionDir, "Power_old.log");
+            File.WriteAllText(logPath,
+                "D 18:09:00.0000000 GameState.DebugPrintGame() - BuildNumber=246003\r\n"
+                + "D 18:09:01.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=6\r\n"
+                + "D 18:09:01.5000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift Button id=10586 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1] tag=BACON_DARK_GIFT_PRESSABLE_VFX value=1\r\n"
+                + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() - id=10587 Player=Local TaskList=901 ChoiceType=GENERAL CountMin=1 CountMax=1\r\n"
+                + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift Button id=10587 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=1]\r\n"
+                + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=10588 zone=SETASIDE zonePos=0 cardId=BG31_809 player=1]\r\n"
+                + "D 18:09:02.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=10589 zone=SETASIDE zonePos=0 cardId=BG35_602 player=1]\r\n");
+
+            using (var watcher = new PowerLogWatcher())
+            {
+                int darkGiftActiveEvents = 0;
+                int darkGiftCompletedEvents = 0;
+                PowerLogChoiceBatch lastDarkGift = null;
+                PowerLogChoiceCompletion lastDarkGiftCompletion = null;
+                int discoverLeaks = 0;
+                int trinketLeaks = 0;
+                int timewarpLeaks = 0;
+                int choiceCompletedLeaks = 0;
+                watcher.DarkGiftChoiceActive += batch =>
+                {
+                    darkGiftActiveEvents++;
+                    lastDarkGift = batch;
+                };
+                watcher.DarkGiftCompleted += completion =>
+                {
+                    darkGiftCompletedEvents++;
+                    lastDarkGiftCompletion = completion;
+                };
+                watcher.DiscoverOffered += batch =>
+                {
+                    if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                        discoverLeaks++;
+                };
+                watcher.TrinketChoiceActive += batch =>
+                {
+                    if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                        trinketLeaks++;
+                };
+                watcher.TimewarpPurchaseOffered += batch =>
+                {
+                    if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                        timewarpLeaks++;
+                };
+                watcher.ChoiceCompleted += completion => choiceCompletedLeaks++;
+
+                watcher.StartWatchingAtConfigPath(logConfigPath);
+                if (!WaitUntil(() => watcher.IsWatching, 3000))
+                    return Fail("late-start-live watcher did not start against the prewritten log");
+
+                if (darkGiftActiveEvents != 1)
+                    return Fail("late-start-live watcher did not backfill one dark gift active event");
+                if (darkGiftCompletedEvents != 0)
+                    return Fail("late-start-live watcher emitted completion before SendChoices was appended");
+                if (lastDarkGift == null || lastDarkGift.SourceCardId != "BG36_Button_DarkGift"
+                    || lastDarkGift.ChoiceId != 10587 || lastDarkGift.Candidates.Count < 2)
+                    return Fail("late-start-live dark gift batch was malformed: source="
+                        + (lastDarkGift?.SourceCardId ?? "null")
+                        + " choice=" + (lastDarkGift?.ChoiceId ?? -1)
+                        + " candidates=" + (lastDarkGift?.Candidates?.Count ?? -1));
+                if (watcher.IsChoiceListActive)
+                    return Fail("late-start-live dark gift leaked into ordinary choice-list state before completion");
+
+                File.AppendAllText(logPath,
+                    "D 18:09:03.0000000 GameState.SendChoices() - id=10587 ChoiceType=GENERAL\r\n"
+                    + "D 18:09:03.0000000 GameState.SendChoices() -   m_chosenEntities[0]=[entityName=Gift A id=10588 zone=SETASIDE zonePos=0 cardId=BG31_809 player=1]\r\n");
+
+                if (!WaitUntil(() => darkGiftCompletedEvents == 1, 5000))
+                    return Fail("late-start-live completion was not emitted as DarkGiftCompleted");
+                if (lastDarkGiftCompletion == null
+                    || lastDarkGiftCompletion.ChoiceId != 10587
+                    || lastDarkGiftCompletion.SelectedCardId != "BG31_809")
+                    return Fail("late-start-live dark gift completion identity was not preserved");
+                if (watcher.IsChoiceListActive)
+                    return Fail("late-start-live dark gift leaked into ordinary choice-list state after completion");
+                if (discoverLeaks != 0 || trinketLeaks != 0
+                    || timewarpLeaks != 0 || choiceCompletedLeaks != 0)
+                    return Fail("late-start-live dark gift leaked into ordinary choice events");
+
+                watcher.StopWatching();
+            }
+
+            Console.WriteLine("PASS late-start dark gift active context completes without ordinary leaks");
             return 0;
         }
         finally

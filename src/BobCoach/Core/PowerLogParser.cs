@@ -1268,6 +1268,40 @@ namespace BobCoach.Engine
             _isTrinketChoice = false;
         }
 
+        internal PowerLogChoiceBatch GetActiveDarkGiftForBackfill()
+        {
+            if (_darkGiftChoice == null) return null;
+            return new PowerLogChoiceBatch
+            {
+                ChoiceId = _darkGiftChoice.ChoiceId,
+                TaskList = _darkGiftChoice.TaskList,
+                PlayerName = _darkGiftChoice.PlayerName,
+                ChoiceType = _darkGiftChoice.ChoiceType,
+                SourceCardId = _darkGiftChoice.SourceCardId,
+                SourceName = _darkGiftChoice.SourceName,
+                SourcePlayerId = _darkGiftChoice.SourcePlayerId,
+                Timestamp = _darkGiftChoice.Timestamp,
+                Candidates = _darkGiftChoice.Candidates
+                    .Where(c => c != null)
+                    .Select(c => new DiscoverCandidate
+                    {
+                        CardId = c.CardId,
+                        CardName = c.CardName,
+                        EntityId = c.EntityId,
+                        PurchaseCost = c.PurchaseCost,
+                    })
+                    .ToList(),
+            };
+        }
+
+        internal void ApplyBackfilledDarkGift(PowerLogChoiceBatch batch)
+        {
+            if (batch == null) return;
+            _darkGiftChoice = batch;
+            _darkGiftChoiceFired = true;
+            ClearOrdinaryChoiceContext();
+        }
+
         private void ClearDarkGiftContext()
         {
             _darkGiftChoice = null;
