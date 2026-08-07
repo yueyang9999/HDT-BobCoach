@@ -72,10 +72,8 @@ namespace BobCoach
         private Engine.PowerLogChoiceBatch _timewarpPurchaseBatchFromLog = null;
         private volatile bool _timewarpPurchaseClearRequested;
         private Engine.PowerLogChoiceBatch _darkGiftBatchFromLog = null;
-        private volatile bool _darkGiftTipActive;
-        private volatile bool _darkGiftClearRequested;
-        private readonly Engine.DarkGiftTipGate _darkGiftTipGate =
-            new Engine.DarkGiftTipGate(TimeSpan.FromSeconds(6));
+        private readonly Engine.DarkGiftTipRenderCoordinator _darkGiftTipCoordinator =
+            new Engine.DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
         private readonly HashSet<int> _claimedUpgradePrizeChoiceIds = new HashSet<int>();
         private readonly Engine.TrinketChoiceBatchLifecycle _trinketChoiceLifecycle =
             new Engine.TrinketChoiceBatchLifecycle();
@@ -548,6 +546,8 @@ namespace BobCoach
                         _persistentDirty = true;
                         _recruitStartTime = DateTime.MinValue; // 战斗开始, 重置招募计时
                     }
+                    EnsureCombatWatchTimer();
+                    RenderDarkGiftTipStatus();
                     _wasInCombat = true;
                     _lastStateHash = null; _lastRenderedHash = null; _lastShopIdStr = "";
                     _lastShopCount = 0; _shopStableFrames = 0;
@@ -822,9 +822,7 @@ namespace BobCoach
                 _timewarpPurchaseBatchFromLog = null;
                 _timewarpPurchaseClearRequested = false;
                 _darkGiftBatchFromLog = null;
-                _darkGiftTipActive = false;
-                _darkGiftClearRequested = false;
-                _darkGiftTipGate.Reset();
+                _darkGiftTipCoordinator.Reset();
                 _claimedUpgradePrizeChoiceIds.Clear();
                 _trinketChoiceLifecycle.Reset();
                 // 跨局重置面板状态机回 Idle(防止上局 Active/Fading 残留)
@@ -1280,19 +1278,87 @@ namespace BobCoach
 
         // ── Decision evaluation & render ──
 
-        private void EvaluateAndRender()
+        private void EnsureCombatWatchTimer()
         {
-            if (_darkGiftTipActive)
+            if (_combatWatchTimer != null) return;
+
+            _combatWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(0.2) };
+            _combatWatchTimer.Tick += (s3, e3) =>
             {
-                _renderer.RefreshCanvasSize();
-                _renderer.ShowDarkGiftTip("暗赐选择中");
+                try
+                {
+                    if (_timewarpPurchaseClearRequested)
+                    {
+                        _timewarpPurchaseClearRequested = false;
+                        _renderer.ClearTimewarpPurchaseHint();
+                    }
+
+                    var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
+                    if (darkGiftStatus == null)
+                        _renderer.ClearDarkGiftTip();
+
+                    bool nowInCombat = Core.Game.IsBattlegroundsCombatPhase;
+                    if (darkGiftStatus != null)
+                    {
+                        _eventEvalRequested = false;
+                        _renderer.RefreshCanvasSize();
+                        _renderer.ShowDarkGiftTip(darkGiftStatus);
+                    }
+                    else if (nowInCombat)
+                    {
+                        if (_timewarpPurchaseBatchFromLog != null)
+                        {
+                            _eventEvalRequested = false;
+                            RenderTimewarpPurchaseHint();
+                        }
+                        else if (CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
+                            _discoverBatchFromLog, _discoverPanelActive))
+                        {
+                            _eventEvalRequested = false;
+                            RenderAuthoritativeDiscoverDuringCombat();
+                        }
+                        else
+                        {
+                            _renderer.Clear();
+                            _renderVersion++;
+                            _suggestionsActive = false;
+                            _persistentDirty = true;
+                            _lastDiscoverShowState = false;
+                        }
+                    }
+                    else if (_eventEvalRequested)
+                    {
+                        // Power.log运行在后台线程；选择界面静止时HDT可能数秒不调用OnUpdate。
+                        // 由现有UI线程DispatcherTimer合并消费请求，避免后台线程直接访问HDT/WPF。
+                        _eventEvalRequested = false;
+                        EvaluateAndRender();
+                    }
+                }
+                catch { }
+            };
+            _combatWatchTimer.Start();
+        }
+
+        private void RenderDarkGiftTipStatus()
+        {
+            var status = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
+            if (status == null)
+            {
+                _renderer.ClearDarkGiftTip();
                 return;
             }
 
-            if (_darkGiftTipGate.ShouldShow(DateTime.Now))
+            _renderer.RefreshCanvasSize();
+            _renderer.ShowDarkGiftTip(status);
+        }
+
+        private void EvaluateAndRender()
+        {
+            var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
+            if (darkGiftStatus != null)
             {
                 _renderer.RefreshCanvasSize();
-                _renderer.ShowDarkGiftTip("暗赐可发现");
+                _renderer.ShowDarkGiftTip(darkGiftStatus);
                 return;
             }
             _renderer.ClearDarkGiftTip();
@@ -2629,74 +2695,7 @@ namespace BobCoach
 
                     // 兜底战斗监控: 持久定时器(启动一次, 不每帧重置)
                     // 修复: 之前每帧Stop/Start导致计时器永远不触发, 战斗后UI残留1.5s+
-                    if (_combatWatchTimer == null)
-                    {
-                        _combatWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(0.2) };
-                        _combatWatchTimer.Tick += (s3, e3) =>
-                        {
-                            try
-                            {
-                                if (_timewarpPurchaseClearRequested)
-                                {
-                                    _timewarpPurchaseClearRequested = false;
-                                    _renderer.ClearTimewarpPurchaseHint();
-                                }
-                                if (_darkGiftClearRequested)
-                                {
-                                    _darkGiftClearRequested = false;
-                                    _renderer.ClearDarkGiftTip();
-                                }
-                                bool nowInCombat = Core.Game.IsBattlegroundsCombatPhase;
-                                bool darkGiftShouldRender = _darkGiftTipActive
-                                    || _darkGiftTipGate.ShouldShow(DateTime.Now);
-                                if (!darkGiftShouldRender)
-                                    _renderer.ClearDarkGiftTip();
-                                if (_darkGiftTipActive)
-                                {
-                                    _eventEvalRequested = false;
-                                    _renderer.RefreshCanvasSize();
-                                    _renderer.ShowDarkGiftTip("暗赐选择中");
-                                }
-                                else if (_darkGiftTipGate.ShouldShow(DateTime.Now))
-                                {
-                                    _eventEvalRequested = false;
-                                    _renderer.RefreshCanvasSize();
-                                    _renderer.ShowDarkGiftTip("暗赐可发现");
-                                }
-                                else if (nowInCombat)
-                                {
-                                    if (_timewarpPurchaseBatchFromLog != null)
-                                    {
-                                        _eventEvalRequested = false;
-                                        RenderTimewarpPurchaseHint();
-                                    }
-                                    else if (CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
-                                        _discoverBatchFromLog, _discoverPanelActive))
-                                    {
-                                        _eventEvalRequested = false;
-                                        RenderAuthoritativeDiscoverDuringCombat();
-                                    }
-                                    else
-                                    {
-                                        _renderer.Clear();
-                                        _renderVersion++;
-                                        _suggestionsActive = false;
-                                        _persistentDirty = true;
-                                        _lastDiscoverShowState = false;
-                                    }
-                                }
-                                else if (_eventEvalRequested)
-                                {
-                                    // Power.log运行在后台线程；选择界面静止时HDT可能数秒不调用OnUpdate。
-                                    // 由现有UI线程DispatcherTimer合并消费请求，避免后台线程直接访问HDT/WPF。
-                                    _eventEvalRequested = false;
-                                    EvaluateAndRender();
-                                }
-                            }
-                            catch { }
-                        };
-                        _combatWatchTimer.Start();
-                    }
+                    EnsureCombatWatchTimer();
 
                     // 购买/刷新后新元素淡入(100ms), 提供平滑视觉衔接
                     if (_renderer.FadeInMode)
@@ -3545,9 +3544,7 @@ namespace BobCoach
         {
             if (batch == null || batch.ChoiceId < 0) return;
             _darkGiftBatchFromLog = batch;
-            _darkGiftTipActive = true;
-            _darkGiftClearRequested = false;
-            _darkGiftTipGate.OnDarkGiftChoiceActive(DateTime.Now);
+            _darkGiftTipCoordinator.OnDarkGiftChoiceActive(DateTime.Now);
             Log("Dark Gift: choice=" + batch.ChoiceId + " source=" + batch.SourceCardId);
             OnPowerLogStateChanged();
         }
@@ -3557,9 +3554,7 @@ namespace BobCoach
             if (completion == null || _darkGiftBatchFromLog == null
                 || _darkGiftBatchFromLog.ChoiceId != completion.ChoiceId) return;
             _darkGiftBatchFromLog = null;
-            _darkGiftTipActive = false;
-            _darkGiftClearRequested = true;
-            _darkGiftTipGate.OnDarkGiftCompleted(DateTime.Now);
+            _darkGiftTipCoordinator.OnDarkGiftCompleted(DateTime.Now);
             Log("Dark Gift: choice=" + completion.ChoiceId + " completed selected=" + completion.SelectedCardId);
             OnPowerLogStateChanged();
         }
@@ -3567,10 +3562,8 @@ namespace BobCoach
         private void OnPowerLogDarkGiftPressableChanged(Engine.PowerLogDarkGiftPressable pressable)
         {
             if (pressable == null || pressable.CardId != "BG36_Button_DarkGift") return;
-            _darkGiftTipGate.OnPressableChanged(
+            _darkGiftTipCoordinator.OnPressableChanged(
                 pressable.Pressable, DateTime.Now, pressable.Backfilled);
-            if (_darkGiftBatchFromLog == null)
-                _darkGiftClearRequested = !pressable.Pressable;
             Log(string.Format("Dark Gift: pressable={0} entity={1} backfilled={2}",
                 pressable.Pressable, pressable.EntityId, pressable.Backfilled));
             OnPowerLogStateChanged();

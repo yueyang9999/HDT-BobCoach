@@ -377,6 +377,8 @@ public static class PowerLogChoiceBatchHarness
         if (pressableExit != 0) return pressableExit;
         var darkGiftTipGateExit = RunDarkGiftTipGateTest();
         if (darkGiftTipGateExit != 0) return darkGiftTipGateExit;
+        var darkGiftTipCoordinatorExit = RunDarkGiftTipRenderCoordinatorTest();
+        if (darkGiftTipCoordinatorExit != 0) return darkGiftTipCoordinatorExit;
         var ordinaryDiscoverLeakExit = RunOrdinaryDiscoverLeakFilterTest();
         if (ordinaryDiscoverLeakExit != 0) return ordinaryDiscoverLeakExit;
         var ordinaryDiscoverLeakRegressionExit = RunOrdinaryDiscoverLeakRegressionTest();
@@ -611,6 +613,49 @@ public static class PowerLogChoiceBatchHarness
             return Fail("live dark gift pressable did not reopen the tip after choice active");
 
         Console.WriteLine("PASS dark gift tip gate only shows a bounded pressable window");
+        return 0;
+    }
+
+    private static int RunDarkGiftTipRenderCoordinatorTest()
+    {
+        var t0 = new DateTime(2026, 8, 7, 22, 0, 0, DateTimeKind.Local);
+        var coordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
+        if (coordinator.GetStatus(t0) != null)
+            return Fail("dark gift tip coordinator rendered before pressable");
+
+        coordinator.OnPressableChanged(true, t0, false);
+        if (coordinator.GetStatus(t0) != "\u6697\u8d50\u53ef\u53d1\u73b0")
+            return Fail("dark gift tip coordinator did not render pressable discovery");
+        if (coordinator.GetStatus(t0.AddSeconds(6)) != null)
+            return Fail("dark gift tip coordinator stayed visible after its 6s window");
+
+        var falseCoordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
+        falseCoordinator.OnPressableChanged(true, t0, false);
+        falseCoordinator.OnPressableChanged(false, t0.AddSeconds(1), false);
+        if (falseCoordinator.GetStatus(t0.AddSeconds(1)) != null)
+            return Fail("dark gift tip coordinator stayed visible after pressable=false");
+
+        var activeCoordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
+        activeCoordinator.OnPressableChanged(true, t0, false);
+        activeCoordinator.OnDarkGiftChoiceActive(t0.AddSeconds(1));
+        if (activeCoordinator.GetStatus(t0.AddSeconds(20)) != "\u6697\u8d50\u9009\u62e9\u4e2d")
+            return Fail("dark gift tip coordinator did not keep choice status active");
+        activeCoordinator.OnDarkGiftCompleted(t0.AddSeconds(21));
+        if (activeCoordinator.GetStatus(t0.AddSeconds(21)) != null)
+            return Fail("dark gift tip coordinator stayed visible after completion");
+
+        var backfilledCoordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
+        backfilledCoordinator.OnPressableChanged(true, t0, true);
+        if (backfilledCoordinator.GetStatus(t0) != null)
+            return Fail("backfilled dark gift pressable rendered a discovery tip");
+        backfilledCoordinator.OnDarkGiftChoiceActive(t0.AddSeconds(1));
+        if (backfilledCoordinator.GetStatus(t0.AddSeconds(1)) != "\u6697\u8d50\u9009\u62e9\u4e2d")
+            return Fail("backfilled dark gift choice did not render choice status");
+        backfilledCoordinator.Reset();
+        if (backfilledCoordinator.GetStatus(t0.AddSeconds(2)) != null)
+            return Fail("dark gift tip coordinator did not reset");
+
+        Console.WriteLine("PASS dark gift tip coordinator keeps status across pressable and choice lifecycle");
         return 0;
     }
 

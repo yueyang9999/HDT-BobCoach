@@ -401,7 +401,13 @@ namespace BobCoach
         internal void ShowDarkGiftTip(string status)
         {
             var canvas = Core.OverlayCanvas;
-            if (canvas == null || string.IsNullOrEmpty(status)) return;
+            if (canvas == null || string.IsNullOrEmpty(status))
+            {
+                if (!string.IsNullOrEmpty(status))
+                    RendererLog("ShowDarkGiftTip: status=" + status + " canvasNull=true");
+                return;
+            }
+
             bool markerPresent = _activeElements.Any(element =>
                 (element as FrameworkElement)?.Tag as string == "dark_gift_tip");
             if (status == _darkGiftTipSig && markerPresent) return;
@@ -452,12 +458,33 @@ namespace BobCoach
             Panel.SetZIndex(tip, 1006);
             canvas.Children.Add(tip);
             _activeElements.Add(tip);
+
+            RendererLog(string.Format(
+                "ShowDarkGiftTip: status={0} canvas={1:F0}x{2:F0} markerPresent={3} action=add rect=({4:F0},{5:F0},{6:F0},{7:F0})",
+                status, canvas.ActualWidth, canvas.ActualHeight, markerPresent,
+                left, top, left + tipWidth, top + tipHeight));
         }
 
         internal void ClearDarkGiftTip()
         {
-            ClearTaggedElements("dark_gift_tip");
+            bool markerPresent = _activeElements.Any(element =>
+                (element as FrameworkElement)?.Tag as string == "dark_gift_tip");
+            bool sigPresent = _darkGiftTipSig != null;
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null)
+            {
+                if (markerPresent || sigPresent)
+                    RendererLog(string.Format("ClearDarkGiftTip: canvasNull=true markerPresent={0} sigPresent={1}",
+                        markerPresent, sigPresent));
+                _darkGiftTipSig = null;
+                return;
+            }
+
+            int removed = ClearTaggedElements("dark_gift_tip");
             _darkGiftTipSig = null;
+            if (markerPresent || sigPresent || removed > 0)
+                RendererLog(string.Format("ClearDarkGiftTip: removed={0} markerPresent={1} sigPresent={2}",
+                    removed, markerPresent, sigPresent));
         }
 
         /// <summary>
@@ -1707,19 +1734,22 @@ namespace BobCoach
 
         /// <summary>清除非面板元素(保留trinket/discover面板防闪烁)</summary>
         /// <summary>清除指定Tag的所有元素(防重复渲染堆叠)</summary>
-        private void ClearTaggedElements(string tag)
+        private int ClearTaggedElements(string tag)
         {
             var canvas = Core.OverlayCanvas;
-            if (canvas == null) return;
+            if (canvas == null) return 0;
             var snapshot = new List<UIElement>(_activeElements);
+            int removed = 0;
             foreach (var el in snapshot)
             {
                 if ((el as FrameworkElement)?.Tag as string == tag)
                 {
                     try { canvas.Children.Remove(el); } catch { }
                     _activeElements.Remove(el);
+                    removed++;
                 }
             }
+            return removed;
         }
 
         public void ClearNonPanel()
