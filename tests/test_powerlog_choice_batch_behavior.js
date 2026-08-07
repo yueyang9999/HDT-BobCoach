@@ -29,6 +29,7 @@ const fishbaitFactSource = path.join(root, "src", "BobCoach", "Core", "FishbaitF
 const darkGiftRegistrySource = path.join(root, "src", "BobCoach", "Core", "DarkGiftRegistry.cs");
 const darkGiftFactSource = path.join(root, "src", "BobCoach", "Core", "DarkGiftFactSource.cs");
 const darkGiftTipGateSource = path.join(root, "src", "BobCoach", "Core", "DarkGiftTipGate.cs");
+const displayNameResolverSource = path.join(root, "src", "BobCoach", "Core", "DisplayNameResolver.cs");
 const season14RulesEvaluatorSource = path.join(root, "src", "BobCoach", "Core", "Season14RulesEvaluator.cs");
 const harnessSource = path.join(__dirname, "PowerLogChoiceBatchHarness.cs");
 const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "bobcoach-powerlog-choice-"));
@@ -65,6 +66,7 @@ try {
         darkGiftRegistrySource,
         darkGiftFactSource,
         darkGiftTipGateSource,
+        displayNameResolverSource,
         season14RulesEvaluatorSource,
         harnessSource,
     ], { encoding: "utf8" });

@@ -296,6 +296,7 @@ namespace BobCoach.Engine
                         _pendingSendChoiceId = sendChoiceId;
                         _pendingSendChoiceType = scm.Groups[2].Value;
                         _pendingSendChoiceAt = ts;
+                        _lastChoiceContextAt = DateTime.MinValue;
                     }
                 }
                 else if (_darkGiftPendingChoiceId >= 0 || _pendingSendChoiceId >= 0)
@@ -808,6 +809,8 @@ namespace BobCoach.Engine
                     CardName = entityMatch.Groups[2].Value,
                     EntityId = int.Parse(entityMatch.Groups[3].Value),
                 };
+                if (_currentEntityChoice.Candidates.Any(c => c != null && c.CardId == candidate.CardId))
+                    return null;
                 PLEntityState candidateEntity;
                 if (_entities.TryGetValue(candidate.EntityId, out candidateEntity))
                     candidate.PurchaseCost = candidateEntity.AlternateCost > 0
@@ -1222,12 +1225,13 @@ namespace BobCoach.Engine
                 return false;
             if (cardId.Contains("_Button") || cardId.StartsWith("BG36_MidGameEffect_"))
                 return false;
+            if (cardId.Contains("DarkGift") || cardId.StartsWith("BG36_Synthetic"))
+                return false;
             return true;
         }
 
         private static bool IsOrdinaryDiscoverZone(string zone)
         {
-            if (string.IsNullOrEmpty(zone)) return true;
             return zone == "SETASIDE" || zone == "6";
         }
 
@@ -1297,10 +1301,11 @@ namespace BobCoach.Engine
         private bool HasActiveChoiceContext()
         {
             if (_inChoiceBlock) return true;
-            if (_currentEntityChoice != null) return true;
+            if (_currentEntityChoice != null) return !_currentEntityChoice.Fired;
             if (_lastChoiceContextAt == DateTime.MinValue) return false;
-            return (DateTime.UtcNow - _lastChoiceContextAt).TotalSeconds < 3
-                || (DateTime.Now - _lastChoiceContextAt).TotalSeconds < 3;
+            if (_lastChoiceContextAt.Kind == DateTimeKind.Utc)
+                return (DateTime.UtcNow - _lastChoiceContextAt).TotalSeconds < 3;
+            return (DateTime.Now - _lastChoiceContextAt).TotalSeconds < 3;
         }
 
         /// <summary>ChoiceList/EntityChoices 解析是否活跃(近3秒内有 CHOICE/ENTITY 或正处于选择块)。

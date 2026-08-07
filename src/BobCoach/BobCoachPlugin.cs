@@ -2722,7 +2722,8 @@ namespace BobCoach
                 state.DiscoverOptions = candidates.Select(c => new Engine.TrinketOption
                 {
                     CardId = c.CardId,
-                    TrinketName = c.CardName ?? c.CardId,
+                    TrinketName = Engine.DisplayNameResolver.Resolve(
+                        c.CardId, c.CardName, Engine.CardNameService.GetName),
                     EntityId = c.EntityId,
                 }).ToList();
                 return Engine.UiTargetSource.PowerLog;
@@ -2741,7 +2742,8 @@ namespace BobCoach
             var options = batch.Candidates.Select(candidate => new Engine.TrinketOption
             {
                 CardId = candidate.CardId,
-                TrinketName = candidate.CardName ?? candidate.CardId,
+                TrinketName = Engine.DisplayNameResolver.Resolve(
+                    candidate.CardId, candidate.CardName, Engine.CardNameService.GetName),
                 EntityId = candidate.EntityId,
             }).ToList();
             var scoringState = new GameState { DiscoverOptions = options };
