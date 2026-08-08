@@ -2317,7 +2317,6 @@ namespace BobCoach
                 {
                     // 现场重读金币: Dispatcher回调可能延迟执行, state.Gold已过时
                     int liveGold = state.Gold;
-                    try { var pe = Core.Game.PlayerEntity; if (pe != null) { int r = pe.GetTag(GameTag.RESOURCES); if (r >= 0 && r <= 20) liveGold = r; } } catch { }
                     bool inCombat = false;
                     try { inCombat = Core.Game.IsBattlegroundsCombatPhase; } catch { }
                     // 07062107修复: 回调被拦截=本plan未上屏, 清hash让同plan下帧重试(见DispatchRender头部注释)
@@ -2411,7 +2410,9 @@ namespace BobCoach
 
                     // ── 发现渲染: 状态机单一权威(_discoverPanelActive 已折入 Advance 输入) ──
                     var discoverPs = _discoverPanelState;
-                    bool discoverShouldShow = discoverPs.IsVisible;
+                    // 0708: Fading 期间候选可能已清空, 仍显示会让旧推荐(含酒馆招募面板卡)残留。
+                    // 消费端必须同时要求当前帧存在 >=2 个候选, 才进入 SHOW/重绘路径。
+                    bool discoverShouldShow = discoverPs.IsVisible && (state.DiscoverOptions?.Count ?? 0) >= 2;
 
                     if (discoverShouldShow != _lastDiscoverShowState)
                     {
@@ -3347,14 +3348,10 @@ namespace BobCoach
                 if (turn < 1 || turn > 30) turn = 1;
                 try
                 {
-                    var pe = Core.Game.PlayerEntity;
-                    if (pe != null)
-                    {
-                        var res = pe.GetTag(GameTag.RESOURCES);
-                        // gold=0 是合法值(买完随从铸币归零): 用 >=0 门控, 否则 res=0 被当默认3,
-                        // 状态哈希与买卡前同帧 → OnUpdate hash门控跳过重评 → gold=0 残留旧购买推荐UI(0708 Bug2根因)
-                        if (res >= 0 && res <= 20) gold = res;
-                    }
+                    // 0708: HDT RESOURCES 在招募期保持回合起始满金, 用它覆盖 self-tracked gold
+                    // 会让 gold=0 被哈希成旧值, 导致买空/升本后仍提示购买或3费技能。
+                    // gold=0 必须保留在状态哈希中; _cachedState 是上一帧 Extract() 的可信金币。
+                    gold = _cachedState?.Gold ?? 3;
                 }
                 catch { }
                 frozen = false;

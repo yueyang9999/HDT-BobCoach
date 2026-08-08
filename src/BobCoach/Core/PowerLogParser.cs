@@ -1034,40 +1034,42 @@ namespace BobCoach.Engine
             // ChoiceList=CHOSEN id=X → 玩家做出了选择
             if (content.Contains("ChoiceList=CHOSEN") && _inChoiceBlock)
             {
-                _inChoiceBlock = false;
-                // 通知对应面板关闭
-                if (_isTrinketChoice)
+                // 暗赐/未知暗赐上下文必须走 DarkGiftCompleted 或 fail closed，
+                // 不能因 ChoiceList=CHOSEN 泄漏为普通 Discover/Trinket/ChoiceCompleted。
+                bool hasDarkGiftContext = _darkGiftChoice != null || _darkGiftFailClosedChoiceId >= 0;
+                if (!hasDarkGiftContext)
                 {
+                    // 通知对应面板关闭
+                    if (_isTrinketChoice)
+                    {
+                        try
+                        {
+                            TrinketChoiceActive?.Invoke(new PowerLogChoiceBatch
+                            {
+                                ChoiceId = _pendingChoiceId,
+                                ChoiceType = "GENERAL",
+                                Timestamp = ts,
+                                Candidates = new List<DiscoverCandidate>(),
+                            });
+                        }
+                        catch { }
+                    }
+                    else
+                    {
+                        EmitDiscoverOffered(new List<DiscoverCandidate>(), ts);
+                    }
                     try
                     {
-                        TrinketChoiceActive?.Invoke(new PowerLogChoiceBatch
+                        ChoiceCompleted?.Invoke(new PowerLogChoiceCompletion
                         {
                             ChoiceId = _pendingChoiceId,
                             ChoiceType = "GENERAL",
                             Timestamp = ts,
-                            Candidates = new List<DiscoverCandidate>(),
                         });
                     }
                     catch { }
                 }
-                else
-                {
-                    EmitDiscoverOffered(new List<DiscoverCandidate>(), ts);
-                }
-                try
-                {
-                    ChoiceCompleted?.Invoke(new PowerLogChoiceCompletion
-                    {
-                        ChoiceId = _pendingChoiceId,
-                        ChoiceType = "GENERAL",
-                        Timestamp = ts,
-                    });
-                }
-                catch { }
-                _pendingChoiceEntityIds.Clear();
-                _discoverBuffer.Clear();
-                _pendingChoiceId = -1;
-                _isTrinketChoice = false;
+                ClearOrdinaryChoiceContext();
                 return new PLEvent { Type = PLEventType.PlayerAction, Timestamp = ts, BlockType = "CHOSEN" };
             }
             return null;

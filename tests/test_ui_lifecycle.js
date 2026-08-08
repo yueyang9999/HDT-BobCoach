@@ -1608,6 +1608,38 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
 }
 
 // ============================================================================
+// [0708] T21 UI fixes
+// ============================================================================
+{
+    const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+
+    test("[0708][DiscoverRender] Fading + no options must not SHOW discover panel", () => {
+        if (!pluginSrc.includes("bool discoverShouldShow = discoverPs.IsVisible && (state.DiscoverOptions?.Count ?? 0) >= 2;"))
+            return "discover render must require visible panel and >=2 current options; Fading with empty candidates otherwise leaves stale tavern/recruit hints";
+    });
+
+    test("[0708][Gold] Dispatcher liveGold must not be overridden by HDT RESOURCES", () => {
+        const idx = pluginSrc.indexOf("private void DispatchRender");
+        const nextIdx = pluginSrc.indexOf("\n        private ", idx + "private void DispatchRender".length);
+        const block = pluginSrc.slice(idx, nextIdx >= 0 ? nextIdx : pluginSrc.length);
+        if (!block.includes("int liveGold = state.Gold;"))
+            return "DispatchRender must read live gold from self-tracked state.Gold";
+        if (block.includes("GameTag.RESOURCES"))
+            return "DispatchRender still trusts HDT RESOURCES, which stays at turn-start during recruit (0708: 0 gold still suggested 3-cost HP/buy)";
+    });
+
+    test("[0708][Gold] ComputeStateHash must use cached self-tracked gold, not HDT RESOURCES", () => {
+        const idx = pluginSrc.indexOf("private string ComputeStateHash()");
+        const nextIdx = pluginSrc.indexOf("\n        private ", idx + "private string ComputeStateHash".length);
+        const block = pluginSrc.slice(idx, nextIdx >= 0 ? nextIdx : pluginSrc.length);
+        if (!block.includes("_cachedState?.Gold ?? 3"))
+            return "ComputeStateHash must use _cachedState.Gold fallback so gold=0 remains part of the state hash";
+        if (block.includes("GameTag.RESOURCES"))
+            return "ComputeStateHash still reads HDT RESOURCES; in-turn recruit gold is unreliable";
+    });
+}
+
+// ============================================================================
 // Summary
 // ============================================================================
 
