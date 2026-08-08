@@ -1700,6 +1700,11 @@ namespace BobCoach
                 if (e.Attack <= 0 && e.Health <= 0) continue;
                 // 卡牌ID必须是BG前缀
                 if (!e.CardId.StartsWith("BG") && !e.CardId.StartsWith("TB_Bacon")) continue;
+                // 排除按钮/升级/暗赐/中局效果/合成占位等非发现控制卡
+                if (e.CardId.Contains("_Button") || e.CardId.StartsWith("TB_BaconShopTechUp", StringComparison.Ordinal)
+                    || e.CardId.StartsWith("BG36_MidGameEffect_", StringComparison.Ordinal)
+                    || e.CardId.Contains("DarkGift") || e.CardId.StartsWith("BG36_Synthetic", StringComparison.Ordinal))
+                    continue;
                 // 排除hero/trinket/enchantment卡牌 (英雄技能CARDTYPE=10允许_HP前缀)
                 if (ct != 10)
                 {

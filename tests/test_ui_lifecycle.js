@@ -1091,6 +1091,23 @@ function warn(name, msg) {
             warn("[Lifecycle] InPlay 过滤仍包含 ctrl 检查，可能过滤过度", "");
         }
     });
+
+    test("[DiscoverLifecycle] strict zone6 extraction rejects upgrade/dark gift control IDs", () => {
+        const start = extractorSrc.indexOf("private List<Engine.TrinketOption> ExtractDiscoverOptionsStrict(");
+        const end = extractorSrc.indexOf("private List<Engine.TrinketOption> ExtractDiscoverOptions(");
+        const strictBody = extractorSrc.slice(start, end);
+        const required = [
+            'e.CardId.Contains("_Button")',
+            'e.CardId.StartsWith("TB_BaconShopTechUp"',
+            'e.CardId.StartsWith("BG36_MidGameEffect_"',
+            'e.CardId.Contains("DarkGift")',
+            'e.CardId.StartsWith("BG36_Synthetic"'
+        ];
+        const missing = required.filter((pattern) => !strictBody.includes(pattern));
+        if (missing.length > 0) {
+            return "strict discover is missing filters: " + missing.join(", ");
+        }
+    });
 }
 
 // ============================================================================
