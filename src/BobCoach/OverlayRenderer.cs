@@ -488,9 +488,9 @@ namespace BobCoach
                     removed, markerPresent, sigPresent));
         }
 
-        internal void ShowDarkGiftCandidates(System.Collections.Generic.List<Engine.DiscoverCandidate> candidates)
+        internal void ShowDarkGiftCandidates(System.Collections.Generic.List<Engine.DiscoverCandidate> candidates, bool renderDuringCombat = false)
         {
-            if (IsCombat()) return;
+            if (IsCombat() && !renderDuringCombat) return;
             var canvas = Core.OverlayCanvas;
             if (canvas == null || candidates == null || candidates.Count == 0) return;
 

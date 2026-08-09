@@ -1668,8 +1668,8 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
         if (showIdx < 0)
             return "OverlayRenderer must expose ShowDarkGiftCandidates";
         const block = overlaySrc.slice(showIdx, showIdx + 2600);
-        if (!block.includes("if (IsCombat()) return;"))
-            return "ShowDarkGiftCandidates must keep the combat guard";
+        if (!block.includes("if (IsCombat() && !renderDuringCombat) return;"))
+            return "ShowDarkGiftCandidates must keep the combat guard while allowing dark gift explicit bypass";
         if (!block.includes('Tag = "dark_gift_panel"'))
             return "dark gift candidates must use an independent dark_gift_panel tag";
         if (!block.includes("_calc.Config.PanelOffsetX") || !block.includes("new ScaleTransform(sc, sc)"))
@@ -1702,6 +1702,39 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "plugin must render dark gift candidates while a dark gift choice is active";
         if (!pluginSrc.includes("_renderer.ClearDarkGiftCandidates()"))
             return "plugin must clear dark gift candidates when the dark gift choice ends";
+    });
+
+    test("[0809][DarkGift] candidate panel supports explicit render during combat", () => {
+        const showIdx = overlaySrc.indexOf("internal void ShowDarkGiftCandidates(");
+        if (showIdx < 0)
+            return "OverlayRenderer must expose ShowDarkGiftCandidates";
+        const block = overlaySrc.slice(showIdx, showIdx + 600);
+        if (!block.includes("bool renderDuringCombat = false"))
+            return "ShowDarkGiftCandidates must expose renderDuringCombat=false default";
+        if (!block.includes("if (IsCombat() && !renderDuringCombat) return;"))
+            return "ShowDarkGiftCandidates must skip only when combat guard is not explicitly bypassed";
+    });
+
+    test("[0809][DarkGift] plugin passes renderDuringCombat=true for dark gift candidates", () => {
+        const expected = "_renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true)";
+        const actual = countOccurrences(pluginSrc, expected);
+        if (actual < 3)
+            return `expected at least 3 dark gift candidate renders with renderDuringCombat=true, found ${actual}`;
+    });
+
+    test("[0809][DarkGift] ordinary discover/trinket guards remain unconditional", () => {
+        const ordinaryIdx = overlaySrc.indexOf("public void ShowDiscoverHints(");
+        if (ordinaryIdx < 0)
+            return "ShowDiscoverHints not found";
+        const ordinaryBlock = overlaySrc.slice(ordinaryIdx, ordinaryIdx + 900);
+        if (!ordinaryBlock.includes("if (IsCombat()) return;"))
+            return "ordinary discover renderer must keep an unconditional combat guard";
+        const trinketIdx = overlaySrc.indexOf("public void ShowTrinketHints(");
+        if (trinketIdx < 0)
+            return "ShowTrinketHints not found";
+        const trinketBlock = overlaySrc.slice(trinketIdx, trinketIdx + 900);
+        if (!trinketBlock.includes("if (IsCombat()) return;"))
+            return "trinket renderer must keep an unconditional combat guard";
     });
 
     test("[0809][Gold] levelUrgent requires affordable upgrade cost", () => {

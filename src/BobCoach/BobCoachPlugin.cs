@@ -1308,7 +1308,7 @@ namespace BobCoach
                         _renderer.RefreshCanvasSize();
                         _renderer.ShowDarkGiftTip(darkGiftStatus);
                         if (_darkGiftBatchFromLog != null)
-                            _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates);
+                            _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
                     }
                     else if (nowInCombat)
                     {
@@ -1358,7 +1358,7 @@ namespace BobCoach
             _renderer.RefreshCanvasSize();
             _renderer.ShowDarkGiftTip(status);
             if (_darkGiftBatchFromLog != null)
-                _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates);
+                _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
         }
 
         private void EvaluateAndRender()
@@ -1369,7 +1369,7 @@ namespace BobCoach
                 _renderer.RefreshCanvasSize();
                 _renderer.ShowDarkGiftTip(darkGiftStatus);
                 if (_darkGiftBatchFromLog != null)
-                    _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates);
+                    _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
                 return;
             }
             _renderer.ClearDarkGiftTip();
