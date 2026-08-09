@@ -1294,7 +1294,7 @@ namespace BobCoach
                         _renderer.ClearTimewarpPurchaseHint();
                     }
 
-                    var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
+                    var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now, BuildDarkGiftTipContext());
                     if (darkGiftStatus == null)
                     {
                         _renderer.ClearDarkGiftTip();
@@ -1347,7 +1347,7 @@ namespace BobCoach
 
         private void RenderDarkGiftTipStatus()
         {
-            var status = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
+            var status = _darkGiftTipCoordinator.GetStatus(DateTime.Now, BuildDarkGiftTipContext());
             if (status == null)
             {
                 _renderer.ClearDarkGiftTip();
@@ -1361,9 +1361,34 @@ namespace BobCoach
                 _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
         }
 
+        private Engine.DarkGiftTipContext BuildDarkGiftTipContext()
+        {
+            var state = _cachedState;
+            if (state == null)
+            {
+                return new Engine.DarkGiftTipContext
+                {
+                    StateAvailable = false,
+                };
+            }
+
+            return new Engine.DarkGiftTipContext
+            {
+                StateAvailable = true,
+                GameActive = state.GameActive,
+                Phase = state.Phase ?? "",
+                Turn = state.Turn,
+                TavernTier = state.TavernTier,
+                Gold = state.Gold,
+                BoardMinionCount = state.BoardMinions?.Count ?? 0,
+                ShopMinionCount = state.ShopMinions?.Count ?? 0,
+                HandMinionCount = state.HandMinions?.Count ?? 0,
+            };
+        }
+
         private void EvaluateAndRender()
         {
-            var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
+            var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now, BuildDarkGiftTipContext());
             if (darkGiftStatus != null)
             {
                 _renderer.RefreshCanvasSize();

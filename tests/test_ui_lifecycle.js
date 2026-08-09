@@ -1722,6 +1722,40 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return `expected at least 3 dark gift candidate renders with renderDuringCombat=true, found ${actual}`;
     });
 
+    test("[0809][DarkGift] plugin builds dark gift context from cached GameState", () => {
+        const helperIdx = pluginSrc.indexOf("private Engine.DarkGiftTipContext BuildDarkGiftTipContext()");
+        if (helperIdx < 0)
+            return "BuildDarkGiftTipContext helper not found";
+        const braceIdx = pluginSrc.indexOf("{", helperIdx);
+        const closeIdx = pluginSrc.indexOf("\n        }\n", braceIdx);
+        const block = pluginSrc.slice(helperIdx, closeIdx + 5);
+        const required = [
+            "var state = _cachedState",
+            "if (state == null)",
+            "StateAvailable = false",
+            "GameActive = state.GameActive",
+            'Phase = state.Phase ?? ""',
+            "Turn = state.Turn",
+            "TavernTier = state.TavernTier",
+            "Gold = state.Gold",
+            "BoardMinionCount = state.BoardMinions?.Count ?? 0",
+            "ShopMinionCount = state.ShopMinions?.Count ?? 0",
+            "HandMinionCount = state.HandMinions?.Count ?? 0",
+        ];
+        const missing = required.filter(x => !block.includes(x));
+        if (missing.length > 0)
+            return "BuildDarkGiftTipContext missing: " + missing.join(", ");
+    });
+
+    test("[0809][DarkGift] all render paths pass dark gift context to status", () => {
+        const expected = "_darkGiftTipCoordinator.GetStatus(DateTime.Now, BuildDarkGiftTipContext())";
+        const actual = countOccurrences(pluginSrc, expected);
+        if (actual < 3)
+            return `expected 3 context-aware GetStatus calls, found ${actual}`;
+        if (countOccurrences(pluginSrc, "_darkGiftTipCoordinator.GetStatus(DateTime.Now)") > 0)
+            return "render paths must not call GetStatus without BuildDarkGiftTipContext";
+    });
+
     test("[0809][DarkGift] ordinary discover/trinket guards remain unconditional", () => {
         const ordinaryIdx = overlaySrc.indexOf("public void ShowDiscoverHints(");
         if (ordinaryIdx < 0)

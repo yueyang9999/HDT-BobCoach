@@ -380,6 +380,8 @@ public static class PowerLogChoiceBatchHarness
         if (darkGiftTipGateExit != 0) return darkGiftTipGateExit;
         var darkGiftTipCoordinatorExit = RunDarkGiftTipRenderCoordinatorTest();
         if (darkGiftTipCoordinatorExit != 0) return darkGiftTipCoordinatorExit;
+        var darkGiftTipAdvisorExit = RunDarkGiftTipAdvisorTest();
+        if (darkGiftTipAdvisorExit != 0) return darkGiftTipAdvisorExit;
         var ordinaryDiscoverLeakExit = RunOrdinaryDiscoverLeakFilterTest();
         if (ordinaryDiscoverLeakExit != 0) return ordinaryDiscoverLeakExit;
         var ordinaryDiscoverLeakRegressionExit = RunOrdinaryDiscoverLeakRegressionTest();
@@ -625,23 +627,135 @@ public static class PowerLogChoiceBatchHarness
         return 0;
     }
 
+    private static int RunDarkGiftTipAdvisorTest()
+    {
+        var advisor = new DarkGiftTipAdvisor();
+        var unknownContext = new DarkGiftTipContext
+        {
+            Pressable = true,
+            StateAvailable = false,
+        };
+        var unknownAdvice = advisor.Evaluate(unknownContext);
+        if (unknownAdvice.ShouldShow)
+            return Fail("dark gift tip advisor showed a pressable tip without game state");
+        if (unknownAdvice.Reason != "state_unknown")
+            return Fail("dark gift tip advisor did not report state_unknown reason");
+
+        var context = new DarkGiftTipContext
+        {
+            Pressable = true,
+            StateAvailable = true,
+            GameActive = true,
+            Phase = "shop",
+            Turn = 1,
+            TavernTier = 1,
+            Gold = 3,
+            BoardMinionCount = 2,
+            ShopMinionCount = 4,
+            HandMinionCount = 1,
+        };
+        var advice = advisor.Evaluate(context);
+        if (!advice.ShouldShow)
+            return Fail("dark gift tip advisor suppressed a pressable tip with valid game state");
+        if (!advice.StatusText.Contains("\u6697\u8d50\u53ef\u53d1\u73b0")
+            || !advice.StatusText.Contains("T1")
+            || !advice.StatusText.Contains("\u672c1")
+            || !advice.StatusText.Contains("\u91d13")
+            || !advice.StatusText.Contains("\u573a2")
+            || !advice.StatusText.Contains("\u5e974")
+            || !advice.StatusText.Contains("\u624b1"))
+            return Fail("dark gift tip advisor status did not expose the algorithm context");
+
+        var emptyContext = new DarkGiftTipContext
+        {
+            Pressable = true,
+            StateAvailable = true,
+            GameActive = true,
+            Phase = "shop",
+            Turn = 1,
+            TavernTier = 1,
+            Gold = 0,
+            BoardMinionCount = 0,
+            ShopMinionCount = 0,
+            HandMinionCount = 0,
+        };
+        var emptyAdvice = advisor.Evaluate(emptyContext);
+        if (emptyAdvice.ShouldShow)
+            return Fail("dark gift tip advisor opened without any board, shop, hand, or gold context");
+
+        var backfilledContext = new DarkGiftTipContext
+        {
+            Pressable = true,
+            Backfilled = true,
+            StateAvailable = true,
+            GameActive = true,
+            Phase = "shop",
+            Turn = 1,
+            TavernTier = 1,
+            Gold = 3,
+            BoardMinionCount = 1,
+            ShopMinionCount = 3,
+            HandMinionCount = 0,
+        };
+        var backfilledAdvice = advisor.Evaluate(backfilledContext);
+        if (backfilledAdvice.ShouldShow)
+            return Fail("dark gift tip advisor reopened a backfilled pressable state");
+
+        var choiceContext = new DarkGiftTipContext
+        {
+            Pressable = false,
+            ChoiceActive = true,
+            StateAvailable = false,
+        };
+        var choiceAdvice = advisor.Evaluate(choiceContext);
+        if (!choiceAdvice.ShouldShow
+            || choiceAdvice.StatusText != "\u6697\u8d50\u9009\u62e9\u4e2d")
+            return Fail("dark gift tip advisor suppressed the real dark gift choice status");
+
+        Console.WriteLine("PASS dark gift tip advisor combines pressable and game state context");
+        return 0;
+    }
+
     private static int RunDarkGiftTipRenderCoordinatorTest()
     {
         var t0 = new DateTime(2026, 8, 7, 22, 0, 0, DateTimeKind.Local);
+        var context = new DarkGiftTipContext
+        {
+            Pressable = true,
+            StateAvailable = true,
+            GameActive = true,
+            Phase = "shop",
+            Turn = 2,
+            TavernTier = 3,
+            Gold = 5,
+            BoardMinionCount = 1,
+            ShopMinionCount = 2,
+            HandMinionCount = 0,
+        };
         var coordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
         if (coordinator.GetStatus(t0) != null)
             return Fail("dark gift tip coordinator rendered before pressable");
 
         coordinator.OnPressableChanged(true, t0, false);
-        if (coordinator.GetStatus(t0) != "\u6697\u8d50\u53ef\u53d1\u73b0")
-            return Fail("dark gift tip coordinator did not render pressable discovery");
-        if (coordinator.GetStatus(t0.AddSeconds(6)) != null)
+        if (coordinator.GetStatus(t0) != null)
+            return Fail("dark gift tip coordinator rendered pressable discovery without algorithm context");
+        var contextStatus = coordinator.GetStatus(t0, context);
+        if (contextStatus == null
+            || !contextStatus.Contains("\u6697\u8d50\u53ef\u53d1\u73b0")
+            || !contextStatus.Contains("T2")
+            || !contextStatus.Contains("\u672c3")
+            || !contextStatus.Contains("\u91d15")
+            || !contextStatus.Contains("\u573a1")
+            || !contextStatus.Contains("\u5e972")
+            || !contextStatus.Contains("\u624b0"))
+            return Fail("dark gift tip coordinator did not render the algorithm context");
+        if (coordinator.GetStatus(t0.AddSeconds(6), context) != null)
             return Fail("dark gift tip coordinator stayed visible after its 6s window");
 
         var falseCoordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
         falseCoordinator.OnPressableChanged(true, t0, false);
         falseCoordinator.OnPressableChanged(false, t0.AddSeconds(1), false);
-        if (falseCoordinator.GetStatus(t0.AddSeconds(1)) != null)
+        if (falseCoordinator.GetStatus(t0.AddSeconds(1), context) != null)
             return Fail("dark gift tip coordinator stayed visible after pressable=false");
 
         var activeCoordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
@@ -655,13 +769,13 @@ public static class PowerLogChoiceBatchHarness
 
         var backfilledCoordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
         backfilledCoordinator.OnPressableChanged(true, t0, true);
-        if (backfilledCoordinator.GetStatus(t0) != null)
+        if (backfilledCoordinator.GetStatus(t0, context) != null)
             return Fail("backfilled dark gift pressable rendered a discovery tip");
         backfilledCoordinator.OnDarkGiftChoiceActive(t0.AddSeconds(1));
         if (backfilledCoordinator.GetStatus(t0.AddSeconds(1)) != "\u6697\u8d50\u9009\u62e9\u4e2d")
             return Fail("backfilled dark gift choice did not render choice status");
         backfilledCoordinator.Reset();
-        if (backfilledCoordinator.GetStatus(t0.AddSeconds(2)) != null)
+        if (backfilledCoordinator.GetStatus(t0.AddSeconds(2), context) != null)
             return Fail("dark gift tip coordinator did not reset");
 
         Console.WriteLine("PASS dark gift tip coordinator keeps status across pressable and choice lifecycle");

@@ -70,11 +70,13 @@ namespace BobCoach.Engine
     {
         private readonly object _sync = new object();
         private readonly DarkGiftTipGate _gate;
+        private readonly DarkGiftTipAdvisor _advisor;
         private bool _choiceActive;
 
         public DarkGiftTipRenderCoordinator(TimeSpan window)
         {
             _gate = new DarkGiftTipGate(window);
+            _advisor = new DarkGiftTipAdvisor();
         }
 
         public void OnPressableChanged(bool pressable, DateTime now, bool backfilled = false)
@@ -105,10 +107,21 @@ namespace BobCoach.Engine
 
         public string GetStatus(DateTime now)
         {
+            return GetStatus(now, null);
+        }
+
+        public string GetStatus(DateTime now, DarkGiftTipContext context)
+        {
             lock (_sync)
             {
                 if (_choiceActive) return "\u6697\u8d50\u9009\u62e9\u4e2d";
-                return _gate.ShouldShow(now) ? "\u6697\u8d50\u53ef\u53d1\u73b0" : null;
+                if (!_gate.ShouldShow(now)) return null;
+
+                var effectiveContext = context ?? new DarkGiftTipContext();
+                effectiveContext.Pressable = true;
+                effectiveContext.Backfilled = false;
+                var advice = _advisor.Evaluate(effectiveContext);
+                return advice.ShouldShow ? advice.StatusText : null;
             }
         }
 
@@ -119,6 +132,87 @@ namespace BobCoach.Engine
                 _choiceActive = false;
                 _gate.Reset();
             }
+        }
+    }
+
+    /// <summary>
+    /// Serializable-style context used by the dark gift tip advisor. The plugin
+    /// fills it from the latest GameState snapshot so the tip is gated by the
+    /// same board, shop, hand, gold, turn, and tier inputs the rest of the
+    /// algorithm uses.
+    /// </summary>
+    public sealed class DarkGiftTipContext
+    {
+        public bool Pressable;
+        public bool Backfilled;
+        public bool ChoiceActive;
+        public bool StateAvailable;
+        public bool GameActive;
+        public string Phase = "";
+        public int Turn = -1;
+        public int TavernTier = -1;
+        public int Gold = -1;
+        public int BoardMinionCount = -1;
+        public int ShopMinionCount = -1;
+        public int HandMinionCount = -1;
+    }
+
+    public sealed class DarkGiftTipAdvice
+    {
+        public bool ShouldShow;
+        public string StatusText = "";
+        public string Reason = "";
+    }
+
+    /// <summary>
+    /// Decides when the dark gift pressable hint is worth showing. It is a
+    /// transparent context gate, not a card-effect scorer: unknown state stays
+    /// closed, and the tip text exposes the exact context used.
+    /// </summary>
+    public sealed class DarkGiftTipAdvisor
+    {
+        private const string ChoiceActiveText = "\u6697\u8d50\u9009\u62e9\u4e2d";
+        private const string PressableText = "\u6697\u8d50\u53ef\u53d1\u73b0";
+
+        public DarkGiftTipAdvice Evaluate(DarkGiftTipContext context)
+        {
+            if (context == null) return Create(false, null, "context_null");
+            if (context.ChoiceActive)
+                return Create(true, ChoiceActiveText, "choice_active");
+            if (!context.Pressable) return Create(false, null, "not_pressable");
+            if (context.Backfilled) return Create(false, null, "backfilled");
+            if (!context.StateAvailable) return Create(false, null, "state_unknown");
+            if (!context.GameActive) return Create(false, null, "game_inactive");
+            if (!string.Equals(context.Phase, "shop", StringComparison.Ordinal))
+                return Create(false, null, "phase_not_shop");
+            if (context.Turn <= 0 || context.TavernTier <= 0 || context.Gold < 0
+                || context.BoardMinionCount < 0
+                || context.ShopMinionCount < 0
+                || context.HandMinionCount < 0)
+                return Create(false, null, "state_incomplete");
+
+            int opportunityCount = context.BoardMinionCount
+                + context.ShopMinionCount
+                + context.HandMinionCount;
+            if (opportunityCount <= 0 && context.Gold <= 0)
+                return Create(false, null, "no_opportunity_context");
+
+            string statusText = string.Format(
+                "{0} T{1} \u672c{2} \u91d1{3} \u573a{4} \u5e97{5} \u624b{6}",
+                PressableText, context.Turn, context.TavernTier, context.Gold,
+                context.BoardMinionCount, context.ShopMinionCount,
+                context.HandMinionCount);
+            return Create(true, statusText, "context_ready");
+        }
+
+        private static DarkGiftTipAdvice Create(bool shouldShow, string statusText, string reason)
+        {
+            return new DarkGiftTipAdvice
+            {
+                ShouldShow = shouldShow,
+                StatusText = statusText ?? "",
+                Reason = reason ?? "",
+            };
         }
     }
 }
