@@ -98,6 +98,7 @@ namespace BobCoach.Engine
         private DateTime _pendingSendChoiceAt = DateTime.MinValue;
         private PowerLogChoiceBatch _darkGiftChoice;
         private bool _darkGiftChoiceFired;
+        private bool _darkGiftChoiceShowMarkerReceived;
         private int _darkGiftFailClosedChoiceId = -1;
         private int _darkGiftPendingChoiceId = -1;
         private string _darkGiftPendingChoiceType = "";
@@ -156,6 +157,7 @@ namespace BobCoach.Engine
             _pendingSendChoiceAt = DateTime.MinValue;
             _darkGiftChoice = null;
             _darkGiftChoiceFired = false;
+            _darkGiftChoiceShowMarkerReceived = false;
             _darkGiftFailClosedChoiceId = -1;
             _darkGiftPendingChoiceId = -1;
             _darkGiftPendingChoiceType = "";
@@ -747,6 +749,7 @@ namespace BobCoach.Engine
                         Candidates = new List<DiscoverCandidate>(),
                     };
                     _darkGiftChoiceFired = false;
+                    _darkGiftChoiceShowMarkerReceived = false;
                     _darkGiftFailClosedChoiceId = -1;
                     ClearOrdinaryChoiceContext();
                 }
@@ -754,6 +757,7 @@ namespace BobCoach.Engine
                 {
                     _darkGiftChoice = null;
                     _darkGiftChoiceFired = false;
+                    _darkGiftChoiceShowMarkerReceived = false;
                     _darkGiftFailClosedChoiceId = _currentEntityChoice.Id;
                     ClearOrdinaryChoiceContext();
                 }
@@ -775,28 +779,7 @@ namespace BobCoach.Engine
                     EntityId = int.Parse(entityMatch.Groups[3].Value),
                 };
 
-                var validGiftCandidates = _darkGiftChoice.Candidates
-                    .Where(c => c != null).ToList();
-                if (!_darkGiftChoiceFired && validGiftCandidates.Count >= 2)
-                {
-                    _darkGiftChoiceFired = true;
-                    try
-                    {
-                        DarkGiftChoiceActive?.Invoke(new PowerLogChoiceBatch
-                        {
-                            ChoiceId = _darkGiftChoice.ChoiceId,
-                            TaskList = _darkGiftChoice.TaskList,
-                            PlayerName = _darkGiftChoice.PlayerName,
-                            ChoiceType = _darkGiftChoice.ChoiceType,
-                            SourceCardId = _darkGiftChoice.SourceCardId,
-                            SourceName = _darkGiftChoice.SourceName,
-                            SourcePlayerId = _darkGiftChoice.SourcePlayerId,
-                            Timestamp = _darkGiftChoice.Timestamp,
-                            Candidates = new List<DiscoverCandidate>(validGiftCandidates),
-                        });
-                    }
-                    catch { }
-                }
+                TryEmitDarkGiftChoiceActive(ts);
                 return null;
             }
             if (entityMatch.Success && _darkGiftFailClosedChoiceId >= 0)
@@ -880,13 +863,41 @@ namespace BobCoach.Engine
         {
             var markerMatch = Regex.Match(content,
                 @"^id=(\d+) WAIT for taskList (\d+)");
-            if (!markerMatch.Success) return;
+            if (!markerMatch.Success)
+            {
+                var beginMatch = Regex.Match(content, @"^id=(\d+) BEGIN");
+                if (!beginMatch.Success) return;
+
+                int beginId = int.Parse(beginMatch.Groups[1].Value);
+                if (_currentEntityChoice == null
+                    || !_currentEntityChoice.SourceGrantsOrdinaryDiscover
+                    || !string.Equals(_currentEntityChoice.SourceCardId,
+                        "TB_BaconShop_Triples_01", StringComparison.Ordinal)
+                    || beginId != _currentEntityChoice.Id)
+                    return;
+
+                _currentEntityChoice.ShowMarkerReceived = true;
+                _lastChoiceContextAt = ts;
+                TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
+                return;
+            }
+
+            int markerId = int.Parse(markerMatch.Groups[1].Value);
+            int markerTaskList = int.Parse(markerMatch.Groups[2].Value);
+            if (_darkGiftChoice != null
+                && markerId == _darkGiftChoice.ChoiceId
+                && markerTaskList == _darkGiftChoice.TaskList)
+            {
+                _darkGiftChoiceShowMarkerReceived = true;
+                _lastChoiceContextAt = ts;
+                TryEmitDarkGiftChoiceActive(ts);
+                return;
+            }
+
             if (_currentEntityChoice == null
                 || !_currentEntityChoice.SourceGrantsOrdinaryDiscover)
                 return;
 
-            int markerId = int.Parse(markerMatch.Groups[1].Value);
-            int markerTaskList = int.Parse(markerMatch.Groups[2].Value);
             if (markerId != _currentEntityChoice.Id
                 || markerTaskList != _currentEntityChoice.TaskList)
                 return;
@@ -894,6 +905,36 @@ namespace BobCoach.Engine
             _currentEntityChoice.ShowMarkerReceived = true;
             _lastChoiceContextAt = ts;
             TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
+        }
+
+        private void TryEmitDarkGiftChoiceActive(DateTime ts)
+        {
+            if (_darkGiftChoice == null
+                || _darkGiftChoiceFired
+                || !_darkGiftChoiceShowMarkerReceived)
+                return;
+
+            var validGiftCandidates = _darkGiftChoice.Candidates
+                .Where(c => c != null).ToList();
+            if (validGiftCandidates.Count < 2) return;
+
+            _darkGiftChoiceFired = true;
+            try
+            {
+                DarkGiftChoiceActive?.Invoke(new PowerLogChoiceBatch
+                {
+                    ChoiceId = _darkGiftChoice.ChoiceId,
+                    TaskList = _darkGiftChoice.TaskList,
+                    PlayerName = _darkGiftChoice.PlayerName,
+                    ChoiceType = _darkGiftChoice.ChoiceType,
+                    SourceCardId = _darkGiftChoice.SourceCardId,
+                    SourceName = _darkGiftChoice.SourceName,
+                    SourcePlayerId = _darkGiftChoice.SourcePlayerId,
+                    Timestamp = ts,
+                    Candidates = new List<DiscoverCandidate>(validGiftCandidates),
+                });
+            }
+            catch { }
         }
 
         private void TryEmitOrdinaryDiscover(EntityChoiceState entityChoice, DateTime ts)
@@ -1378,6 +1419,7 @@ namespace BobCoach.Engine
             if (batch == null) return;
             _darkGiftChoice = batch;
             _darkGiftChoiceFired = true;
+            _darkGiftChoiceShowMarkerReceived = true;
             ClearOrdinaryChoiceContext();
         }
 
@@ -1385,6 +1427,7 @@ namespace BobCoach.Engine
         {
             _darkGiftChoice = null;
             _darkGiftChoiceFired = false;
+            _darkGiftChoiceShowMarkerReceived = false;
             _darkGiftFailClosedChoiceId = -1;
             _darkGiftPendingChoiceId = -1;
             _darkGiftPendingChoiceType = "";
