@@ -174,7 +174,8 @@ namespace BobCoach.Engine
             // PowerTaskList.DebugPrintPower() 承载实体属性初始化
             if (!line.Contains("PowerTaskList") && !line.Contains("PowerProcessor")
                 && !line.Contains("DebugPrintPower") && !line.Contains("DebugPrintEntityChoices")
-                && !line.Contains("DebugPrintGame") && !line.Contains("SendChoices")) return results;
+                && !line.Contains("DebugPrintGame") && !line.Contains("SendChoices")
+                && !line.Contains("ChoiceCardMgr.WaitThenShowChoices()")) return results;
 
             var ts = ExtractTimestamp(line);
             string content = ExtractContent(line);
@@ -247,6 +248,10 @@ namespace BobCoach.Engine
             {
                 var ch = ParseChoiceLine(content, ts);
                 if (ch != null) results.Add(ch);
+            }
+            else if (line.Contains("ChoiceCardMgr.WaitThenShowChoices()"))
+            {
+                ParseWaitThenShowChoicesMarker(content, ts);
             }
             else if (line.Contains("DebugPrintEntityChoices()"))
             {
@@ -397,7 +402,7 @@ namespace BobCoach.Engine
                     // SETASIDE(6) + PLAY(1, 对手侧可能是商店/发现实体) 都可能包含发现选项
                     var zoneVal = evt.Value;
                     bool isDiscoverZone = IsOrdinaryDiscoverZone(zoneVal);
-                    if (HasActiveChoiceContext()
+                    if (IsOrdinaryDiscoverSourceAuthorized()
                         && isDiscoverZone
                         && !string.IsNullOrEmpty(entity.CardId)
                         && IsOrdinaryDiscoverCandidate(entity.CardId, zoneVal))
@@ -416,12 +421,10 @@ namespace BobCoach.Engine
                                 CardName = entity.Name ?? entity.CardId,
                                 EntityId = evt.EntityId,
                             });
-                            if (_discoverBuffer.Count == 2 || _discoverBuffer.Count == 3)
-                            {
-                                EmitDiscoverOffered(new List<DiscoverCandidate>(_discoverBuffer), ts);
-                            }
-                            else if (_discoverBuffer.Count > 3)
+                            if (_discoverBuffer.Count > 3)
                                 _discoverBuffer.Clear();
+                            else
+                                TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
                         }
                     }
                     // 饰品被选中: 饰品实体进入玩家区域
@@ -565,7 +568,7 @@ namespace BobCoach.Engine
 
             // 发现选项检测: SHOW_ENTITY="向玩家展示实体"恰好是发现选项出现的语义
             // 比FULL_ENTITY更精确(FULL_ENTITY创建实体原因很多, SHOW_ENTITY只表示展示)
-            if (HasActiveChoiceContext()
+            if (IsOrdinaryDiscoverSourceAuthorized()
                 && entityId > 0 && !string.IsNullOrEmpty(cardId)
                 && IsOrdinaryDiscoverCandidate(cardId, GetEntityZone(entityId))
                 && !cardId.Contains("MagicItem") && !cardId.Contains("Trinket"))
@@ -585,15 +588,10 @@ namespace BobCoach.Engine
                         CardName = string.IsNullOrEmpty(name) ? cardId : name,
                         EntityId = entityId,
                     });
-                    if (_discoverBuffer.Count >= 2 && _discoverBuffer.Count <= 3)
-                    {
-                        var snapshot = new List<DiscoverCandidate>(_discoverBuffer);
-                        DiagLog(string.Format("Discover via SHOW_ENTITY: {0} candidates [{1}]",
-                            snapshot.Count, string.Join(", ", snapshot.Select(c => c.CardName ?? c.CardId ?? "?"))));
-                        EmitDiscoverOffered(snapshot, ts);
-                    }
-                    else if (_discoverBuffer.Count > 3)
+                    if (_discoverBuffer.Count > 3)
                         _discoverBuffer.Clear();
+                    else
+                        TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
                 }
             }
 
@@ -701,6 +699,12 @@ namespace BobCoach.Engine
                 @"^id=(\d+) Player=(.+?) TaskList=(\d*) ChoiceType=(\w+) CountMin=(\d+) CountMax=(\d+)");
             if (headerMatch.Success)
             {
+                if (string.Equals(headerMatch.Groups[4].Value, "MULLIGAN", StringComparison.Ordinal))
+                {
+                    ClearOrdinaryChoiceContext();
+                    return null;
+                }
+
                 int taskList;
                 int.TryParse(headerMatch.Groups[3].Value, out taskList);
                 _currentEntityChoice = new EntityChoiceState
@@ -725,6 +729,8 @@ namespace BobCoach.Engine
                 _currentEntityChoice.SourceCardId = sourceMatch.Groups[5].Value;
                 _currentEntityChoice.SourceName = sourceMatch.Groups[1].Value;
                 int.TryParse(sourceMatch.Groups[6].Value, out _currentEntityChoice.SourcePlayerId);
+                _currentEntityChoice.SourceGrantsOrdinaryDiscover =
+                    IsTrustedOrdinaryDiscoverSource(_currentEntityChoice.SourceCardId);
 
                 if (IsDarkGiftSource(_currentEntityChoice.SourceCardId))
                 {
@@ -824,8 +830,6 @@ namespace BobCoach.Engine
                 // 不能在第一个 Entities[0] 就 Fired, 否则后续两个候选会被拦掉。
                 if (validCandidates.Count >= 2)
                 {
-                    _currentEntityChoice.Fired = true;
-
                     if (_currentEntityChoice.ChoiceType == "MULLIGAN") return null;
 
                     bool isTrinket = validCandidates.Any(c =>
@@ -833,6 +837,7 @@ namespace BobCoach.Engine
 
                     if (isTrinket)
                     {
+                        _currentEntityChoice.Fired = true;
                         DiagLog(string.Format("TrinketChoice via EntityChoices: {0} candidates [{1}]",
                             validCandidates.Count,
                             string.Join(", ", validCandidates.Select(c => c.CardName ?? c.CardId ?? "?"))));
@@ -854,14 +859,14 @@ namespace BobCoach.Engine
                         catch { }
                     }
                     else if (IsTimewarpPurchaseSource(_currentEntityChoice.SourceCardId))
-                        EmitTimewarpPurchaseOffered(_currentEntityChoice);
-                    else
                     {
-                        DiagLog(string.Format("Discover via EntityChoices: {0} candidates [{1}]",
-                            validCandidates.Count,
-                            string.Join(", ", validCandidates.Select(c => c.CardName ?? c.CardId ?? "?"))));
-                        EmitDiscoverOffered(validCandidates, ts, _currentEntityChoice);
+                        _currentEntityChoice.Fired = true;
+                        EmitTimewarpPurchaseOffered(_currentEntityChoice);
                     }
+                    else if (!_currentEntityChoice.SourceGrantsOrdinaryDiscover)
+                        return null;
+                    else
+                        TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
                 }
                 return null;
             }
@@ -870,6 +875,59 @@ namespace BobCoach.Engine
         }
 
         private EntityChoiceState _currentEntityChoice;
+
+        private void ParseWaitThenShowChoicesMarker(string content, DateTime ts)
+        {
+            var markerMatch = Regex.Match(content,
+                @"^id=(\d+) WAIT for taskList (\d+)");
+            if (!markerMatch.Success) return;
+            if (_currentEntityChoice == null
+                || !_currentEntityChoice.SourceGrantsOrdinaryDiscover)
+                return;
+
+            int markerId = int.Parse(markerMatch.Groups[1].Value);
+            int markerTaskList = int.Parse(markerMatch.Groups[2].Value);
+            if (markerId != _currentEntityChoice.Id
+                || markerTaskList != _currentEntityChoice.TaskList)
+                return;
+
+            _currentEntityChoice.ShowMarkerReceived = true;
+            _lastChoiceContextAt = ts;
+            TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
+        }
+
+        private void TryEmitOrdinaryDiscover(EntityChoiceState entityChoice, DateTime ts)
+        {
+            if (entityChoice == null
+                || !entityChoice.SourceGrantsOrdinaryDiscover
+                || !entityChoice.ShowMarkerReceived
+                || entityChoice.Fired)
+                return;
+
+            var candidates = new List<DiscoverCandidate>();
+            foreach (var candidate in entityChoice.Candidates)
+                AddOrdinaryDiscoverCandidate(candidates, candidate);
+            foreach (var candidate in _discoverBuffer)
+                AddOrdinaryDiscoverCandidate(candidates, candidate);
+
+            if (candidates.Count < 2 || candidates.Count > 3) return;
+
+            entityChoice.Fired = true;
+            DiagLog(string.Format("Discover via WaitThenShowChoices: {0} candidates [{1}]",
+                candidates.Count,
+                string.Join(", ", candidates.Select(c => c.CardName ?? c.CardId ?? "?"))));
+            EmitDiscoverOffered(candidates, ts, entityChoice);
+        }
+
+        private static void AddOrdinaryDiscoverCandidate(
+            List<DiscoverCandidate> target, DiscoverCandidate candidate)
+        {
+            if (candidate == null || string.IsNullOrEmpty(candidate.CardId)) return;
+            if (target.Any(c => c.EntityId == candidate.EntityId
+                || c.CardId == candidate.CardId))
+                return;
+            target.Add(candidate);
+        }
 
         private void EmitDiscoverOffered(List<DiscoverCandidate> candidates, DateTime ts,
             EntityChoiceState entityChoice = null)
@@ -935,6 +993,8 @@ namespace BobCoach.Engine
             public string SourceCardId;
             public string SourceName;
             public int SourcePlayerId;
+            public bool SourceGrantsOrdinaryDiscover;
+            public bool ShowMarkerReceived;
             public DateTime Timestamp;
             public List<DiscoverCandidate> Candidates = new List<DiscoverCandidate>();
             public bool Fired;
@@ -1007,7 +1067,8 @@ namespace BobCoach.Engine
                                 catch { }
                             }
                         }
-                        else if (IsOrdinaryDiscoverCandidate(entity.CardId, entity.Zone))
+                        else if (IsOrdinaryDiscoverSourceAuthorized()
+                            && IsOrdinaryDiscoverCandidate(entity.CardId, entity.Zone))
                         {
                             if (!_discoverBuffer.Any(c => c.EntityId == entityId))
                             {
@@ -1019,13 +1080,7 @@ namespace BobCoach.Engine
                                 });
                                 _lastDiscoverCandidateTime = ts;
                             }
-                            if (_discoverBuffer.Count >= 2 && _discoverBuffer.Count <= 3)
-                            {
-                                var snapshot = new List<DiscoverCandidate>(_discoverBuffer);
-                                DiagLog(string.Format("Discover via ChoiceList: {0} candidates [{1}]",
-                                    snapshot.Count, string.Join(", ", snapshot.Select(c => c.CardName ?? c.CardId ?? "?"))));
-                                EmitDiscoverOffered(snapshot, ts);
-                            }
+                            TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
                         }
                     }
                 }
@@ -1054,10 +1109,6 @@ namespace BobCoach.Engine
                         }
                         catch { }
                     }
-                    else
-                    {
-                        EmitDiscoverOffered(new List<DiscoverCandidate>(), ts);
-                    }
                     try
                     {
                         ChoiceCompleted?.Invoke(new PowerLogChoiceCompletion
@@ -1080,6 +1131,34 @@ namespace BobCoach.Engine
             if (string.IsNullOrEmpty(id)) return false;
             return id.Contains("MagicItem") || id.Contains("Trinket")
                 || id.Contains("_Trinket_");
+        }
+
+        private static readonly HashSet<string> TrustedOrdinaryDiscoverSourceIds =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "TB_BaconShop_Triples_01",
+                "BG28_521",
+                "BG33_101",
+                "BG24_715",
+                "BG24_715_G",
+                "BG28_550",
+                "BG31_890",
+                "BG34_330",
+                "BG32_MagicItem_361",
+                "BG34_Treasure_606pe",
+                "BG27_Anomaly_716",
+            };
+
+        private static bool IsTrustedOrdinaryDiscoverSource(string sourceCardId)
+        {
+            return !string.IsNullOrEmpty(sourceCardId)
+                && TrustedOrdinaryDiscoverSourceIds.Contains(sourceCardId);
+        }
+
+        private bool IsOrdinaryDiscoverSourceAuthorized()
+        {
+            return _currentEntityChoice != null
+                && _currentEntityChoice.SourceGrantsOrdinaryDiscover;
         }
 
         // ── 辅助解析 ──
@@ -1105,6 +1184,7 @@ namespace BobCoach.Engine
                 "GameState.SendChoices() - ",
                 "PowerTaskList.DebugPrintPower() - ",
                 "PowerProcessor.DebugPrintPower() - ",
+                "ChoiceCardMgr.WaitThenShowChoices() - ",
             };
             foreach (string prefix in prefixes)
             {
@@ -1142,7 +1222,11 @@ namespace BobCoach.Engine
         private void TryDetectDiscover(PLEvent fe, DateTime ts)
         {
             if (fe.Type != PLEventType.FullEntity) return;
-            if (!HasActiveChoiceContext()) return;
+            if (!IsOrdinaryDiscoverSourceAuthorized())
+            {
+                _discoverBuffer.Clear();
+                return;
+            }
             if (string.IsNullOrEmpty(fe.CardId)) return;
             // 仅关注BG随从/法术, 排除英雄/技能/饰品
             if (!IsDiscoverCandidateCardId(fe.CardId)) return;
@@ -1172,17 +1256,14 @@ namespace BobCoach.Engine
             });
 
             // 2~3个候选 → 触发发现事件
-            if (_discoverBuffer.Count >= 2 && _discoverBuffer.Count <= 3)
-            {
-                var snapshot = new List<DiscoverCandidate>(_discoverBuffer);
-                DiagLog(string.Format("Discover buffer filled: {0} candidates [{1}]",
-                    snapshot.Count, string.Join(", ", snapshot.Select(c => c.CardName ?? c.CardId ?? "?"))));
-                EmitDiscoverOffered(snapshot, ts);
-            }
-            else if (_discoverBuffer.Count > 3)
+            if (_discoverBuffer.Count > 3)
             {
                 DiagLog(string.Format("Discover buffer overflow: {0} candidates, clearing", _discoverBuffer.Count));
                 _discoverBuffer.Clear();
+            }
+            else
+            {
+                TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
             }
         }
 
@@ -1192,10 +1273,6 @@ namespace BobCoach.Engine
             // 移除被隐藏的实体
             _discoverBuffer.RemoveAll(c => c.EntityId == entityId);
             // 如果全部清除 → 通知发现结束
-            if (_discoverBuffer.Count == 0 && HasActiveChoiceContext())
-            {
-                EmitDiscoverOffered(new List<DiscoverCandidate>(), DateTime.UtcNow);
-            }
         }
 
         private static int _diagCount = 0;
@@ -1337,7 +1414,9 @@ namespace BobCoach.Engine
         private bool HasActiveChoiceContext()
         {
             if (_inChoiceBlock) return true;
-            if (_currentEntityChoice != null) return !_currentEntityChoice.Fired;
+            if (_currentEntityChoice != null)
+                return _currentEntityChoice.SourceGrantsOrdinaryDiscover
+                    && !_currentEntityChoice.Fired;
             if (_lastChoiceContextAt == DateTime.MinValue) return false;
             if (_lastChoiceContextAt.Kind == DateTimeKind.Utc)
                 return (DateTime.UtcNow - _lastChoiceContextAt).TotalSeconds < 3;

@@ -110,6 +110,7 @@ public static class PowerLogChoiceBatchHarness
         parser.ParseLine("D 11:09:04.5203600 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Discover A id=15000 zone=SETASIDE zonePos=0 cardId=BG28_300 player=2]");
         parser.ParseLine("D 11:09:04.5203600 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Discover B id=15001 zone=SETASIDE zonePos=0 cardId=BG26_146 player=2]");
         parser.ParseLine("D 11:09:04.5203600 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Discover C id=15002 zone=SETASIDE zonePos=0 cardId=BG33_140 player=2]");
+        parser.ParseLine("D 11:09:04.5203600 ChoiceCardMgr.WaitThenShowChoices() - id=29 WAIT for taskList 5865");
         if (lastDiscover == null || lastDiscover.ChoiceId != 29)
             return Fail("discover choice identity missing");
         if (lastDiscover.SourceCardId != "BG33_101" || lastDiscover.Candidates.Count != 3)
@@ -383,6 +384,12 @@ public static class PowerLogChoiceBatchHarness
         if (ordinaryDiscoverLeakExit != 0) return ordinaryDiscoverLeakExit;
         var ordinaryDiscoverLeakRegressionExit = RunOrdinaryDiscoverLeakRegressionTest();
         if (ordinaryDiscoverLeakRegressionExit != 0) return ordinaryDiscoverLeakRegressionExit;
+        var ordinaryDiscoverShowMarkerExit = RunOrdinaryDiscoverShowMarkerGateTest();
+        if (ordinaryDiscoverShowMarkerExit != 0) return ordinaryDiscoverShowMarkerExit;
+        var ordinaryDiscoverSourceGateExit = RunOrdinaryDiscoverSourceGateTest();
+        if (ordinaryDiscoverSourceGateExit != 0) return ordinaryDiscoverSourceGateExit;
+        var barovMulliganTavernExit = RunBarovMulliganTavernLeakRegressionTest();
+        if (barovMulliganTavernExit != 0) return barovMulliganTavernExit;
         var displayNameExit = RunDisplayNameResolverTest();
         if (displayNameExit != 0) return displayNameExit;
 
@@ -412,6 +419,7 @@ public static class PowerLogChoiceBatchHarness
         parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Board Minion id=9201 zone=PLAY zonePos=0 cardId=BG26_523 player=8]");
         parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Valid A id=9202 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
         parser.ParseLine("D 18:31:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Valid B id=9203 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        parser.ParseLine("D 18:31:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9002 WAIT for taskList 9102");
         if (offers.Count != 1)
             return Fail("mixed ordinary discover did not emit exactly one filtered batch");
         if (offers[0].Candidates.Count != 2
@@ -434,6 +442,7 @@ public static class PowerLogChoiceBatchHarness
         parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Transitional A id=9401 zone=PLAY zonePos=0 cardId=BG26_525 player=8]");
         parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Valid A id=9402 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
         parser.ParseLine("D 18:33:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Valid B id=9403 zone=SETASIDE zonePos=0 cardId=BG26_528 player=8]");
+        parser.ParseLine("D 18:33:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9004 WAIT for taskList 9104");
         if (offers.Count != 1)
             return Fail("PLAY-zone candidate was not removed from ordinary discover buffer: offers="
                 + offers.Count);
@@ -689,6 +698,7 @@ public static class PowerLogChoiceBatchHarness
         dedupeParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=First id=9902 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
         dedupeParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Duplicate id=9903 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
         dedupeParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Third id=9904 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        dedupeParser.ParseLine("D 18:42:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9901 WAIT for taskList 9910");
         if (dedupeOffers.Count != 1 || dedupeOffers[0].Candidates.Count != 2
             || dedupeOffers[0].Candidates.Any(c => c.CardId == "BG26_525" && c.EntityId == 9903)
             || !dedupeOffers[0].Candidates.Any(c => c.CardId == "BG26_525" && c.EntityId == 9902)
@@ -702,6 +712,7 @@ public static class PowerLogChoiceBatchHarness
         sendParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Discover Source id=9951 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
         sendParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=9952 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
         sendParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=9953 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        sendParser.ParseLine("D 18:43:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9951 WAIT for taskList 9950");
         if (sendOffers.Count != 1)
             return Fail("ordinary discover send-context fixture did not emit a batch");
         if (sendParser.IsChoiceListActive())
@@ -718,6 +729,256 @@ public static class PowerLogChoiceBatchHarness
             return Fail("ChoiceList=CHOSEN left ordinary choice context active");
 
         Console.WriteLine("PASS ordinary discover closes stale choice context and dedupes by CardId");
+        return 0;
+    }
+
+    private static int RunOrdinaryDiscoverSourceGateTest()
+    {
+        var trustedParser = new PowerLogParser();
+        var trustedOffers = new List<PowerLogChoiceBatch>();
+        trustedParser.DiscoverOffered += batch => trustedOffers.Add(batch);
+        trustedParser.ParseLine("D 18:50:00.0000000 GameState.DebugPrintEntityChoices() - id=10001 Player=Local TaskList=10010 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        trustedParser.ParseLine("D 18:50:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Trusted Source id=10100 zone=PLAY zonePos=0 cardId=BG28_521 player=8]");
+        trustedParser.ParseLine("D 18:50:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=10101 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
+        trustedParser.ParseLine("D 18:50:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=10102 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        trustedParser.ParseLine("D 18:50:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=10103 zone=SETASIDE zonePos=0 cardId=BG26_528 player=8]");
+        trustedParser.ParseLine("D 18:50:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=10001 WAIT for taskList 10010");
+        if (trustedOffers.Count != 1 || trustedOffers[0].SourceCardId != "BG28_521"
+            || trustedOffers[0].Candidates.Count != 3)
+            return Fail("trusted ordinary discover source did not emit one three-candidate batch");
+
+        var missingSourceParser = new PowerLogParser();
+        var missingSourceOffers = new List<PowerLogChoiceBatch>();
+        missingSourceParser.DiscoverOffered += batch => missingSourceOffers.Add(batch);
+        missingSourceParser.ParseLine("D 18:51:00.0000000 GameState.DebugPrintEntityChoices() - id=10002 Player=Local TaskList=10020 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        missingSourceParser.ParseLine("D 18:51:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=10201 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
+        missingSourceParser.ParseLine("D 18:51:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=10202 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        missingSourceParser.ParseLine("D 18:51:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=10203 zone=SETASIDE zonePos=0 cardId=BG26_528 player=8]");
+        if (missingSourceOffers.Count != 0)
+            return Fail("missing source seeded ordinary discover");
+        if (missingSourceParser.IsChoiceListActive())
+            return Fail("missing source left ordinary discover active");
+
+        var gameEntityParser = new PowerLogParser();
+        var gameEntityOffers = new List<PowerLogChoiceBatch>();
+        gameEntityParser.DiscoverOffered += batch => gameEntityOffers.Add(batch);
+        gameEntityParser.ParseLine("D 18:52:00.0000000 GameState.DebugPrintEntityChoices() - id=10003 Player=Local TaskList=10030 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        gameEntityParser.ParseLine("D 18:52:00.0000000 GameState.DebugPrintEntityChoices() -   Source=GameEntity");
+        gameEntityParser.ParseLine("D 18:52:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=10301 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
+        gameEntityParser.ParseLine("D 18:52:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=10302 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        if (gameEntityOffers.Count != 0)
+            return Fail("GameEntity source seeded ordinary discover");
+        if (gameEntityParser.IsChoiceListActive())
+            return Fail("GameEntity source left ordinary discover active");
+
+        var unknownParser = new PowerLogParser();
+        var unknownOffers = new List<PowerLogChoiceBatch>();
+        unknownParser.DiscoverOffered += batch => unknownOffers.Add(batch);
+        unknownParser.ParseLine("D 18:53:00.0000000 GameState.DebugPrintEntityChoices() - id=10004 Player=Local TaskList=10040 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        unknownParser.ParseLine("D 18:53:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Unknown Source id=10400 zone=PLAY zonePos=0 cardId=BG36_Button_Unknown player=8]");
+        unknownParser.ParseLine("D 18:53:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=10401 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
+        unknownParser.ParseLine("D 18:53:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=10402 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+        if (unknownOffers.Count != 0)
+            return Fail("unknown source seeded ordinary discover");
+        if (unknownParser.IsChoiceListActive())
+            return Fail("unknown source left ordinary discover active");
+
+        var fallbackParser = new PowerLogParser();
+        var fallbackOffers = new List<PowerLogChoiceBatch>();
+        fallbackParser.DiscoverOffered += batch => fallbackOffers.Add(batch);
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintEntityChoices() - id=10005 Player=Local TaskList=10050 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintEntityChoices() -   Source=GameEntity");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=10501 CardID=BG26_525");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=10502 CardID=BG26_524");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=A id=10503 zone=SETASIDE zonePos=0 cardId=BG26_528 player=8] tag=ZONE value=SETASIDE");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=B id=10504 zone=SETASIDE zonePos=0 cardId=BG26_523 player=8] tag=ZONE value=SETASIDE");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintPower() - SHOW_ENTITY - Updating [entityName=C id=10505 zone=SETASIDE zonePos=0 cardId=BG26_522 player=8] CardID=BG26_522");
+        fallbackParser.ParseLine("D 18:54:00.0000000 GameState.DebugPrintPower() - SHOW_ENTITY - Updating [entityName=D id=10506 zone=SETASIDE zonePos=0 cardId=BG26_521 player=8] CardID=BG26_521");
+        if (fallbackOffers.Count != 0)
+            return Fail("unauthorized source seeded ordinary discover through FULL_ENTITY/TAG_CHANGE/SHOW_ENTITY");
+        if (fallbackParser.IsChoiceListActive())
+            return Fail("unauthorized source kept fallback ordinary discover active");
+
+        var darkGiftParser = new PowerLogParser();
+        int darkGiftActive = 0;
+        int darkGiftCompleted = 0;
+        int darkGiftDiscoverLeaks = 0;
+        int darkGiftChoiceCompletedLeaks = 0;
+        darkGiftParser.DarkGiftChoiceActive += batch => darkGiftActive++;
+        darkGiftParser.DarkGiftCompleted += completion => darkGiftCompleted++;
+        darkGiftParser.DiscoverOffered += batch => darkGiftDiscoverLeaks++;
+        darkGiftParser.ChoiceCompleted += completion => darkGiftChoiceCompletedLeaks++;
+        darkGiftParser.ParseLine("D 18:55:00.0000000 GameState.DebugPrintEntityChoices() - id=10006 Player=Local TaskList=10060 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        darkGiftParser.ParseLine("D 18:55:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift Button id=10600 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=8]");
+        darkGiftParser.ParseLine("D 18:55:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=10601 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_001 player=8]");
+        darkGiftParser.ParseLine("D 18:55:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=10602 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=8]");
+        if (darkGiftActive != 1 || darkGiftDiscoverLeaks != 0
+            || darkGiftChoiceCompletedLeaks != 0 || darkGiftParser.IsChoiceListActive())
+            return Fail("dark gift source gate disturbed dark gift isolation");
+        darkGiftParser.ParseLine("D 18:55:01.0000000 GameState.SendChoices() - id=10006 ChoiceType=GENERAL");
+        darkGiftParser.ParseLine("D 18:55:01.0000000 GameState.SendChoices() -   m_chosenEntities[0]=[entityName=Gift B id=10602 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=8]");
+        if (darkGiftCompleted != 1 || darkGiftDiscoverLeaks != 0
+            || darkGiftChoiceCompletedLeaks != 0 || darkGiftParser.IsChoiceListActive())
+            return Fail("dark gift completion leaked or stayed active after source gate");
+
+        foreach (var legacySource in new[] { "BG34_Treasure_606pe", "BG27_Anomaly_716" })
+        {
+            var legacyParser = new PowerLogParser();
+            var legacyOffers = new List<PowerLogChoiceBatch>();
+            legacyParser.DiscoverOffered += batch => legacyOffers.Add(batch);
+            legacyParser.ParseLine("D 18:56:00.0000000 GameState.DebugPrintEntityChoices() - id=10007 Player=Local TaskList=10070 ChoiceType=GENERAL CountMin=1 CountMax=1");
+            legacyParser.ParseLine("D 18:56:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Legacy Source id=10700 zone=PLAY zonePos=0 cardId=" + legacySource + " player=8]");
+            legacyParser.ParseLine("D 18:56:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=10701 zone=SETASIDE zonePos=0 cardId=BG26_525 player=8]");
+            legacyParser.ParseLine("D 18:56:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=10702 zone=SETASIDE zonePos=0 cardId=BG26_524 player=8]");
+            legacyParser.ParseLine("D 18:56:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=10703 zone=SETASIDE zonePos=0 cardId=BG26_528 player=8]");
+            legacyParser.ParseLine("D 18:56:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=10007 WAIT for taskList 10070");
+            if (legacyOffers.Count != 1 || legacyOffers[0].SourceCardId != legacySource)
+                return Fail("legacy trusted discover source was rejected: " + legacySource);
+        }
+
+        Console.WriteLine("PASS ordinary discover requires a trusted source and stays fail-closed otherwise");
+        return 0;
+    }
+
+    private static int RunOrdinaryDiscoverShowMarkerGateTest()
+    {
+        var markerParser = new PowerLogParser();
+        var markerOffers = new List<PowerLogChoiceBatch>();
+        markerParser.DiscoverOffered += batch => markerOffers.Add(batch);
+        markerParser.ParseLine("D 18:40:00.0000000 GameState.DebugPrintEntityChoices() - id=9001 Player=Local TaskList=90010 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        markerParser.ParseLine("D 18:40:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Trusted Source id=90010 zone=PLAY zonePos=0 cardId=TB_BaconShop_Triples_01 player=4]");
+        markerParser.ParseLine("D 18:40:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=90011 zone=SETASIDE zonePos=0 cardId=BG26_525 player=4]");
+        markerParser.ParseLine("D 18:40:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=90012 zone=SETASIDE zonePos=0 cardId=BG26_524 player=4]");
+        markerParser.ParseLine("D 18:40:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=90013 zone=SETASIDE zonePos=0 cardId=BG26_528 player=4]");
+        if (markerOffers.Count != 0)
+            return Fail("ordinary discover emitted before WaitThenShowChoices marker");
+        markerParser.ParseLine("D 18:40:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9001 WAIT for taskList 90010");
+        markerParser.ParseLine("D 18:40:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9001 WAIT for taskList 90010");
+        if (markerOffers.Count != 1 || markerOffers[0].ChoiceId != 9001
+            || markerOffers[0].TaskList != 90010 || markerOffers[0].Candidates.Count != 3)
+            return Fail("ordinary discover did not emit exactly one batch after matching marker");
+
+        var missingMarkerParser = new PowerLogParser();
+        var missingMarkerOffers = new List<PowerLogChoiceBatch>();
+        missingMarkerParser.DiscoverOffered += batch => missingMarkerOffers.Add(batch);
+        missingMarkerParser.ParseLine("D 18:41:00.0000000 GameState.DebugPrintEntityChoices() - id=9002 Player=Local TaskList=90020 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        missingMarkerParser.ParseLine("D 18:41:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Trusted Source id=90020 zone=PLAY zonePos=0 cardId=TB_BaconShop_Triples_01 player=4]");
+        missingMarkerParser.ParseLine("D 18:41:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=90021 zone=SETASIDE zonePos=0 cardId=BG26_525 player=4]");
+        missingMarkerParser.ParseLine("D 18:41:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=90022 zone=SETASIDE zonePos=0 cardId=BG26_524 player=4]");
+        missingMarkerParser.ParseLine("D 18:41:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=90023 zone=SETASIDE zonePos=0 cardId=BG26_528 player=4]");
+        if (missingMarkerOffers.Count != 0)
+            return Fail("ordinary discover fired without WaitThenShowChoices marker");
+
+        var fullEntityMarkerParser = new PowerLogParser();
+        var fullEntityMarkerOffers = new List<PowerLogChoiceBatch>();
+        fullEntityMarkerParser.DiscoverOffered += batch => fullEntityMarkerOffers.Add(batch);
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 GameState.DebugPrintEntityChoices() - id=9008 Player=Local TaskList=90080 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Trusted Source id=90080 zone=PLAY zonePos=0 cardId=TB_BaconShop_Triples_01 player=4]");
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=90081 CardID=BG26_525 zone=SETASIDE zonePos=0");
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=90082 CardID=BG26_524 zone=SETASIDE zonePos=0");
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 GameState.DebugPrintPower() - FULL_ENTITY - Creating ID=90083 CardID=BG26_528 zone=SETASIDE zonePos=0");
+        if (fullEntityMarkerOffers.Count != 0)
+            return Fail("ordinary discover emitted from FULL_ENTITY candidates before WaitThenShowChoices marker");
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9008 WAIT for taskList 90080");
+        if (fullEntityMarkerOffers.Count != 1 || fullEntityMarkerOffers[0].ChoiceId != 9008
+            || fullEntityMarkerOffers[0].TaskList != 90080 || fullEntityMarkerOffers[0].Candidates.Count != 3)
+            return Fail("ordinary discover did not emit exactly one batch after matching FULL_ENTITY candidates and marker");
+        fullEntityMarkerParser.ParseLine("D 18:41:30.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9008 WAIT for taskList 90080");
+        if (fullEntityMarkerOffers.Count != 1)
+            return Fail("ordinary discover emitted more than once for duplicate FULL_ENTITY marker");
+
+        var mismatchParser = new PowerLogParser();
+        var mismatchOffers = new List<PowerLogChoiceBatch>();
+        mismatchParser.DiscoverOffered += batch => mismatchOffers.Add(batch);
+        mismatchParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() - id=9003 Player=Local TaskList=90030 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        mismatchParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Trusted Source id=90030 zone=PLAY zonePos=0 cardId=TB_BaconShop_Triples_01 player=4]");
+        mismatchParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=90031 zone=SETASIDE zonePos=0 cardId=BG26_525 player=4]");
+        mismatchParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=90032 zone=SETASIDE zonePos=0 cardId=BG26_524 player=4]");
+        mismatchParser.ParseLine("D 18:42:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=90033 zone=SETASIDE zonePos=0 cardId=BG26_528 player=4]");
+        mismatchParser.ParseLine("D 18:42:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9999 WAIT for taskList 90030");
+        mismatchParser.ParseLine("D 18:42:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9003 WAIT for taskList 99999");
+        if (mismatchOffers.Count != 0)
+            return Fail("ordinary discover fired on mismatched id or taskList");
+
+        var beginOnlyParser = new PowerLogParser();
+        var beginOnlyOffers = new List<PowerLogChoiceBatch>();
+        beginOnlyParser.DiscoverOffered += batch => beginOnlyOffers.Add(batch);
+        beginOnlyParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() - id=9004 Player=Local TaskList=90040 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        beginOnlyParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Trusted Source id=90040 zone=PLAY zonePos=0 cardId=TB_BaconShop_Triples_01 player=4]");
+        beginOnlyParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=90041 zone=SETASIDE zonePos=0 cardId=BG26_525 player=4]");
+        beginOnlyParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=90042 zone=SETASIDE zonePos=0 cardId=BG26_524 player=4]");
+        beginOnlyParser.ParseLine("D 18:43:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=90043 zone=SETASIDE zonePos=0 cardId=BG26_528 player=4]");
+        beginOnlyParser.ParseLine("D 18:43:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9004 BEGIN");
+        if (beginOnlyOffers.Count != 0)
+            return Fail("ordinary discover fired from BEGIN without WAIT marker");
+
+        var darkGiftMarkerParser = new PowerLogParser();
+        int darkGiftMarkerActive = 0;
+        int darkGiftMarkerDiscoverLeaks = 0;
+        darkGiftMarkerParser.DarkGiftChoiceActive += batch => darkGiftMarkerActive++;
+        darkGiftMarkerParser.DiscoverOffered += batch => darkGiftMarkerDiscoverLeaks++;
+        darkGiftMarkerParser.ParseLine("D 18:44:00.0000000 GameState.DebugPrintEntityChoices() - id=9005 Player=Local TaskList=90050 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        darkGiftMarkerParser.ParseLine("D 18:44:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift Button id=90050 zone=PLAY zonePos=0 cardId=BG36_Button_DarkGift player=4]");
+        darkGiftMarkerParser.ParseLine("D 18:44:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=90051 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_001 player=4]");
+        darkGiftMarkerParser.ParseLine("D 18:44:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=90052 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=4]");
+        darkGiftMarkerParser.ParseLine("D 18:44:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9005 WAIT for taskList 90050");
+        if (darkGiftMarkerActive != 1 || darkGiftMarkerDiscoverLeaks != 0
+            || darkGiftMarkerParser.IsChoiceListActive())
+            return Fail("dark gift required ordinary marker or leaked into ordinary discover");
+
+        var trinketMarkerParser = new PowerLogParser();
+        PowerLogChoiceBatch trinketMarkerBatch = null;
+        trinketMarkerParser.TrinketChoiceActive += batch => trinketMarkerBatch = batch;
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 GameState.DebugPrintEntityChoices() - id=9006 Player=Local TaskList=90060 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Scheduled Trinket id=90060 zone=PLAY zonePos=0 cardId=BG30_Trinket_1st player=4]");
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Trinket A id=90061 zone=SETASIDE zonePos=0 cardId=BG32_MagicItem_858 player=4]");
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Trinket B id=90062 zone=SETASIDE zonePos=0 cardId=BG32_MagicItem_428 player=4]");
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Trinket C id=90063 zone=SETASIDE zonePos=0 cardId=BG32_MagicItem_894 player=4]");
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[3]=[entityName=Trinket D id=90064 zone=SETASIDE zonePos=0 cardId=BG35_MagicItem_834 player=4]");
+        trinketMarkerParser.ParseLine("D 18:45:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9006 WAIT for taskList 90060");
+        if (trinketMarkerBatch == null || trinketMarkerParser.IsChoiceListActive())
+            return Fail("trinket choice was blocked by ordinary WaitThenShowChoices marker gate");
+
+        var timewarpMarkerParser = new PowerLogParser();
+        int timewarpMarkerActive = 0;
+        timewarpMarkerParser.TimewarpPurchaseOffered += batch => timewarpMarkerActive++;
+        timewarpMarkerParser.ParseLine("D 18:46:00.0000000 GameState.DebugPrintEntityChoices() - id=9007 Player=Local TaskList=90070 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        timewarpMarkerParser.ParseLine("D 18:46:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Timewarp id=90070 zone=PLAY zonePos=0 cardId=BG34_HERO_004p player=4]");
+        timewarpMarkerParser.ParseLine("D 18:46:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Timewarp A id=90071 zone=SETASIDE zonePos=0 cardId=BG34_Treasure_932 player=4]");
+        timewarpMarkerParser.ParseLine("D 18:46:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Timewarp B id=90072 zone=SETASIDE zonePos=0 cardId=BG34_Giant_034 player=4]");
+        timewarpMarkerParser.ParseLine("D 18:46:00.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=9007 WAIT for taskList 90070");
+        if (timewarpMarkerActive != 1 || timewarpMarkerParser.IsChoiceListActive())
+            return Fail("timewarp purchase was blocked by ordinary WaitThenShowChoices marker gate");
+
+        Console.WriteLine("PASS ordinary discover requires matching WaitThenShowChoices marker");
+        return 0;
+    }
+
+    private static int RunBarovMulliganTavernLeakRegressionTest()
+    {
+        var parser = new PowerLogParser();
+        var offers = new List<PowerLogChoiceBatch>();
+        parser.DiscoverOffered += batch => offers.Add(batch);
+
+        parser.ParseLine("D 21:37:48.3638494 GameState.DebugPrintEntityChoices() - id=1 Player=Player TaskList=7 ChoiceType=MULLIGAN CountMin=1 CountMax=1");
+        parser.ParseLine("D 21:37:48.3638494 GameState.DebugPrintEntityChoices() -   Source=GameEntity");
+        parser.ParseLine("D 21:37:48.3638494 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Hero A id=90 zone=HAND zonePos=2 cardId=BG22_HERO_200 player=1]");
+        parser.ParseLine("D 21:37:48.3638494 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Barov id=92 zone=HAND zonePos=4 cardId=TB_BaconShop_HERO_72 player=1]");
+        parser.ParseLine("D 21:37:48.3638494 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Hero B id=89 zone=HAND zonePos=1 cardId=BG36_HERO_105 player=1]");
+        parser.ParseLine("D 21:37:48.3638494 GameState.DebugPrintEntityChoices() -   Entities[3]=[entityName=Hero C id=91 zone=HAND zonePos=3 cardId=BG32_HERO_001 player=1]");
+        if (parser.IsChoiceListActive())
+            return Fail("MULLIGAN choice left an ordinary choice context active");
+
+        parser.ParseLine("D 21:38:28.4081910 PowerTaskList.DebugPrintPower() -     FULL_ENTITY - Updating [entityName=Shimmering Guard id=383 zone=SETASIDE zonePos=0 cardId=BG29_888 player=1] CardID=BG29_888");
+        parser.ParseLine("D 21:38:28.4081910 PowerTaskList.DebugPrintPower() -     FULL_ENTITY - Updating [entityName=Suspicious Jailer id=384 zone=SETASIDE zonePos=0 cardId=BG36_345 player=1] CardID=BG36_345");
+        parser.ParseLine("D 21:38:28.4081910 PowerTaskList.DebugPrintPower() -     FULL_ENTITY - Updating [entityName=Hypnotizing Robot id=385 zone=SETASIDE zonePos=0 cardId=BG26_146 player=1] CardID=BG26_146");
+        if (offers.Count != 0)
+            return Fail("tavern board minions leaked into ordinary discover after MULLIGAN: "
+                + string.Join(", ", offers.Select(batch => batch.ChoiceId)));
+        if (parser.IsChoiceListActive())
+            return Fail("tavern setaside cards left the MULLIGAN context active");
+
+        Console.WriteLine("PASS MULLIGAN cannot seed ordinary discover from tavern board minions");
         return 0;
     }
 
@@ -1161,12 +1422,35 @@ public static class PowerLogChoiceBatchHarness
     {
         if (!File.Exists(path)) return Fail("replay log not found");
         var parser = new PowerLogParser();
+        var discovers = new List<PowerLogChoiceBatch>();
         var trinketBatches = new List<PowerLogChoiceBatch>();
+        var darkGiftBatches = new List<PowerLogChoiceBatch>();
+        var darkGiftCompletions = new List<PowerLogChoiceCompletion>();
+        var timewarpPurchases = new List<PowerLogChoiceBatch>();
         var completions = new List<PowerLogChoiceCompletion>();
+        parser.DiscoverOffered += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                discovers.Add(batch);
+        };
         parser.TrinketChoiceActive += batch =>
         {
             if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
                 trinketBatches.Add(batch);
+        };
+        parser.DarkGiftChoiceActive += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                darkGiftBatches.Add(batch);
+        };
+        parser.DarkGiftCompleted += completion =>
+        {
+            if (completion != null) darkGiftCompletions.Add(completion);
+        };
+        parser.TimewarpPurchaseOffered += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                timewarpPurchases.Add(batch);
         };
         parser.ChoiceCompleted += completion =>
         {
@@ -1174,21 +1458,39 @@ public static class PowerLogChoiceBatchHarness
         };
         foreach (var line in File.ReadLines(path)) parser.ParseLine(line);
 
-        var scheduled = trinketBatches.LastOrDefault(b => b.ChoiceId == 12 && b.Candidates.Count == 4);
-        if (scheduled == null || scheduled.SourceCardId != "BG30_Trinket_1st")
-            return Fail("captured choice 12 scheduled batch missing");
-        var scheduledDone = completions.LastOrDefault(c => c.ChoiceId == 12);
-        if (scheduledDone == null || scheduledDone.SelectedCardId != "BG32_MagicItem_894")
-            return Fail("captured choice 12 completion missing");
+        var ordinary = discovers.LastOrDefault(b =>
+            b.ChoiceId == 5 && b.TaskList == 255 && b.SourceCardId == "BG32_MagicItem_361");
+        if (ordinary == null || ordinary.Candidates.Count != 3)
+            return Fail("captured ordinary discover id=5 taskList=255 missing or wrong candidate count");
 
-        var anomaly = trinketBatches.LastOrDefault(b => b.ChoiceId == 13 && b.Candidates.Count == 2);
-        if (anomaly == null || anomaly.SourceCardId != "BG30_MagicItem_703t")
-            return Fail("captured choice 13 anomaly batch missing");
-        var anomalyDone = completions.LastOrDefault(c => c.ChoiceId == 13);
-        if (anomalyDone == null || anomalyDone.SelectedCardId != "BG32_MagicItem_416")
-            return Fail("captured choice 13 completion missing");
+        var triple = discovers.LastOrDefault(b =>
+            b.ChoiceId == 7 && b.TaskList == 1372 && b.SourceCardId == "TB_BaconShop_Triples_01");
+        if (triple == null || triple.Candidates.Count != 3)
+            return Fail("captured triple discover id=7 taskList=1372 missing or wrong candidate count");
 
-        Console.WriteLine("PASS captured log choices 12/13 remain distinct");
+        var scheduled = trinketBatches.LastOrDefault(b =>
+            b.ChoiceId == 4 && b.TaskList == 245 && b.SourceCardId == "BG30_Trinket_1st");
+        if (scheduled == null || scheduled.Candidates.Count != 4)
+            return Fail("captured scheduled trinket id=4 taskList=245 missing or wrong candidate count");
+
+        var darkGift = darkGiftBatches.LastOrDefault(b =>
+            b.ChoiceId == 10 && b.TaskList == 2190 && b.SourceCardId == "BG36_MidGameEffect_010");
+        if (darkGift == null || darkGift.Candidates.Count < 2)
+            return Fail("captured dark gift id=10 taskList=2190 missing or wrong candidate count");
+        var darkGiftDone = darkGiftCompletions.LastOrDefault(c => c.ChoiceId == darkGift.ChoiceId);
+        if (darkGiftDone == null || string.IsNullOrEmpty(darkGiftDone.SelectedCardId))
+            return Fail("captured dark gift completion missing");
+
+        var darkGiftSource = "BG36_MidGameEffect_010";
+        if (discovers.Any(b => b.SourceCardId == darkGiftSource)
+            || trinketBatches.Any(b => b.SourceCardId == darkGiftSource)
+            || timewarpPurchases.Any(b => b.SourceCardId == darkGiftSource))
+            return Fail("dark gift leaked into ordinary discover, trinket, or timewarp");
+        if (completions.Any(c =>
+            c.ChoiceId == darkGift.ChoiceId && c.Timestamp == darkGiftDone.Timestamp))
+            return Fail("dark gift completion leaked into ordinary ChoiceCompleted");
+
+        Console.WriteLine("PASS captured log ordinary/triple discover, scheduled trinket, and dark gift remain distinct");
         return 0;
     }
 
