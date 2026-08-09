@@ -49,6 +49,21 @@ internal static class HeroStrategyFacadeBehavior
                 "structured use suggestion");
             AssertEqual("", engine.GetUseSuggestion("PASSIVE", 10, 5, 7, false),
                 "passive has no suggestion");
+            AssertEqual("",
+                engine.GetUseSuggestion("HERO", 0, 5, 3, false, 3, false, 1, 1, 2),
+                "runtime cost blocks empty gold");
+            AssertEqual("",
+                engine.GetUseSuggestion("HERO", 3, 5, 3, false, 1, true, 1, 1, 2),
+                "exhausted hero power has no suggestion");
+            AssertEqual("",
+                engine.GetUseSuggestion("HERO", 3, 2, 3, false, 1, false, 3, 1, 2),
+                "locked hero power has no suggestion before unlock turn");
+            AssertEqual("",
+                engine.GetUseSuggestion("HERO", 3, 5, 3, false, 1, false, 1, 2, 1),
+                "locked hero power has no suggestion before unlock tier");
+            AssertTrue(!string.IsNullOrEmpty(
+                engine.GetUseSuggestion("HERO", 3, 5, 3, false, 1, false, 1, 1, 2)),
+                "affordable unlocked hero power keeps suggestion");
             AssertEqual(1.10f, engine.GetLevelAggression("HERO"), "level aggression facade");
             AssertEqual(0.20f, engine.GetTribeAffinity("HERO", "DRAGON"),
                 "tribe affinity facade");

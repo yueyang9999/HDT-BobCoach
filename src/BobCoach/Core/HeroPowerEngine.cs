@@ -62,19 +62,57 @@ namespace BobCoach.Engine
                 boardFull);
         }
 
+        public string GetUseSuggestion(
+            string heroCardId,
+            int gold,
+            int turn,
+            int boardSize,
+            bool boardFull,
+            int heroPowerCost,
+            bool heroPowerExhausted,
+            int heroPowerUnlockTurn,
+            int heroPowerUnlockTier,
+            int tavernTier)
+        {
+            return GetUseSuggestionFromStrategy(
+                GetStrategy(heroCardId),
+                gold,
+                turn,
+                boardSize,
+                boardFull,
+                heroPowerCost,
+                heroPowerExhausted,
+                heroPowerUnlockTurn,
+                heroPowerUnlockTier,
+                tavernTier);
+        }
+
         private string GetUseSuggestionFromStrategy(
             HeroStrategy strategy,
             int gold,
             int turn,
             int boardSize,
-            bool boardFull)
+            bool boardFull,
+            int heroPowerCost = -1,
+            bool heroPowerExhausted = false,
+            int heroPowerUnlockTurn = 1,
+            int heroPowerUnlockTier = 1,
+            int tavernTier = 1)
         {
             if (strategy == null || strategy.PowerType == HeroPowerType.Passive)
                 return "";
-            if (strategy.PowerCost > gold)
+
+            int cost = heroPowerCost >= 0 ? heroPowerCost : strategy.PowerCost;
+            if (cost < 0) cost = strategy.PowerCost;
+            if (gold < cost)
+                return "";
+            if (heroPowerExhausted)
+                return "";
+            if (turn < heroPowerUnlockTurn)
+                return "";
+            if (tavernTier < heroPowerUnlockTier)
                 return "";
 
-            int cost = strategy.PowerCost;
             if (strategy.UsePurpose == HeroUsePurpose.Economy)
                 return string.Format("赚铸币 · {0}费换经济优势", cost);
             if (strategy.UsePurpose == HeroUsePurpose.Buff)

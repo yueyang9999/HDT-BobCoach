@@ -916,7 +916,7 @@ function warn(name, msg) {
             return `面板不应再水平居中(07071644: 中央与游戏三选一交互区重叠遮挡), 发现 ${centered} 处居中 → 改屏幕左侧`;
         // 三个面板位置改由 F10 校准配置驱动(Config.PanelOffsetX/Y), 不再硬编码
         const cfgDriven = (overlaySrc.match(/_calc\.Config\.PanelOffsetX/g) || []).length;
-        if (cfgDriven < 3)
+        if (cfgDriven < 4)
             return `三个选择面板须从 Config.PanelOffsetX 读位置(F10可校准) (found ${cfgDriven}/3)`;
     });
 
@@ -925,7 +925,7 @@ function warn(name, msg) {
         if (!cfg.includes("PanelOffsetX") || !cfg.includes("PanelOffsetY") || !cfg.includes("PanelScale"))
             return "LayoutConfig 须有 PanelOffsetX/Y/Scale 字段";
         const overlaySrc = readFile("src/BobCoach/OverlayRenderer.cs");
-        if ((overlaySrc.match(/new ScaleTransform\(sc, sc\)/g) || []).length < 3)
+        if ((overlaySrc.match(/new ScaleTransform\(sc, sc\)/g) || []).length < 4)
             return "三个面板须应用 PanelScale 的 ScaleTransform";
         const calib = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
         if (!calib.includes('_selectedZone = "Panel"'))
@@ -1653,6 +1653,92 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "ComputeStateHash must use _cachedState.Gold fallback so gold=0 remains part of the state hash";
         if (block.includes("GameTag.RESOURCES"))
             return "ComputeStateHash still reads HDT RESOURCES; in-turn recruit gold is unreliable";
+    });
+}
+
+// ============================================================================
+// [0809] Dark gift candidate panel + early-turn upgrade affordability
+// ============================================================================
+{
+    const overlaySrc = readFile("src/BobCoach/OverlayRenderer.cs");
+    const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+
+    test("[0809][DarkGift] renderer exposes a candidate panel with combat guard", () => {
+        const showIdx = overlaySrc.indexOf("internal void ShowDarkGiftCandidates(");
+        if (showIdx < 0)
+            return "OverlayRenderer must expose ShowDarkGiftCandidates";
+        const block = overlaySrc.slice(showIdx, showIdx + 2600);
+        if (!block.includes("if (IsCombat()) return;"))
+            return "ShowDarkGiftCandidates must keep the combat guard";
+        if (!block.includes('Tag = "dark_gift_panel"'))
+            return "dark gift candidates must use an independent dark_gift_panel tag";
+        if (!block.includes("_calc.Config.PanelOffsetX") || !block.includes("new ScaleTransform(sc, sc)"))
+            return "dark gift candidate panel must use F10 calibration position and scale";
+        if (!block.includes("h.CardName"))
+            return "dark gift candidate rows must show the parsed card name";
+    });
+
+    test("[0809][DarkGift] clear lifecycle is independent and survives ClearNonPanel", () => {
+        const clearIdx = overlaySrc.indexOf("internal void ClearDarkGiftCandidates(");
+        if (clearIdx < 0)
+            return "OverlayRenderer must expose ClearDarkGiftCandidates";
+        const clearBlock = overlaySrc.slice(clearIdx, clearIdx + 1200);
+        if (!clearBlock.includes('ClearTaggedElements("dark_gift_panel")'))
+            return "ClearDarkGiftCandidates must clear only dark_gift_panel elements";
+        if (!clearBlock.includes("_darkGiftPanelSig = null"))
+            return "ClearDarkGiftCandidates must reset the dark gift panel signature";
+        const nonPanelIdx = overlaySrc.indexOf("public void ClearNonPanel");
+        const nonPanelBlock = overlaySrc.slice(nonPanelIdx, nonPanelIdx + 1200);
+        if (!nonPanelBlock.includes('tag == "dark_gift_panel"'))
+            return "ClearNonPanel must preserve the active dark gift candidate panel";
+        const clearAllIdx = overlaySrc.indexOf("public void Clear(");
+        const clearAllBlock = overlaySrc.slice(clearAllIdx, clearAllIdx + 1000);
+        if (!clearAllBlock.includes("_darkGiftPanelSig = null"))
+            return "full Clear must reset the dark gift panel signature";
+    });
+
+    test("[0809][DarkGift] plugin renders and clears candidates with dark gift status", () => {
+        if (!pluginSrc.includes("_renderer.ShowDarkGiftCandidates("))
+            return "plugin must render dark gift candidates while a dark gift choice is active";
+        if (!pluginSrc.includes("_renderer.ClearDarkGiftCandidates()"))
+            return "plugin must clear dark gift candidates when the dark gift choice ends";
+    });
+
+    test("[0809][Gold] levelUrgent requires affordable upgrade cost", () => {
+        const levelUrgentIdx = pluginSrc.indexOf("bool levelUrgent =");
+        if (levelUrgentIdx < 0)
+            return "levelUrgent assignment not found";
+        const semicolonIdx = pluginSrc.indexOf(";", levelUrgentIdx);
+        const levelUrgentBlock = pluginSrc.slice(levelUrgentIdx, semicolonIdx);
+        if (!levelUrgentBlock.includes("liveGold >= plan.UpgradeHint.Cost"))
+            return "levelUrgent must require liveGold >= plan.UpgradeHint.Cost; critical urgency alone must not drive upgrade text at turn 1 with 0 gold";
+    });
+
+    test("[0809][Gold] justLeveled must not fire on turn 1 from the default LastUpgradeTurn", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        const justLeveledIdx = visualizerSrc.indexOf("bool justLeveled = state.Turn > 1 && state.LastUpgradeTurn == state.Turn;");
+        if (justLeveledIdx < 0)
+            return "justLeveled must require state.Turn > 1 so the default LastUpgradeTurn=1 cannot force Sprint at turn 1";
+    });
+
+    test("[0809][Gold] ShowLevelUpGlow must be guarded by liveGold >= upgrade cost", () => {
+        const glowIdx = pluginSrc.indexOf("_renderer.ShowLevelUpGlow(");
+        if (glowIdx < 0)
+            return "_renderer.ShowLevelUpGlow call not found";
+        const glowBlock = pluginSrc.slice(Math.max(0, glowIdx - 400), glowIdx + 500);
+        if (!glowBlock.includes("if (plan.UpgradeHint != null && liveGold >= plan.UpgradeHint.Cost)"))
+            return "ShowLevelUpGlow must render only when UpgradeHint exists and liveGold can cover its cost";
+    });
+
+    test("[0809][Gold] unaffordable upgrade must not render a shortage reason", () => {
+        const glowIdx = pluginSrc.indexOf("_renderer.ShowLevelUpGlow(");
+        if (glowIdx < 0)
+            return "_renderer.ShowLevelUpGlow call not found";
+        const glowBlock = pluginSrc.slice(Math.max(0, glowIdx - 600), glowIdx + 500);
+        if (glowBlock.includes("需{0}费(差{1})"))
+            return "unaffordable upgrade text must be removed; shortage guidance must not appear when liveGold < upgrade cost";
+        if (glowBlock.includes("canAfford = liveGold >= plan.UpgradeHint.Cost"))
+            return "ShowLevelUpGlow must not keep a canAfford branch that renders shortage reasons";
     });
 }
 

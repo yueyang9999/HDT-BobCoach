@@ -823,6 +823,7 @@ namespace BobCoach
                 _timewarpPurchaseClearRequested = false;
                 _darkGiftBatchFromLog = null;
                 _darkGiftTipCoordinator.Reset();
+                _renderer.ClearDarkGiftCandidates();
                 _claimedUpgradePrizeChoiceIds.Clear();
                 _trinketChoiceLifecycle.Reset();
                 // 跨局重置面板状态机回 Idle(防止上局 Active/Fading 残留)
@@ -1295,7 +1296,10 @@ namespace BobCoach
 
                     var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now);
                     if (darkGiftStatus == null)
+                    {
                         _renderer.ClearDarkGiftTip();
+                        _renderer.ClearDarkGiftCandidates();
+                    }
 
                     bool nowInCombat = Core.Game.IsBattlegroundsCombatPhase;
                     if (darkGiftStatus != null)
@@ -1303,6 +1307,8 @@ namespace BobCoach
                         _eventEvalRequested = false;
                         _renderer.RefreshCanvasSize();
                         _renderer.ShowDarkGiftTip(darkGiftStatus);
+                        if (_darkGiftBatchFromLog != null)
+                            _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates);
                     }
                     else if (nowInCombat)
                     {
@@ -1345,11 +1351,14 @@ namespace BobCoach
             if (status == null)
             {
                 _renderer.ClearDarkGiftTip();
+                _renderer.ClearDarkGiftCandidates();
                 return;
             }
 
             _renderer.RefreshCanvasSize();
             _renderer.ShowDarkGiftTip(status);
+            if (_darkGiftBatchFromLog != null)
+                _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates);
         }
 
         private void EvaluateAndRender()
@@ -1359,9 +1368,12 @@ namespace BobCoach
             {
                 _renderer.RefreshCanvasSize();
                 _renderer.ShowDarkGiftTip(darkGiftStatus);
+                if (_darkGiftBatchFromLog != null)
+                    _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates);
                 return;
             }
             _renderer.ClearDarkGiftTip();
+            _renderer.ClearDarkGiftCandidates();
 
             // 战斗阶段不评估
             try { if (Core.Game.IsBattlegroundsCombatPhase) return; } catch { }
@@ -1522,7 +1534,10 @@ namespace BobCoach
             // 动态技能使用建议: 根据当前金币+场面判断是否该用技能
             string heroUseSuggestion = _heroPowerEngine.GetUseSuggestion(
                 state.HeroCardId, state.Gold, state.Turn,
-                state.BoardMinions.Count, state.BoardMinions.Count >= 7);
+                state.BoardMinions.Count, state.BoardMinions.Count >= 7,
+                state.HeroPowerCost, state.HeroPowerExhausted,
+                state.HeroPowerUnlockTurn, state.HeroPowerUnlockTier,
+                state.TavernTier);
 
             // T1/T2 空商店：仅显示英雄提示，不跑决策引擎
             if (state.Turn <= 2 && state.ShopMinions.Count == 0 && state.Phase == "shop")
@@ -2508,7 +2523,9 @@ namespace BobCoach
                     // ── 铸币分配: 升本优先但需预算检查 ──
                     // 优先级: 升本 > 手牌打出 > 买牌 > 冻结 > 卖牌 > 刷新
                     bool shownPrimary = false;
-                    bool levelUrgent = plan.UpgradeHint != null && plan.UpgradeHint.Level == DecisionLevel.Critical;
+                    bool levelUrgent = plan.UpgradeHint != null
+                        && plan.UpgradeHint.Level == DecisionLevel.Critical
+                        && liveGold >= plan.UpgradeHint.Cost;
                     bool levelOk = plan.UpgradeHint != null && liveGold >= plan.UpgradeHint.Cost;
                     int goldAfterUpgrade = levelOk ? liveGold - plan.UpgradeHint.Cost : liveGold;
                     bool canBuyAfterUpgrade = goldAfterUpgrade >= 3;
@@ -2635,15 +2652,12 @@ namespace BobCoach
                             m.Purpose, m.Quality, m.IsTriple, m.Tier, m.EntityId);
                     }
 
-                    // ── 升本宝石: UpgradeHint存在就显示(现场重读金币) ──
-                    if (plan.UpgradeHint != null)
+                    // ── 升本宝石: 现场重读金币, 铸币不足时不显示任何升本引导 ──
+                    if (plan.UpgradeHint != null && liveGold >= plan.UpgradeHint.Cost)
                     {
-                        bool canAfford = liveGold >= plan.UpgradeHint.Cost;
                         bool urgent = plan.UpgradeHint.Level == DecisionLevel.Critical;
                         bool t7 = state.EffectiveRules != null && state.EffectiveRules.MaxTavernTier >= 7;
-                        string reason = canAfford ? plan.UpgradeHint.Reason
-                            : string.Format("需{0}费(差{1})", plan.UpgradeHint.Cost, plan.UpgradeHint.Cost - state.Gold);
-                        _renderer.ShowLevelUpGlow(canAfford && urgent, reason,
+                        _renderer.ShowLevelUpGlow(urgent, plan.UpgradeHint.Reason,
                             plan.UpgradeHint.Cost, plan.UpgradeHint.CurrentTier, t7);
                     }
 

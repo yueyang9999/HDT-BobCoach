@@ -547,7 +547,7 @@ namespace BobCoach.Engine
             else if (hpRatio < 0.40f && canLevel) pace = "AllIn";
             else pace = "Cruise";
             // 如果本回合刚升完本 → 设为 Sprint (升本是最激进的操作)
-            bool justLeveled = state.LastUpgradeTurn == state.Turn;
+            bool justLeveled = state.Turn > 1 && state.LastUpgradeTurn == state.Turn;
             if (justLeveled && pace != "Sprint") pace = "Sprint";
             // Phase: 直接用回合数
             string phase = state.Turn.ToString();

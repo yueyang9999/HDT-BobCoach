@@ -26,6 +26,7 @@ namespace BobCoach
         private string _discoverPanelSig = null;
         private string _timewarpPurchaseSig = null;
         private string _darkGiftTipSig = null;
+        private string _darkGiftPanelSig = null;
         private Engine.GameLayoutCalculator _calc;
         private Engine.PhaseDetector _phase;
         private Engine.CalibrationOverlay _calib;
@@ -485,6 +486,80 @@ namespace BobCoach
             if (markerPresent || sigPresent || removed > 0)
                 RendererLog(string.Format("ClearDarkGiftTip: removed={0} markerPresent={1} sigPresent={2}",
                     removed, markerPresent, sigPresent));
+        }
+
+        internal void ShowDarkGiftCandidates(System.Collections.Generic.List<Engine.DiscoverCandidate> candidates)
+        {
+            if (IsCombat()) return;
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null || candidates == null || candidates.Count == 0) return;
+
+            // 幂等防闪: 内容指纹不变且面板仍在画布上时跳过重建
+            string sig = string.Join("|", candidates.Select(c => c.CardName ?? c.CardId ?? "?"));
+            bool panelPresent = _activeElements.Any(el => (el as FrameworkElement)?.Tag as string == "dark_gift_panel");
+            if (sig == _darkGiftPanelSig && panelPresent) return;
+            ClearDarkGiftCandidates();
+            _darkGiftPanelSig = sig;
+
+            double sc = _calc.Config.PanelScale > 0.3 ? _calc.Config.PanelScale : 1.0;
+            double panelTextWidth = _calc.ScaleX(360);
+            double x = _calc.Config.ScaleX(_calc.Config.PanelOffsetX, _calc.ClientWidth);
+            double y = _calc.Config.ScaleY(_calc.Config.PanelOffsetY, _calc.ClientHeight);
+            RendererLog(string.Format("ShowDarkGiftCandidates: {0} candidates at ({1:F0},{2:F0})",
+                candidates.Count, x, y));
+
+            var stack = new StackPanel { IsHitTestVisible = false, Tag = "dark_gift_panel" };
+            stack.RenderTransform = new ScaleTransform(sc, sc);
+            var header = new TextBlock
+            {
+                Text = "Bob Coach · 暗赐随从",
+                FontSize = 16,
+                FontWeight = FontWeights.Bold,
+                Foreground = ParseBrush("#8B7CFF"),
+                Background = new SolidColorBrush(Color.FromArgb(200, 10, 10, 10)),
+                Padding = new Thickness(10, 4, 10, 3),
+                IsHitTestVisible = false,
+                TextAlignment = TextAlignment.Center,
+                Width = panelTextWidth,
+            };
+            stack.Children.Add(header);
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var h = candidates[i];
+                var row = new TextBlock
+                {
+                    Text = string.Format("{0}. {1}", i + 1, h.CardName ?? h.CardId ?? "?"),
+                    FontSize = 15,
+                    Foreground = ParseBrush("#CFCFCF"),
+                    Background = new SolidColorBrush(Color.FromArgb(185, 10, 10, 10)),
+                    Padding = new Thickness(10, 2, 10, 2),
+                    IsHitTestVisible = false,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = panelTextWidth,
+                    Width = panelTextWidth,
+                    TextAlignment = TextAlignment.Center,
+                };
+                stack.Children.Add(row);
+            }
+
+            Canvas.SetLeft(stack, x);
+            Canvas.SetTop(stack, y);
+            Panel.SetZIndex(stack, 996);
+            canvas.Children.Add(stack);
+            _activeElements.Add(stack);
+            RendererLog(string.Format(
+                "PanelPresence: tag=dark_gift_panel attached={0} visible={1} opacity={2:F2} z={3} bounds=({4:F0},{5:F0},{6:F0})",
+                canvas.Children.Contains(stack), stack.Visibility, stack.Opacity,
+                Panel.GetZIndex(stack), x, y, panelTextWidth * sc));
+        }
+
+        internal void ClearDarkGiftCandidates()
+        {
+            int removed = ClearTaggedElements("dark_gift_panel");
+            _darkGiftPanelSig = null;
+            if (removed > 0)
+                RendererLog(string.Format("ClearDarkGiftCandidates: removed={0}", removed));
         }
 
         /// <summary>
@@ -1764,7 +1839,7 @@ namespace BobCoach
                 // 保留饰品/发现面板(它们自行管理生命周期)
                 var tag = (el as FrameworkElement)?.Tag as string;
                 if (tag == "status_strip" || tag == "trinket_panel" || tag == "discover_panel"
-                    || tag == "timewarp_purchase" || tag == "dark_gift_tip") continue;
+                    || tag == "timewarp_purchase" || tag == "dark_gift_tip" || tag == "dark_gift_panel") continue;
                 try { el.BeginAnimation(UIElement.OpacityProperty, null); } catch { }
                 try { canvas.Children.Remove(el); } catch { }
                 _activeElements.Remove(el);
@@ -1788,6 +1863,7 @@ namespace BobCoach
             _trinketPanelSig = null; _discoverPanelSig = null;
             _timewarpPurchaseSig = null;
             _darkGiftTipSig = null;
+            _darkGiftPanelSig = null;
             _handMarkerElement = null;  // 防止悬空引用
             foreach (var el in snapshot)
             {
