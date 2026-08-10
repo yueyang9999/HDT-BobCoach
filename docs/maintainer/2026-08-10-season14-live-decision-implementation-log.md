@@ -141,3 +141,6 @@ Owner: Codex goal session
 - `collect_real_ui_evidence.ps1` 已增加本地 HDT app 目录校验。
 - `deploy_local_release.ps1` 已增加本地 HDT app 目录自动同步。
 - 下一步：重新启动 HDT，进入 Season14 对局验证 UI。
+- 2026-08-10 用户手动关闭 HDT 后，已通过 `deploy_local_release.ps1` 正式部署 v4 到 AppData 与本地 app 目录。
+- 部署归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T090620500Z-60c731f0`。
+- 四个插件路径的 DLL/checksum 均匹配 Release v4。
