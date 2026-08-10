@@ -142,6 +142,7 @@ namespace BobCoach
         // 防止塔维什技能等非发现操作将zone6过渡实体误判为发现选项
         public bool DiscoverTriggerActive = false;
         public bool DiscoverZone6Triggered = false;
+        public bool PassiveChoiceActive;
         private List<Engine.TrinketOption> _cachedDiscoverOptions = null;
         private DateTime _lastDiscoverExtractTime = DateTime.MinValue;
 
@@ -516,6 +517,8 @@ namespace BobCoach
                 // (T2算3应为4), 是 gold 提前归零、铸币0仍推荐的根因(0611 06111155 诊断)。
                 state.MaxGold = Math.Min(10, 2 + turn);
                 state.Phase = game.IsBattlegroundsCombatPhase ? "combat" : "shop";
+                state.PassiveChoiceActive = PassiveChoiceActive;
+                state.NormalRecruitAvailable = !PassiveChoiceActive && state.Phase == "shop";
                 _upgradePrizeTracker.Advance(
                     state.Turn, state.TavernTier, state.Phase == "shop",
                     state.EffectiveRules.UpgradePrize);
@@ -593,7 +596,8 @@ namespace BobCoach
                     state.Gold = Math.Max(0, trackedGold);
                 // 兜底只处理追踪器尚未初始化的异常值。不能把真实 0 金改回 3 金，
                 // 否则 T2 刚升本后会继续显示买牌推荐。
-                if (trackedGold < 0 && state.Gold <= 0 && state.ShopMinions.Count > 0 && turn <= 2)
+                if (trackedGold < 0 && state.NormalRecruitAvailable
+                    && state.Gold <= 0 && state.ShopMinions.Count > 0 && turn <= 2)
                     state.Gold = state.MaxGold;
                 // 手牌减少检测: 记录当前帧手牌数，供发现提取判断"玩家是否刚打出了一张手牌"
                 int currentHandCount = state.HandMinions.Count;
@@ -921,7 +925,7 @@ namespace BobCoach
                 }
             }
             catch { }
-            return 3; // 兜底: T1默认3金币
+            return -1; // fail closed: 缺失时保持 unknown, 不伪造 T1 基准 3
         }
 
         /// <summary>
@@ -1003,7 +1007,8 @@ namespace BobCoach
                 turn, curShop, curShopIds, curBoard, curHand, state.TavernTier,
                 bonusGold, goldPerTurn, minionCost, freeRefresh, freeCards, firstBuyFree,
                 hdtTag, handGainedFromShop, observedPurchaseCosts, purchasedMinionCount,
-                effectiveRules, state.TavernUpgradeCost, observedPurchases);
+                effectiveRules, state.TavernUpgradeCost, observedPurchases,
+                state.NormalRecruitAvailable);
             state.FirstPurchaseUsedThisTurn = _goldTracker.IsFirstPurchaseUsed(turn);
             state.FirstMinionPurchaseUsedThisTurn =
                 _goldTracker.IsFirstMinionPurchaseUsed(turn);

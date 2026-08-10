@@ -103,6 +103,12 @@ namespace BobCoach.Engine
         private int _darkGiftPendingChoiceId = -1;
         private string _darkGiftPendingChoiceType = "";
         private DateTime _darkGiftPendingChoiceAt = DateTime.MinValue;
+        private PowerLogChoiceBatch _passiveChoice;
+        private bool _passiveChoiceFired;
+        private bool _passiveChoiceShowMarkerReceived;
+        private int _passivePendingChoiceId = -1;
+        private string _passivePendingChoiceType = "";
+        private DateTime _passivePendingChoiceAt = DateTime.MinValue;
         private PowerLogDarkGiftPressable _lastDarkGiftPressable;
 
         /// <summary>从Power.log检测到阶段变化时触发 (MAIN_READY=招募, MAIN_COMBAT=战斗)</summary>
@@ -133,6 +139,10 @@ namespace BobCoach.Engine
 
         public event Action<PowerLogChoiceCompletion> DarkGiftCompleted;
 
+        public event Action<PowerLogChoiceBatch> PassiveChoiceActive;
+
+        public event Action<PowerLogChoiceCompletion> PassiveChoiceCompleted;
+
         /// <summary>BG36_Button_DarkGift pressable state observed from Power.log.</summary>
         public event Action<PowerLogDarkGiftPressable> DarkGiftPressableChanged;
 
@@ -162,6 +172,12 @@ namespace BobCoach.Engine
             _darkGiftPendingChoiceId = -1;
             _darkGiftPendingChoiceType = "";
             _darkGiftPendingChoiceAt = DateTime.MinValue;
+            _passiveChoice = null;
+            _passiveChoiceFired = false;
+            _passiveChoiceShowMarkerReceived = false;
+            _passivePendingChoiceId = -1;
+            _passivePendingChoiceType = "";
+            _passivePendingChoiceAt = DateTime.MinValue;
             _lastDarkGiftPressable = null;
             _currentEntityChoice = null;
             _isTrinketChoice = false;
@@ -276,7 +292,21 @@ namespace BobCoach.Engine
                 if (scm.Success && scm.Groups[2].Value != "MULLIGAN")
                 {
                     int sendChoiceId = int.Parse(scm.Groups[1].Value);
-                    if (_darkGiftChoice != null || _darkGiftFailClosedChoiceId >= 0)
+                    if (_passiveChoice != null || _passivePendingChoiceId >= 0)
+                    {
+                        if (_passiveChoice != null && sendChoiceId == _passiveChoice.ChoiceId)
+                        {
+                            _passivePendingChoiceId = sendChoiceId;
+                            _passivePendingChoiceType = scm.Groups[2].Value;
+                            _passivePendingChoiceAt = ts;
+                        }
+                        else
+                        {
+                            ClearPassiveContext();
+                        }
+                        ClearOrdinaryChoiceContext();
+                    }
+                    else if (_darkGiftChoice != null || _darkGiftFailClosedChoiceId >= 0)
                     {
                         if (_darkGiftChoice != null && sendChoiceId == _darkGiftChoice.ChoiceId)
                         {
@@ -306,13 +336,34 @@ namespace BobCoach.Engine
                         _lastChoiceContextAt = DateTime.MinValue;
                     }
                 }
-                else if (_darkGiftPendingChoiceId >= 0 || _pendingSendChoiceId >= 0)
+                else if (_passivePendingChoiceId >= 0
+                    || _darkGiftPendingChoiceId >= 0 || _pendingSendChoiceId >= 0)
                 {
                     var chosen = System.Text.RegularExpressions.Regex.Match(content,
                         @"^m_chosenEntities\[\d+\]=\[entityName=(.+) id=(\d+) zone=(\w+) zonePos=(\d+) cardId=(\w*) player=(\d+)\]");
                     if (chosen.Success)
                     {
-                        if (_darkGiftPendingChoiceId >= 0)
+                        if (_passivePendingChoiceId >= 0)
+                        {
+                            var passiveCompletion = new PowerLogChoiceCompletion
+                            {
+                                ChoiceId = _passivePendingChoiceId,
+                                ChoiceType = _passivePendingChoiceType,
+                                SelectedName = chosen.Groups[1].Value,
+                                SelectedEntityId = int.Parse(chosen.Groups[2].Value),
+                                SelectedCardId = chosen.Groups[5].Value,
+                                SelectedPlayerId = int.Parse(chosen.Groups[6].Value),
+                                Timestamp = _passivePendingChoiceAt,
+                            };
+                            ClearPassiveContext();
+                            ClearOrdinaryChoiceContext();
+                            try { PassiveChoiceCompleted?.Invoke(passiveCompletion); } catch { }
+                            results.Add(new PLEvent { Type = PLEventType.PlayerAction, Timestamp = ts,
+                                EntityId = passiveCompletion.SelectedEntityId,
+                                CardId = passiveCompletion.SelectedCardId,
+                                BlockType = "CHOSEN" });
+                        }
+                        else if (_darkGiftPendingChoiceId >= 0)
                         {
                             if (_darkGiftChoice != null
                                 && _darkGiftPendingChoiceId == _darkGiftChoice.ChoiceId)
@@ -734,7 +785,28 @@ namespace BobCoach.Engine
                 _currentEntityChoice.SourceGrantsOrdinaryDiscover =
                     IsTrustedOrdinaryDiscoverSource(_currentEntityChoice.SourceCardId);
 
-                if (IsDarkGiftSource(_currentEntityChoice.SourceCardId))
+                if (IsPassiveHeroPowerChoiceSource(_currentEntityChoice.SourceCardId))
+                {
+                    _passiveChoice = new PowerLogChoiceBatch
+                    {
+                        ChoiceId = _currentEntityChoice.Id,
+                        TaskList = _currentEntityChoice.TaskList,
+                        PlayerName = _currentEntityChoice.PlayerName,
+                        ChoiceType = _currentEntityChoice.ChoiceType,
+                        SourceCardId = _currentEntityChoice.SourceCardId,
+                        SourceName = _currentEntityChoice.SourceName,
+                        SourcePlayerId = _currentEntityChoice.SourcePlayerId,
+                        Timestamp = _currentEntityChoice.Timestamp,
+                        Candidates = new List<DiscoverCandidate>(),
+                    };
+                    _passiveChoiceFired = false;
+                    _passiveChoiceShowMarkerReceived = false;
+                    _passivePendingChoiceId = -1;
+                    _passivePendingChoiceType = "";
+                    _passivePendingChoiceAt = DateTime.MinValue;
+                    ClearOrdinaryChoiceContext();
+                }
+                else if (IsDarkGiftSource(_currentEntityChoice.SourceCardId))
                 {
                     _darkGiftChoice = new PowerLogChoiceBatch
                     {
@@ -767,6 +839,19 @@ namespace BobCoach.Engine
             // Entities[N]行
             var entityMatch = System.Text.RegularExpressions.Regex.Match(content,
                 @"Entities\[(\d+)\]=\[entityName=(.+) id=(\d+) zone=(\w+) zonePos=(\d+) cardId=(\w+)");
+            if (entityMatch.Success && _passiveChoice != null)
+            {
+                int passiveIdx = int.Parse(entityMatch.Groups[1].Value);
+                while (_passiveChoice.Candidates.Count <= passiveIdx)
+                    _passiveChoice.Candidates.Add(null);
+                _passiveChoice.Candidates[passiveIdx] = new DiscoverCandidate
+                {
+                    CardId = entityMatch.Groups[6].Value,
+                    CardName = entityMatch.Groups[2].Value,
+                    EntityId = int.Parse(entityMatch.Groups[3].Value),
+                };
+                return null;
+            }
             if (entityMatch.Success && _darkGiftChoice != null)
             {
                 int giftIdx = int.Parse(entityMatch.Groups[1].Value);
@@ -884,12 +969,19 @@ namespace BobCoach.Engine
 
             int markerId = int.Parse(markerMatch.Groups[1].Value);
             int markerTaskList = int.Parse(markerMatch.Groups[2].Value);
+            if (_passiveChoice != null
+                && markerId == _passiveChoice.ChoiceId
+                && markerTaskList == _passiveChoice.TaskList)
+            {
+                _passiveChoiceShowMarkerReceived = true;
+                TryEmitPassiveChoiceActive(ts);
+                return;
+            }
             if (_darkGiftChoice != null
                 && markerId == _darkGiftChoice.ChoiceId
                 && markerTaskList == _darkGiftChoice.TaskList)
             {
                 _darkGiftChoiceShowMarkerReceived = true;
-                _lastChoiceContextAt = ts;
                 TryEmitDarkGiftChoiceActive(ts);
                 return;
             }
@@ -905,6 +997,36 @@ namespace BobCoach.Engine
             _currentEntityChoice.ShowMarkerReceived = true;
             _lastChoiceContextAt = ts;
             TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
+        }
+
+        private void TryEmitPassiveChoiceActive(DateTime ts)
+        {
+            if (_passiveChoice == null
+                || _passiveChoiceFired
+                || !_passiveChoiceShowMarkerReceived)
+                return;
+
+            var candidates = _passiveChoice.Candidates
+                .Where(c => c != null).ToList();
+            if (candidates.Count < 2) return;
+
+            _passiveChoiceFired = true;
+            try
+            {
+                PassiveChoiceActive?.Invoke(new PowerLogChoiceBatch
+                {
+                    ChoiceId = _passiveChoice.ChoiceId,
+                    TaskList = _passiveChoice.TaskList,
+                    PlayerName = _passiveChoice.PlayerName,
+                    ChoiceType = _passiveChoice.ChoiceType,
+                    SourceCardId = _passiveChoice.SourceCardId,
+                    SourceName = _passiveChoice.SourceName,
+                    SourcePlayerId = _passiveChoice.SourcePlayerId,
+                    Timestamp = ts,
+                    Candidates = new List<DiscoverCandidate>(candidates),
+                });
+            }
+            catch { }
         }
 
         private void TryEmitDarkGiftChoiceActive(DateTime ts)
@@ -1432,6 +1554,21 @@ namespace BobCoach.Engine
             _darkGiftPendingChoiceId = -1;
             _darkGiftPendingChoiceType = "";
             _darkGiftPendingChoiceAt = DateTime.MinValue;
+        }
+
+        private void ClearPassiveContext()
+        {
+            _passiveChoice = null;
+            _passiveChoiceFired = false;
+            _passiveChoiceShowMarkerReceived = false;
+            _passivePendingChoiceId = -1;
+            _passivePendingChoiceType = "";
+            _passivePendingChoiceAt = DateTime.MinValue;
+        }
+
+        private static bool IsPassiveHeroPowerChoiceSource(string sourceCardId)
+        {
+            return sourceCardId == "BG22_HERO_201p";
         }
 
         internal static bool IsDarkGiftSource(string sourceCardId)

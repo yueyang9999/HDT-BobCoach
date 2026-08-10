@@ -56,6 +56,10 @@ namespace BobCoach.Engine
 
         public event Action<PowerLogChoiceCompletion> DarkGiftCompleted;
 
+        public event Action<PowerLogChoiceBatch> PassiveChoiceActive;
+
+        public event Action<PowerLogChoiceCompletion> PassiveChoiceCompleted;
+
         public event Action<PowerLogDarkGiftPressable> DarkGiftPressableChanged;
 
         public event Action<PLEvent> TeammateGoldTransferObserved;
@@ -205,6 +209,8 @@ namespace BobCoach.Engine
                 _parser.ChoiceCompleted += OnChoiceCompleted;
                 _parser.DarkGiftChoiceActive += OnDarkGiftChoiceActive;
                 _parser.DarkGiftCompleted += OnDarkGiftCompleted;
+                _parser.PassiveChoiceActive += OnPassiveChoiceActive;
+                _parser.PassiveChoiceCompleted += OnPassiveChoiceCompleted;
                 _parser.DarkGiftPressableChanged += OnDarkGiftPressableChanged;
                 _parser.TeammateGoldTransferObserved += OnTeammateGoldTransferObserved;
                 _parser.RelevantTagChanged += OnRelevantTagChanged;
@@ -246,6 +252,8 @@ namespace BobCoach.Engine
                 _parser.ChoiceCompleted -= OnChoiceCompleted;
                 _parser.DarkGiftChoiceActive -= OnDarkGiftChoiceActive;
                 _parser.DarkGiftCompleted -= OnDarkGiftCompleted;
+                _parser.PassiveChoiceActive -= OnPassiveChoiceActive;
+                _parser.PassiveChoiceCompleted -= OnPassiveChoiceCompleted;
                 _parser.DarkGiftPressableChanged -= OnDarkGiftPressableChanged;
                 _parser.TeammateGoldTransferObserved -= OnTeammateGoldTransferObserved;
                 _parser.RelevantTagChanged -= OnRelevantTagChanged;
@@ -333,6 +341,23 @@ namespace BobCoach.Engine
             Log(string.Format("PowerLog dark gift completed: choice={0} selected={1}",
                 completion?.ChoiceId ?? -1, completion?.SelectedCardId ?? ""));
             try { DarkGiftCompleted?.Invoke(completion); } catch { }
+        }
+
+        private void OnPassiveChoiceActive(PowerLogChoiceBatch batch)
+        {
+            var candidates = batch?.Candidates;
+            Log(string.Format("PowerLog passive choice active: choice={0} source={1} {2} candidates [{3}]",
+                batch?.ChoiceId ?? -1, batch?.SourceCardId ?? "",
+                candidates?.Count ?? 0,
+                candidates != null ? string.Join(", ", candidates.Select(c => c.CardName ?? c.CardId ?? "?")) : "null"));
+            try { PassiveChoiceActive?.Invoke(batch); } catch { }
+        }
+
+        private void OnPassiveChoiceCompleted(PowerLogChoiceCompletion completion)
+        {
+            Log(string.Format("PowerLog passive choice completed: choice={0} selected={1}",
+                completion?.ChoiceId ?? -1, completion?.SelectedCardId ?? ""));
+            try { PassiveChoiceCompleted?.Invoke(completion); } catch { }
         }
 
         private void OnDarkGiftPressableChanged(PowerLogDarkGiftPressable pressable)

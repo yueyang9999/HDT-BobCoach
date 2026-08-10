@@ -57,6 +57,8 @@ function applyBuyCost(g, p, minionCost) {
 //       handGainedFromShop }
 function advance(g, p) {
     const turn = p.turn;
+    const normalRecruitAvailable = p.normalRecruitAvailable !== false;
+    if (!normalRecruitAvailable) return 0;
     let maxGold = Math.min(10, 2 + turn);
     maxGold = Math.min(20, maxGold + (p.goldPerTurn || 0));
     const effBonus = g.bonusGoldApplied ? 0 : (p.bonusGold || 0);
@@ -377,6 +379,27 @@ test("[5B.3H] 已观察购买费用未知时本回合金币保守关闭为0", ()
         handCount: 1, hdtTag: 6,
     }));
     if (recovered !== 6) return "下一回合应恢复新基准6, 实际 " + recovered;
+});
+
+test("[GT-T25] 无正常招募期保持0/unknown，不抬到maxGold=3", () => {
+    const g = newTracker();
+    const gold = advance(g, frame(1, 5, [1, 2, 3, 4, 5], 0, 1, {
+        hdtTag: -1,
+        normalRecruitAvailable: false,
+    }));
+    if (gold !== 0) return "无正常招募期首帧应为0/unknown，实际 " + gold;
+    if (g.selfTrackedGold !== -1) return "无正常招募期不得执行回合基准，实际 " + g.selfTrackedGold;
+});
+
+test("[GT-T25] 无正常招募期不做购买/刷新/升本/售出推进", () => {
+    const g = newTracker();
+    advance(g, frame(5, 4, [10, 11, 12, 13], 3, 1));   // T5 正常招募基准 7
+    const before = g.selfTrackedGold;
+    const gold = advance(g, frame(5, 3, [20, 21, 22, 23], 2, 1, {
+        normalRecruitAvailable: false,
+    }));
+    if (gold !== 0) return "无正常招募期返回值应为0/unknown，实际 " + gold;
+    if (g.selfTrackedGold !== before) return "无正常招募期不得推进自追踪金币，实际 " + g.selfTrackedGold;
 });
 
 // ============================================================================

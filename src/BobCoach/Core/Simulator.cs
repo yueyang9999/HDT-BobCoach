@@ -528,6 +528,8 @@ namespace BobCoach.Engine
                         src.ObservedTeammateGoldTransfers)
                     : new List<ObservedTeammateGoldTransfer>(),
                 ReplenishingShopActive = src.ReplenishingShopActive,
+                PassiveChoiceActive = src.PassiveChoiceActive,
+                NormalRecruitAvailable = src.NormalRecruitAvailable,
                 Armor = src.Armor,
                 AvailableTribes = src.AvailableTribes != null
                     ? new HashSet<string>(src.AvailableTribes) : new HashSet<string>(),

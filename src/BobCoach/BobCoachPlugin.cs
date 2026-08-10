@@ -72,6 +72,7 @@ namespace BobCoach
         private Engine.PowerLogChoiceBatch _timewarpPurchaseBatchFromLog = null;
         private volatile bool _timewarpPurchaseClearRequested;
         private Engine.PowerLogChoiceBatch _darkGiftBatchFromLog = null;
+        private bool _passiveChoiceActive;
         private readonly Engine.DarkGiftTipRenderCoordinator _darkGiftTipCoordinator =
             new Engine.DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
         private readonly HashSet<int> _claimedUpgradePrizeChoiceIds = new HashSet<int>();
@@ -822,6 +823,7 @@ namespace BobCoach
                 _timewarpPurchaseBatchFromLog = null;
                 _timewarpPurchaseClearRequested = false;
                 _darkGiftBatchFromLog = null;
+                _passiveChoiceActive = false;
                 _darkGiftTipCoordinator.Reset();
                 _renderer.ClearDarkGiftCandidates();
                 _claimedUpgradePrizeChoiceIds.Clear();
@@ -1426,6 +1428,7 @@ namespace BobCoach
                 && (DateTime.UtcNow - _lastDiscoverTriggerTime).TotalSeconds < 5; // 3→5秒延长窗口
             bool initialDiscoverGate = (_discoverPanelActive || hasRecentTrigger) && !combatCooldown;
             _extractor.DiscoverTriggerActive = initialDiscoverGate;
+            _extractor.PassiveChoiceActive = _passiveChoiceActive;
 
             var state = _extractor.Extract();
             if (state == null) return;
@@ -2165,6 +2168,8 @@ namespace BobCoach
             _powerLogWatcher.TimewarpPurchaseOffered += OnPowerLogTimewarpPurchaseOffered;
             _powerLogWatcher.DarkGiftChoiceActive += OnPowerLogDarkGiftChoiceActive;
             _powerLogWatcher.DarkGiftCompleted += OnPowerLogDarkGiftCompleted;
+            _powerLogWatcher.PassiveChoiceActive += OnPowerLogPassiveChoiceActive;
+            _powerLogWatcher.PassiveChoiceCompleted += OnPowerLogPassiveChoiceCompleted;
             _powerLogWatcher.DarkGiftPressableChanged += OnPowerLogDarkGiftPressableChanged;
             _powerLogWatcher.TrinketChoiceActive += OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted += OnPowerLogChoiceCompleted;
@@ -2183,6 +2188,8 @@ namespace BobCoach
             _powerLogWatcher.TimewarpPurchaseOffered -= OnPowerLogTimewarpPurchaseOffered;
             _powerLogWatcher.DarkGiftChoiceActive -= OnPowerLogDarkGiftChoiceActive;
             _powerLogWatcher.DarkGiftCompleted -= OnPowerLogDarkGiftCompleted;
+            _powerLogWatcher.PassiveChoiceActive -= OnPowerLogPassiveChoiceActive;
+            _powerLogWatcher.PassiveChoiceCompleted -= OnPowerLogPassiveChoiceCompleted;
             _powerLogWatcher.DarkGiftPressableChanged -= OnPowerLogDarkGiftPressableChanged;
             _powerLogWatcher.TrinketChoiceActive -= OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted -= OnPowerLogChoiceCompleted;
@@ -2494,11 +2501,13 @@ namespace BobCoach
                         _renderer.ClearDiscoverHints();
                     }
 
-                    // 无操作场景：商店空+无发现+无饰品+无手牌推荐 → 不显示任何指导
-                    bool noActionNeeded = state.ShopMinions.Count == 0
+                    // 无操作场景：商店空+无发现+无饰品+无手牌推荐，或处于被动选择/无正常招募期
+                    bool noActionNeeded = (state.ShopMinions.Count == 0
                         && state.DiscoverOptions.Count == 0
                         && (state.TrinketOffer?.Count ?? 0) == 0
-                        && plan.HandMarker == null;
+                        && plan.HandMarker == null)
+                        || state.PassiveChoiceActive
+                        || !state.NormalRecruitAvailable;
                     if (noActionNeeded)
                     {
                         // 清空所有指导文字，只保留状态信息
@@ -2689,7 +2698,7 @@ namespace BobCoach
                     // ── 刷新建议: 店无好牌时提示刷新, 金币够就用 ──
                     var liveRules = state.EffectiveRules ?? EffectiveGameRules.Default;
                     int liveRefreshCost = GameRuleEvaluator.GetRefreshCost(state, state.HeroCardId, liveRules);
-                    bool canAffordRefresh = liveRules.ManualRefreshAllowed && state.Gold >= liveRefreshCost;
+                    bool canAffordRefresh = liveRules.ManualRefreshAllowed && liveGold >= liveRefreshCost;
                     bool earlySuppressRefresh = state.Turn <= 5 && state.FreeRefreshCount == 0;
                     bool badShop = plan.ShopMarkers.Count == 0 && plan.UpgradeHint == null
                         && state.ShopMinions.Count > 0 && !earlySuppressRefresh;
@@ -3592,6 +3601,23 @@ namespace BobCoach
             _darkGiftBatchFromLog = null;
             _darkGiftTipCoordinator.OnDarkGiftCompleted(DateTime.Now);
             Log("Dark Gift: choice=" + completion.ChoiceId + " completed selected=" + completion.SelectedCardId);
+            OnPowerLogStateChanged();
+        }
+
+        private void OnPowerLogPassiveChoiceActive(Engine.PowerLogChoiceBatch batch)
+        {
+            if (batch == null || batch.ChoiceId < 0) return;
+            _passiveChoiceActive = true;
+            Log("Passive choice: active choice=" + batch.ChoiceId + " source=" + batch.SourceCardId);
+            OnPowerLogStateChanged();
+        }
+
+        private void OnPowerLogPassiveChoiceCompleted(Engine.PowerLogChoiceCompletion completion)
+        {
+            if (completion == null) return;
+            _passiveChoiceActive = false;
+            Log("Passive choice: completed choice=" + completion.ChoiceId
+                + " selected=" + completion.SelectedCardId);
             OnPowerLogStateChanged();
         }
 

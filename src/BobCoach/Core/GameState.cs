@@ -159,6 +159,8 @@ namespace BobCoach.Engine
         public List<ObservedTeammateGoldTransfer> ObservedTeammateGoldTransfers =
             new List<ObservedTeammateGoldTransfer>();
         public bool ReplenishingShopActive; // 补牌型酒馆: 辐光护手/时空扭曲物色新人等, UI按实际可见槽位映射
+        public bool PassiveChoiceActive;
+        public bool NormalRecruitAvailable = true;
 
         /// <summary>游戏实际招募位数(基于酒馆等级, 含法术位)</summary>
         public int ShopSlotCount

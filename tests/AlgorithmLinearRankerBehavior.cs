@@ -75,6 +75,8 @@ namespace BobCoach.Engine
         public string HeroPowerSpecial = "";
         public bool HeroPowerHasDiscover;
         public bool ReplenishingShopActive;
+        public bool PassiveChoiceActive;
+        public bool NormalRecruitAvailable = true;
         public HashSet<string> AvailableTribes = new HashSet<string>();
         public List<string> ActiveTrinkets = new List<string>();
         public HashSet<string> ClaimedScheduledGrantOccurrences = new HashSet<string>();

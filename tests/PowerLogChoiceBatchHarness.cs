@@ -31,6 +31,8 @@ public static class PowerLogChoiceBatchHarness
             if (args[0] == "--watcher-late-start-live-completion"
                 || (args.Length >= 2 && args[1] == "--watcher-late-start-live-completion"))
                 return RunWatcherLateStartLiveCompletionTest(null);
+            if (args[0].IndexOf("2026_08_09_21_39_26", StringComparison.OrdinalIgnoreCase) >= 0)
+                return ReplayFaelin20260809(args[0]);
             return ReplayCapturedLog(args[0]);
         }
 
@@ -393,10 +395,83 @@ public static class PowerLogChoiceBatchHarness
         if (ordinaryDiscoverSourceGateExit != 0) return ordinaryDiscoverSourceGateExit;
         var barovMulliganTavernExit = RunBarovMulliganTavernLeakRegressionTest();
         if (barovMulliganTavernExit != 0) return barovMulliganTavernExit;
+        var faelinPassiveExit = RunFaelinPassiveChoiceTest();
+        if (faelinPassiveExit != 0) return faelinPassiveExit;
         var displayNameExit = RunDisplayNameResolverTest();
         if (displayNameExit != 0) return displayNameExit;
 
         Console.WriteLine("PASS trinket/discover batch metadata and typed completion");
+        return 0;
+    }
+
+    private static int RunFaelinPassiveChoiceTest()
+    {
+        var parser = new PowerLogParser();
+        int passiveActive = 0;
+        int passiveCompleted = 0;
+        int discoverLeaks = 0;
+        int darkGiftLeaks = 0;
+        int trinketLeaks = 0;
+        int timewarpLeaks = 0;
+        int choiceCompletedLeaks = 0;
+        PowerLogChoiceBatch passiveBatch = null;
+        PowerLogChoiceCompletion passiveDone = null;
+        parser.PassiveChoiceActive += batch =>
+        {
+            passiveActive++;
+            passiveBatch = batch;
+        };
+        parser.PassiveChoiceCompleted += completion =>
+        {
+            passiveCompleted++;
+            passiveDone = completion;
+        };
+        parser.DiscoverOffered += batch => discoverLeaks++;
+        parser.DarkGiftChoiceActive += batch => darkGiftLeaks++;
+        parser.TrinketChoiceActive += batch => trinketLeaks++;
+        parser.TimewarpPurchaseOffered += batch => timewarpLeaks++;
+        parser.ChoiceCompleted += completion => choiceCompletedLeaks++;
+
+        parser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() - id=2 Player=Local TaskList=132 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Source=[entityName=Far Plan id=184 zone=PLAY zonePos=0 cardId=BG22_HERO_201p player=6]");
+        parser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Option A id=411 zone=SETASIDE zonePos=0 cardId=BG33_823 player=6]");
+        parser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Option B id=413 zone=SETASIDE zonePos=0 cardId=BG36_640 player=6]");
+        parser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Option C id=414 zone=SETASIDE zonePos=0 cardId=BGS_018 player=6]");
+        if (passiveActive != 0 || parser.IsChoiceListActive())
+            return Fail("Faelin passive choice fired before matching WaitThenShowChoices marker or leaked into choice context");
+
+        parser.ParseLine("D 22:09:14.2167276 ChoiceCardMgr.WaitThenShowChoices() - id=2 WAIT for taskList 132");
+        if (passiveActive != 1 || passiveBatch == null
+            || passiveBatch.ChoiceId != 2 || passiveBatch.TaskList != 132
+            || passiveBatch.SourceCardId != "BG22_HERO_201p"
+            || passiveBatch.Candidates == null || passiveBatch.Candidates.Count != 3
+            || parser.IsChoiceListActive())
+            return Fail("Faelin passive choice did not emit one typed batch with candidates, or leaked into choice context");
+
+        parser.ParseLine("D 22:09:39.4897516 GameState.SendChoices() - id=2 ChoiceType=GENERAL");
+        parser.ParseLine("D 22:09:39.4897516 GameState.SendChoices() -   m_chosenEntities[0]=[entityName=Option A id=411 zone=SETASIDE zonePos=0 cardId=BG33_823 player=6]");
+        if (passiveCompleted != 1 || passiveDone == null
+            || passiveDone.ChoiceId != 2 || passiveDone.SelectedCardId != "BG33_823")
+            return Fail("Faelin passive completion was not emitted with the selected card");
+        if (discoverLeaks != 0 || darkGiftLeaks != 0 || trinketLeaks != 0
+            || timewarpLeaks != 0 || choiceCompletedLeaks != 0)
+            return Fail("Faelin passive choice leaked into ordinary discover/dark gift/trinket/timewarp/ChoiceCompleted");
+        if (parser.IsChoiceListActive())
+            return Fail("Faelin passive completion left ordinary choice context active");
+
+        var mismatchParser = new PowerLogParser();
+        int mismatchActive = 0;
+        mismatchParser.PassiveChoiceActive += batch => mismatchActive++;
+        mismatchParser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() - id=2 Player=Local TaskList=132 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        mismatchParser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Source=[entityName=Far Plan id=184 zone=PLAY zonePos=0 cardId=BG22_HERO_201p player=6]");
+        mismatchParser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Option A id=411 zone=SETASIDE zonePos=0 cardId=BG33_823 player=6]");
+        mismatchParser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Option B id=413 zone=SETASIDE zonePos=0 cardId=BG36_640 player=6]");
+        mismatchParser.ParseLine("D 22:09:14.2167276 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Option C id=414 zone=SETASIDE zonePos=0 cardId=BGS_018 player=6]");
+        mismatchParser.ParseLine("D 22:09:14.2167276 ChoiceCardMgr.WaitThenShowChoices() - id=2 WAIT for taskList 999");
+        if (mismatchActive != 0)
+            return Fail("Faelin passive choice fired on mismatched taskList");
+
+        Console.WriteLine("PASS Faelin passive choice stays independent from ordinary choice events");
         return 0;
     }
 
@@ -1661,6 +1736,74 @@ public static class PowerLogChoiceBatchHarness
             return Fail("dark gift completion leaked into ordinary ChoiceCompleted");
 
         Console.WriteLine("PASS captured log ordinary/triple discover, scheduled trinket, and dark gift remain distinct");
+        return 0;
+    }
+
+    private static int ReplayFaelin20260809(string path)
+    {
+        if (!File.Exists(path)) return Fail("Faelin replay log not found");
+        var parser = new PowerLogParser();
+        var discovers = new List<PowerLogChoiceBatch>();
+        var trinketBatches = new List<PowerLogChoiceBatch>();
+        var darkGiftBatches = new List<PowerLogChoiceBatch>();
+        var timewarpPurchases = new List<PowerLogChoiceBatch>();
+        var completions = new List<PowerLogChoiceCompletion>();
+        var passiveBatches = new List<PowerLogChoiceBatch>();
+        var passiveCompletions = new List<PowerLogChoiceCompletion>();
+        parser.DiscoverOffered += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                discovers.Add(batch);
+        };
+        parser.TrinketChoiceActive += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                trinketBatches.Add(batch);
+        };
+        parser.DarkGiftChoiceActive += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                darkGiftBatches.Add(batch);
+        };
+        parser.TimewarpPurchaseOffered += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                timewarpPurchases.Add(batch);
+        };
+        parser.ChoiceCompleted += completion =>
+        {
+            if (completion != null) completions.Add(completion);
+        };
+        parser.PassiveChoiceActive += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                passiveBatches.Add(batch);
+        };
+        parser.PassiveChoiceCompleted += completion =>
+        {
+            if (completion != null) passiveCompletions.Add(completion);
+        };
+        foreach (var line in File.ReadLines(path)) parser.ParseLine(line);
+
+        var faelinPassive = passiveBatches.LastOrDefault(b =>
+            b.SourceCardId == "BG22_HERO_201p" && b.TaskList == 132);
+        if (faelinPassive == null || faelinPassive.Candidates.Count != 3)
+            return Fail("Faelin 2026-08-09 passive choice id=2 taskList=132 missing or wrong candidate count");
+        var faelinDone = passiveCompletions.LastOrDefault(c => c.ChoiceId == faelinPassive.ChoiceId);
+        if (faelinDone == null || faelinDone.SelectedCardId != "BG33_823")
+            return Fail("Faelin 2026-08-09 passive completion missing or selected card mismatch");
+        if (completions.Any(c =>
+            c.ChoiceId == faelinPassive.ChoiceId && c.Timestamp == faelinDone.Timestamp))
+            return Fail("Faelin passive completion leaked into ordinary ChoiceCompleted");
+        if (discovers.Any(b => b.SourceCardId == "BG22_HERO_201p")
+            || trinketBatches.Any(b => b.SourceCardId == "BG22_HERO_201p")
+            || darkGiftBatches.Any(b => b.SourceCardId == "BG22_HERO_201p")
+            || timewarpPurchases.Any(b => b.SourceCardId == "BG22_HERO_201p"))
+            return Fail("Faelin passive choice leaked into another typed choice event");
+        if (parser.IsChoiceListActive())
+            return Fail("Faelin passive completion left ordinary choice context active");
+
+        Console.WriteLine("PASS Faelin 2026-08-09 real log passive choice stays independent");
         return 0;
     }
 

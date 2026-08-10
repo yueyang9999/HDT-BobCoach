@@ -555,7 +555,8 @@ function warn(name, msg) {
     });
 
     test("[GoldTracker] early-turn fallback must not overwrite real 0 gold", () => {
-        if (!extractorSrc.includes("trackedGold < 0 && state.Gold <= 0"))
+        if (!extractorSrc.includes("trackedGold < 0 && state.NormalRecruitAvailable")
+            || !extractorSrc.includes("state.Gold <= 0"))
             return "T1/T2 gold fallback must only run before tracker initializes";
         const oldFallback = /state\.Gold\s*<=\s*0\s*&&\s*state\.ShopMinions\.Count\s*>\s*0\s*&&\s*turn\s*<=\s*2\)\s*state\.Gold\s*=\s*3/.test(extractorSrc);
         if (oldFallback)
@@ -1806,6 +1807,89 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "unaffordable upgrade text must be removed; shortage guidance must not appear when liveGold < upgrade cost";
         if (glowBlock.includes("canAfford = liveGold >= plan.UpgradeHint.Cost"))
             return "ShowLevelUpGlow must not keep a canAfford branch that renders shortage reasons";
+    });
+}
+
+// ============================================================================
+// T25 Faelin passive choice + 0-coin/no-recruit gates
+// ============================================================================
+{
+    const gameStateSrc = readFile("src/BobCoach/Core/GameState.cs");
+    const simulatorSrc = readFile("src/BobCoach/Core/Simulator.cs");
+    const goldSrc = readFile("src/BobCoach/Core/GoldTracker.cs");
+    const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+    const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+    const parserSrc = readFile("src/BobCoach/Core/PowerLogParser.cs");
+    const watcherSrc = readFile("src/BobCoach/Core/PowerLogWatcher.cs");
+
+    test("[T25] GameState exposes passive/no-recruit flags and Simulator copies them", () => {
+        if (!gameStateSrc.includes("PassiveChoiceActive"))
+            return "GameState must expose PassiveChoiceActive";
+        if (!gameStateSrc.includes("NormalRecruitAvailable"))
+            return "GameState must expose NormalRecruitAvailable";
+        if (!simulatorSrc.includes("PassiveChoiceActive = src.PassiveChoiceActive"))
+            return "Simulator.DetachedCopy must preserve PassiveChoiceActive";
+        if (!simulatorSrc.includes("NormalRecruitAvailable = src.NormalRecruitAvailable"))
+            return "Simulator.DetachedCopy must preserve NormalRecruitAvailable";
+    });
+
+    test("[T25] GoldTracker and TrackGold carry NormalRecruitAvailable fail closed", () => {
+        if (!goldSrc.includes("bool normalRecruitAvailable = true"))
+            return "GoldTracker.Advance must accept normalRecruitAvailable=true default";
+        if (!goldSrc.includes("if (!normalRecruitAvailable)") || !goldSrc.includes("return 0;"))
+            return "GoldTracker.Advance must fail closed to 0 outside normal recruit";
+        const trackIdx = extractorSrc.indexOf("private int TrackGold(");
+        const trackEnd = extractorSrc.indexOf("private int _goldDiagCount", trackIdx);
+        const trackBody = trackIdx >= 0 ? extractorSrc.slice(trackIdx, trackEnd > trackIdx ? trackEnd : trackIdx + 4000) : "";
+        if (!trackBody.includes("state.NormalRecruitAvailable"))
+            return "TrackGold must pass state.NormalRecruitAvailable into GoldTracker";
+        if (!extractorSrc.includes("trackedGold < 0 && state.NormalRecruitAvailable"))
+            return "early-turn fallback must be gated by NormalRecruitAvailable";
+    });
+
+    test("[T25] ReadGold must not fallback to 3", () => {
+        const readGoldIdx = extractorSrc.indexOf("private static int ReadGold()");
+        const readGoldBlock = readGoldIdx >= 0 ? extractorSrc.slice(readGoldIdx, readGoldIdx + 500) : "";
+        if (readGoldBlock.includes("return 3;"))
+            return "ReadGold fallback must not return 3";
+        if (!readGoldBlock.includes("return -1;"))
+            return "ReadGold fallback must be explicit unknown/-1";
+    });
+
+    test("[T25] refresh affordability uses liveGold", () => {
+        const idx = pluginSrc.indexOf("bool canAffordRefresh");
+        const block = idx >= 0 ? pluginSrc.slice(idx, idx + 240) : "";
+        if (!block.includes("liveGold >= liveRefreshCost"))
+            return "refresh affordability must use liveGold";
+        if (block.includes("state.Gold >= liveRefreshCost"))
+            return "refresh affordability must not use stale state.Gold";
+    });
+
+    test("[T25] noActionNeeded covers passive/no-recruit and does not hide by passive hero power", () => {
+        const idx = pluginSrc.indexOf("bool noActionNeeded = ");
+        const block = idx >= 0 ? pluginSrc.slice(idx, idx + 600) : "";
+        if (!block.includes("state.PassiveChoiceActive"))
+            return "noActionNeeded must cover passive choice period";
+        if (!block.includes("!state.NormalRecruitAvailable"))
+            return "noActionNeeded must cover no normal recruit period";
+        if (block.includes('HeroPowerType == "Passive"'))
+            return "noActionNeeded must not hide guidance globally just because HeroPowerType is Passive";
+    });
+
+    test("[T25] parser/watcher/plugin expose passive choice lifecycle", () => {
+        if (!parserSrc.includes("public event Action<PowerLogChoiceBatch> PassiveChoiceActive;")
+            || !parserSrc.includes("public event Action<PowerLogChoiceCompletion> PassiveChoiceCompleted;")
+            || !parserSrc.includes("BG22_HERO_201p"))
+            return "PowerLogParser must expose and recognize the Faelin passive choice lifecycle";
+        if (!watcherSrc.includes("public event Action<PowerLogChoiceBatch> PassiveChoiceActive;")
+            || !watcherSrc.includes("public event Action<PowerLogChoiceCompletion> PassiveChoiceCompleted;")
+            || !watcherSrc.includes("OnPassiveChoiceActive")
+            || !watcherSrc.includes("OnPassiveChoiceCompleted"))
+            return "PowerLogWatcher must forward passive choice lifecycle events";
+        if (!pluginSrc.includes("_passiveChoiceActive")
+            || !pluginSrc.includes("OnPowerLogPassiveChoiceActive")
+            || !pluginSrc.includes("OnPowerLogPassiveChoiceCompleted"))
+            return "BobCoachPlugin must own and handle passive choice lifecycle state";
     });
 }
 

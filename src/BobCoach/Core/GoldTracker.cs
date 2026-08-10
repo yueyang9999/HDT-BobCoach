@@ -86,9 +86,12 @@ namespace BobCoach.Engine
             int observedPurchasedMinionCount = 0,
             EffectiveGameRules effectiveRules = null,
             int tavernUpgradeCost = -1,
-            IList<ObservedPurchase> observedPurchases = null)
+            IList<ObservedPurchase> observedPurchases = null,
+            bool normalRecruitAvailable = true)
         {
             effectiveRules = effectiveRules ?? EffectiveGameRules.Default;
+            if (!normalRecruitAvailable)
+                return 0;
             int maxGold = Math.Min(10, 2 + turn); // T1=3,T2=4...T8起=10(与 GameState.MaxGold 同步)
             maxGold = Math.Min(20, maxGold + goldPerTurn); // 畸变可能超过10
             // 开局一次性加金(金钱大战等): 当回合上限拔高
