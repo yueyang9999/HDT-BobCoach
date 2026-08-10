@@ -1865,6 +1865,24 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "refresh affordability must not use stale state.Gold";
     });
 
+    test("[Phase2][Safety] live safety gate is wired into visible decisions", () => {
+        if (!pluginSrc.includes("LiveSafetyGate.Evaluate"))
+            return "BobCoachPlugin must invoke LiveSafetyGate";
+        if (!pluginSrc.includes("liveSafety.SuppressUpgrade"))
+            return "upgrade suppression must be applied to visible plan";
+        if (!pluginSrc.includes("liveSafety.SuppressRefresh"))
+            return "refresh suppression must be applied to visible plan";
+        if (!pluginSrc.includes("liveSafety.SuppressBuy"))
+            return "buy suppression must be applied to visible plan";
+    });
+
+    test("[Phase2][HeroSkill] visible hero suggestion uses data-driven decision service", () => {
+        if (!pluginSrc.includes("HeroSkillDecisionService.Decide"))
+            return "BobCoachPlugin must use HeroSkillDecisionService";
+        if (!pluginSrc.includes("_heroSkillCatalog.TryGet"))
+            return "BobCoachPlugin must query HeroSkillCatalog";
+    });
+
     test("[T25] noActionNeeded covers passive/no-recruit and does not hide by passive hero power", () => {
         const idx = pluginSrc.indexOf("bool noActionNeeded = ");
         const block = idx >= 0 ? pluginSrc.slice(idx, idx + 600) : "";

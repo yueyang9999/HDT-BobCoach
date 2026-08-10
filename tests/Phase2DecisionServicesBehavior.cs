@@ -13,6 +13,7 @@ internal static class Phase2DecisionServicesBehavior
             HeroSkillDecisionServicePassiveNeverPrompts();
             HeroSkillDecisionServiceActiveChecksTargets();
             DarkGiftDecisionServiceRespectsOfficialGates();
+            LiveSafetyGateSuppressesRiskyUpgrade();
             Console.WriteLine("PASS phase2 decision services assertions=" + _assertions);
             return 0;
         }
@@ -75,6 +76,31 @@ internal static class Phase2DecisionServicesBehavior
         var good = DarkGiftDecisionService.Decide(
             5, 8, 3, false, 10, 10, 30, 0.9, true);
         AssertTrue(good.ShouldOpen, "dark gift high value");
+    }
+
+    private static void LiveSafetyGateSuppressesRiskyUpgrade()
+    {
+        var scene = LiveSceneAnalyzer.Analyze(
+            turn: 6,
+            tavernTier: 3,
+            health: 10,
+            maxHealth: 30,
+            boardMinionCount: 4,
+            handMinionCount: 1,
+            shopMinionCount: 5,
+            boardPower: 20,
+            opponentAveragePower: 40,
+            normalRecruitAvailable: true,
+            liveGold: 8,
+            maxGold: 10,
+            upgradeCost: 8,
+            refreshCost: 1,
+            manualRefreshAllowed: true,
+            canBuyAny: true);
+        var safety = LiveSafetyGate.Evaluate(scene, 1, 3);
+        AssertTrue(safety.SuppressUpgrade, "desperate weak board must suppress upgrade");
+        AssertFalse(safety.SuppressRefresh, "refresh remains allowed");
+        AssertFalse(safety.SuppressBuy, "buy remains allowed");
     }
 
     private static void AssertTrue(bool value, string message)

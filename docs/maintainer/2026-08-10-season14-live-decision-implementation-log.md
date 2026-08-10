@@ -43,6 +43,15 @@ Owner: Codex goal session
 - 真实 `Power_old.log` 回放通过：Faelin 被动选择保持独立。
 - 阶段性提交：`cbb7db6 feat(season14): add live decision foundation and phase1-3 services`
 
+### 2026-08-10：生产决策接入与数据工具
+
+- 新增 `LiveSafetyGate`，已接入 `BobCoachPlugin` 玩家可见升本/刷新/购买抑制。
+- 英雄技能提示改用 `HeroSkillCatalog + HeroSkillDecisionService`。
+- 暗赐提示接入 `DarkGiftDecisionService`，T3、每回合一次、每局 3 次、3 金规则参与 UI 判断。
+- 新增 `generate_card_object_catalog.js`、`generate_hero_skill_registry.js`、`audit_unknown_card_ids.js`。
+- 已生成 `card_object_catalog.json` 816 项、`hero_skill_registry.json` 116 项。
+- 未知卡名兜底审计通过，源码不再使用裸 CardId 作为用户可见卡名。
+
 ## 验证记录
 
 | 时间 | 验证项 | 结果 | 证据 |
@@ -56,6 +65,10 @@ Owner: Codex goal session
 | 已执行 | validate_repository.ps1 | PASS 519 files | - |
 | 已执行 | git diff --check | PASS | 仅 LF/CRLF 警告 |
 | 已执行 | 真实 Power_old.log 回放 | PASS | Faelin 2026-08-09 real log |
+| 已执行 | Phase1 data tools | PASS | 生成器/审计已接入 contract suite |
+| 已执行 | UI lifecycle | PASS 178 | 含安全门禁/英雄技能/暗赐 |
+| 已执行 | npm run test:contracts | PASS | 含 phase1 data tools |
+| 已执行 | npm run test:behavior | PASS | Phase1-3 + safety/dark gift |
 
 ## 下一步
 

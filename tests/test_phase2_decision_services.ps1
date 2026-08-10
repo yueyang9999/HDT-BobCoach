@@ -16,6 +16,9 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\UnifiedActionScorer.cs"),
     (Join-Path $root "src\BobCoach\Core\HeroSkillDecisionService.cs"),
     (Join-Path $root "src\BobCoach\Core\DarkGiftDecisionService.cs"),
+    (Join-Path $root "src\BobCoach\Core\LiveSafetyGate.cs"),
+    (Join-Path $root "src\BobCoach\Core\LiveSceneAnalyzer.cs"),
+    (Join-Path $root "src\BobCoach\Core\EconomySnapshot.cs"),
     (Join-Path $PSScriptRoot "Phase2DecisionServicesBehavior.cs")
 )
 

@@ -155,6 +155,13 @@ namespace BobCoach.Engine
         public int BoardMinionCount = -1;
         public int ShopMinionCount = -1;
         public int HandMinionCount = -1;
+        public int Health = -1;
+        public int BoardPower = -1;
+        public int OpponentPower = -1;
+        public int UsesRemaining = 3;
+        public bool AlreadyUsedThisTurn;
+        public double OfferedExpectedValue;
+        public bool HasCoreSynergy;
     }
 
     public sealed class DarkGiftTipAdvice
@@ -197,12 +204,25 @@ namespace BobCoach.Engine
             if (opportunityCount <= 0 && context.Gold <= 0)
                 return Create(false, null, "no_opportunity_context");
 
+            var decision = DarkGiftDecisionService.Decide(
+                context.Turn,
+                context.Gold,
+                context.UsesRemaining,
+                context.AlreadyUsedThisTurn,
+                context.BoardPower,
+                context.OpponentPower,
+                context.Health,
+                context.OfferedExpectedValue,
+                context.HasCoreSynergy);
+            if (!decision.ShouldOpen)
+                return Create(false, null, decision.Reason);
+
             string statusText = string.Format(
-                "{0} T{1} \u672c{2} \u91d1{3} \u573a{4} \u5e97{5} \u624b{6}",
+                "{0} T{1} \u672c{2} \u91d1{3} \u573a{4} \u5e97{5} \u624b{6} \u8bc4{7:F2}",
                 PressableText, context.Turn, context.TavernTier, context.Gold,
                 context.BoardMinionCount, context.ShopMinionCount,
-                context.HandMinionCount);
-            return Create(true, statusText, "context_ready");
+                context.HandMinionCount, decision.Score);
+            return Create(true, statusText, "open");
         }
 
         private static DarkGiftTipAdvice Create(bool shouldShow, string statusText, string reason)

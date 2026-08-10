@@ -15,6 +15,8 @@ namespace BobCoach.Engine
         public int OpponentAveragePower;
         public bool NormalRecruitAvailable;
         public EconomySnapshot Economy;
+        public int RefreshCost;
+        public int MinBuyCost;
         public BoardCompositionProfile Board = new BoardCompositionProfile();
         public SurvivalRisk Survival = new SurvivalRisk();
         public UnknownCoverage Unknown = new UnknownCoverage();
@@ -96,6 +98,8 @@ namespace BobCoach.Engine
                 OpponentAveragePower = opponentAveragePower,
                 NormalRecruitAvailable = normalRecruitAvailable,
                 Economy = economy,
+                RefreshCost = refreshCost,
+                MinBuyCost = 3,
                 Survival = new SurvivalRisk
                 {
                     PowerRatio = powerRatio,

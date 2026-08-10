@@ -724,20 +724,26 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 1,
-            TavernTier = 1,
-            Gold = 3,
+            Turn = 5,
+            TavernTier = 3,
+            Gold = 8,
             BoardMinionCount = 2,
             ShopMinionCount = 4,
             HandMinionCount = 1,
+            Health = 30,
+            BoardPower = 30,
+            OpponentPower = 30,
+            UsesRemaining = 3,
+            OfferedExpectedValue = 0.8,
+            HasCoreSynergy = true,
         };
         var advice = advisor.Evaluate(context);
         if (!advice.ShouldShow)
             return Fail("dark gift tip advisor suppressed a pressable tip with valid game state");
         if (!advice.StatusText.Contains("\u6697\u8d50\u53ef\u53d1\u73b0")
-            || !advice.StatusText.Contains("T1")
-            || !advice.StatusText.Contains("\u672c1")
-            || !advice.StatusText.Contains("\u91d13")
+            || !advice.StatusText.Contains("T5")
+            || !advice.StatusText.Contains("\u672c3")
+            || !advice.StatusText.Contains("\u91d18")
             || !advice.StatusText.Contains("\u573a2")
             || !advice.StatusText.Contains("\u5e974")
             || !advice.StatusText.Contains("\u624b1"))
@@ -749,12 +755,18 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 1,
-            TavernTier = 1,
+            Turn = 5,
+            TavernTier = 3,
             Gold = 0,
             BoardMinionCount = 0,
             ShopMinionCount = 0,
             HandMinionCount = 0,
+            Health = 30,
+            BoardPower = 20,
+            OpponentPower = 20,
+            UsesRemaining = 3,
+            OfferedExpectedValue = 0.8,
+            HasCoreSynergy = true,
         };
         var emptyAdvice = advisor.Evaluate(emptyContext);
         if (emptyAdvice.ShouldShow)
@@ -767,12 +779,18 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 1,
-            TavernTier = 1,
-            Gold = 3,
+            Turn = 5,
+            TavernTier = 3,
+            Gold = 8,
             BoardMinionCount = 1,
             ShopMinionCount = 3,
             HandMinionCount = 0,
+            Health = 30,
+            BoardPower = 20,
+            OpponentPower = 20,
+            UsesRemaining = 3,
+            OfferedExpectedValue = 0.8,
+            HasCoreSynergy = true,
         };
         var backfilledAdvice = advisor.Evaluate(backfilledContext);
         if (backfilledAdvice.ShouldShow)
@@ -802,12 +820,18 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 2,
+            Turn = 5,
             TavernTier = 3,
-            Gold = 5,
+            Gold = 8,
             BoardMinionCount = 1,
             ShopMinionCount = 2,
             HandMinionCount = 0,
+            Health = 30,
+            BoardPower = 30,
+            OpponentPower = 30,
+            UsesRemaining = 3,
+            OfferedExpectedValue = 0.8,
+            HasCoreSynergy = true,
         };
         var coordinator = new DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
         if (coordinator.GetStatus(t0) != null)
@@ -819,9 +843,9 @@ public static class PowerLogChoiceBatchHarness
         var contextStatus = coordinator.GetStatus(t0, context);
         if (contextStatus == null
             || !contextStatus.Contains("\u6697\u8d50\u53ef\u53d1\u73b0")
-            || !contextStatus.Contains("T2")
+            || !contextStatus.Contains("T5")
             || !contextStatus.Contains("\u672c3")
-            || !contextStatus.Contains("\u91d15")
+            || !contextStatus.Contains("\u91d18")
             || !contextStatus.Contains("\u573a1")
             || !contextStatus.Contains("\u5e972")
             || !contextStatus.Contains("\u624b0"))

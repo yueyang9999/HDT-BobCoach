@@ -74,9 +74,9 @@ assert.ok(compileItems.includes("Core\\SeasonDataSelector.cs"),
     "season data selector must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\DisplayNameResolver.cs"),
     "display name resolver must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 227, "unexpected compile item count");
+assert.strictEqual(compileItems.length, 228, "unexpected compile item count");
 assert.strictEqual(compileDigest,
-    "576200dcfe2b45277ecfeb828ac71fe5ade3ee5ffea3c810d6e6da3950c0431d",
+    "fc10939b51f38946859dc4051b17bd84fea49cf301364102c2985b64b3a408ba",
     "compile set changed");
 
 for (const token of [

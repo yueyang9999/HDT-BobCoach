@@ -28,6 +28,7 @@ const fishbaitRegistrySource = path.join(root, "src", "BobCoach", "Core", "Fishb
 const fishbaitFactSource = path.join(root, "src", "BobCoach", "Core", "FishbaitFactSource.cs");
 const darkGiftRegistrySource = path.join(root, "src", "BobCoach", "Core", "DarkGiftRegistry.cs");
 const darkGiftFactSource = path.join(root, "src", "BobCoach", "Core", "DarkGiftFactSource.cs");
+const darkGiftDecisionServiceSource = path.join(root, "src", "BobCoach", "Core", "DarkGiftDecisionService.cs");
 const darkGiftTipGateSource = path.join(root, "src", "BobCoach", "Core", "DarkGiftTipGate.cs");
 const displayNameResolverSource = path.join(root, "src", "BobCoach", "Core", "DisplayNameResolver.cs");
 const season14RulesEvaluatorSource = path.join(root, "src", "BobCoach", "Core", "Season14RulesEvaluator.cs");
@@ -65,6 +66,7 @@ try {
         fishbaitFactSource,
         darkGiftRegistrySource,
         darkGiftFactSource,
+        darkGiftDecisionServiceSource,
         darkGiftTipGateSource,
         displayNameResolverSource,
         season14RulesEvaluatorSource,

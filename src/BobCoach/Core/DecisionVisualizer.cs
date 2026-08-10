@@ -249,7 +249,7 @@ namespace BobCoach.Engine
                 plan.HandMarker.Index < state.HandMinions.Count &&
                 IsTargetedCard(state.HandMinions[plan.HandMarker.Index]);
             bool isMagnetic = handIsTargeted &&
-                (state.HandMinions[plan.HandMarker.Index].CardName ?? "").Contains("磁力");
+                CardNameService.GetName(state.HandMinions[plan.HandMarker.Index].CardId).Contains("磁力");
             bool heroTargeted = bestAction != null && bestAction.Type == ActionType.UseHeroPower
                 && state.BoardMinions.Count > 0;
             if (handIsTargeted || heroTargeted)
@@ -305,7 +305,8 @@ namespace BobCoach.Engine
                     {
                         case ActionType.BuyMinion:
                             if (bestAction.TargetIndex < state.ShopMinions.Count)
-                                parts.Add("买→" + (state.ShopMinions[bestAction.TargetIndex].CardName ?? "?"));
+                                parts.Add("买→" + CardNameService.GetName(
+                                    state.ShopMinions[bestAction.TargetIndex].CardId));
                             else parts.Add("买");
                             break;
                         case ActionType.Upgrade: parts.Add("升本→" + (state.TavernTier + 1) + "本"); break;
@@ -314,14 +315,16 @@ namespace BobCoach.Engine
                         case ActionType.BuySpell: parts.Add("法术"); break;
                         case ActionType.SellMinion:
                             if (bestAction.TargetIndex >= 0 && bestAction.TargetIndex < state.BoardMinions.Count)
-                                parts.Add("卖→" + (state.BoardMinions[bestAction.TargetIndex].CardName ?? "?"));
+                                parts.Add("卖→" + CardNameService.GetName(
+                                    state.BoardMinions[bestAction.TargetIndex].CardId));
                             else parts.Add("卖");
                             break;
                     }
                 }
                 if (plan.HandMarker != null && plan.HandMarker.Index < state.HandMinions.Count)
                 {
-                    var hName = state.HandMinions[plan.HandMarker.Index].CardName ?? "?";
+                    var hName = CardNameService.GetName(
+                        state.HandMinions[plan.HandMarker.Index].CardId);
                     if (parts.Count == 0 || !parts[parts.Count - 1].EndsWith(hName))
                         parts.Add("打→" + hName);
                 }
@@ -329,7 +332,8 @@ namespace BobCoach.Engine
                 if (bestAction != null && bestAction.Type == ActionType.UseHeroPower)
                 {
                     if (plan.TargetHints.Count > 0 && plan.TargetHints[0].BoardIndex < state.BoardMinions.Count)
-                        parts.Add("技→" + (state.BoardMinions[plan.TargetHints[0].BoardIndex].CardName ?? "目标"));
+                        parts.Add("技→" + CardNameService.GetName(
+                            state.BoardMinions[plan.TargetHints[0].BoardIndex].CardId));
                     else parts.Add("技");
                 }
                 // 第二步(二步前瞻): 买→技 / 买→买等, 带目标对象
@@ -340,21 +344,24 @@ namespace BobCoach.Engine
                         case ActionType.UseHeroPower:
                             if (secondStepState != null && secondStep.TargetIndex >= 0
                                 && secondStep.TargetIndex < secondStepState.BoardMinions.Count)
-                                parts.Add("技→" + (secondStepState.BoardMinions[secondStep.TargetIndex].CardName ?? "目标"));
+                                parts.Add("技→" + CardNameService.GetName(
+                                    secondStepState.BoardMinions[secondStep.TargetIndex].CardId));
                             else
                                 parts.Add("技");
                             break;
                         case ActionType.BuyMinion:
                             if (secondStepState != null && secondStep.TargetIndex >= 0
                                 && secondStep.TargetIndex < secondStepState.ShopMinions.Count)
-                                parts.Add("买→" + (secondStepState.ShopMinions[secondStep.TargetIndex].CardName ?? "?"));
+                                parts.Add("买→" + CardNameService.GetName(
+                                    secondStepState.ShopMinions[secondStep.TargetIndex].CardId));
                             else
                                 parts.Add("再买");
                             break;
                         case ActionType.SellMinion:
                             if (secondStepState != null && secondStep.TargetIndex >= 0
                                 && secondStep.TargetIndex < secondStepState.BoardMinions.Count)
-                                parts.Add("卖→" + (secondStepState.BoardMinions[secondStep.TargetIndex].CardName ?? "?"));
+                                parts.Add("卖→" + CardNameService.GetName(
+                                    secondStepState.BoardMinions[secondStep.TargetIndex].CardId));
                             else
                                 parts.Add("卖");
                             break;

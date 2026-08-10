@@ -70,6 +70,7 @@
     <Compile Include="Core\HeroSkillDecisionService.cs" />
     <Compile Include="Core\DarkGiftDecisionService.cs" />
     <Compile Include="Core\RecommendationPlan.cs" />
+    <Compile Include="Core\LiveSafetyGate.cs" />
     <Compile Include="Core\SeasonDataSelector.cs" />
     <Compile Include="Core\SeasonMechanicProfile.cs" />
     <Compile Include="Core\CompGuideCatalog.cs" />
