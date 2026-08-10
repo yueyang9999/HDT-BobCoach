@@ -157,3 +157,10 @@ Owner: Codex goal session
 - `deploy_local_release.ps1` 增加 D 盘 HDT 插件目录自动同步。
 - `collect_real_ui_evidence.ps1` 增加 checksum 文件格式校验。
 - 下一步：用户重新启动 HDT，插件应能通过完整性校验并进入 `OnLoad`。
+
+## 2026-08-10 实机验证：插件恢复渲染
+
+- HDT 已从 `D:\software\game\HDT-V2.7.0\HDT\HearthstoneDeckTracker.exe` 重启，PID `77616`。
+- BobCoach 日志确认插件通过完整性校验并进入实际对局决策。
+- 日志包含 `Decision`、`ShopMarker`、`Renderer POS`、`ShopRating`、`ShopRectDiag` 等渲染证据。
+- 数据日志根目录：`E:\claude_project_hdt\local-data\bob-coach\user-data\bob_coach.log`。
