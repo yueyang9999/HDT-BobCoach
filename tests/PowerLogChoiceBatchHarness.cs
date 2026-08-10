@@ -31,6 +31,8 @@ public static class PowerLogChoiceBatchHarness
             if (args[0] == "--watcher-late-start-live-completion"
                 || (args.Length >= 2 && args[1] == "--watcher-late-start-live-completion"))
                 return RunWatcherLateStartLiveCompletionTest(null);
+            if (args.Length >= 2 && args[1] == "--replay-only")
+                return RunReplayOnly(args[0]);
             if (args[0].IndexOf("2026_08_09_21_39_26", StringComparison.OrdinalIgnoreCase) >= 0)
                 return ReplayFaelin20260809(args[0]);
             return ReplayCapturedLog(args[0]);
@@ -1665,6 +1667,60 @@ public static class PowerLogChoiceBatchHarness
             Thread.Sleep(10);
         }
         return predicate();
+    }
+
+    private static int RunReplayOnly(string path)
+    {
+        if (!File.Exists(path)) return Fail("replay log not found");
+        var parser = new PowerLogParser();
+        int discovers = 0;
+        int trinkets = 0;
+        int darkGifts = 0;
+        int timewarps = 0;
+        int completions = 0;
+        int passives = 0;
+        parser.DiscoverOffered += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                discovers++;
+        };
+        parser.TrinketChoiceActive += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                trinkets++;
+        };
+        parser.DarkGiftChoiceActive += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                darkGifts++;
+        };
+        parser.TimewarpPurchaseOffered += batch =>
+        {
+            if (batch != null && batch.Candidates != null && batch.Candidates.Count > 0)
+                timewarps++;
+        };
+        parser.ChoiceCompleted += completion =>
+        {
+            if (completion != null) completions++;
+        };
+        parser.PassiveChoiceActive += batch =>
+        {
+            if (batch != null) passives++;
+        };
+        int totalLines = 0;
+        using (var reader = new StreamReader(path))
+            while (reader.ReadLine() != null) totalLines++;
+        int skip = Math.Max(0, totalLines - 20000);
+        int lineIndex = 0;
+        foreach (var line in File.ReadLines(path))
+        {
+            if (lineIndex++ < skip) continue;
+            parser.ParseLine(line);
+        }
+        Console.WriteLine(string.Format(
+            "PASS replay-only discover={0} trinket={1} darkGift={2} timewarp={3} completion={4} passive={5}",
+            discovers, trinkets, darkGifts, timewarps, completions, passives));
+        return 0;
     }
 
     private static int ReplayCapturedLog(string path)

@@ -76,6 +76,14 @@ Owner: Codex goal session
 - v4 AppData 归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T084616357Z-1394f82e`。
 - v4 程序目录归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T164633Z-program-dir-pre-deploy`。
 
+### 2026-08-10：真实日志证据采集器
+
+- 新增 `tools/release/collect_real_ui_evidence.ps1`，校验两处 DLL 哈希、定位最新非空 `Power.log`、截取尾部 20000 行并回放。
+- 最新会话 `Hearthstone_2026_08_10_15_56_35` 的尾部回放通过：
+  `discover=1 trinket=2 darkGift=0 timewarp=0 completion=2 passive=0`。
+- 尾部回放证据：`E:\HDT-BobCoach-evidence\season14\generated\ui-evidence\power-latest-tail-20000.log`。
+- 真实 UI 证据仍待 HDT 实机截图/录像和插件日志。
+
 ## 验证记录
 
 | 时间 | 验证项 | 结果 | 证据 |

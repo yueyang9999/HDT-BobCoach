@@ -30,6 +30,7 @@ foreach ($file in @(
     ,"test_algorithm_decision_capture.js"
     ,"test_algorithm_evaluation.js"
     ,"test_phase1_data_tools.js"
+    ,"test_ui_evidence_collector.js"
 )) {
     Invoke-Checked $file "node"
 }
