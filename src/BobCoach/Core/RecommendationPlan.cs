@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace BobCoach.Engine
@@ -19,6 +20,46 @@ namespace BobCoach.Engine
         public List<string> ShopMarkerCardIds = new List<string>();
         public List<int> SellMarkerBoardIndices = new List<int>();
         public string PlanHash = "";
+
+        public static RecommendationPlan FromVisualPlan(
+            VisualPlan plan,
+            int liveGold,
+            int turn)
+        {
+            var recommendation = new RecommendationPlan
+            {
+                RecommendedActionType = plan == null ? "" : plan.RecommendedActionType,
+                StatusHint = plan == null ? "" : plan.Status.HintLine,
+                UpgradeHintText = plan == null ? "" : plan.UpgradeHint?.Reason ?? "",
+                ActivateCardId = plan == null ? "" : plan.ActivateHint?.CardId ?? "",
+                ActivateCost = plan == null ? 0 : plan.ActivateHint?.Cost ?? 0,
+                LiveGold = liveGold,
+                Turn = turn,
+            };
+            if (plan == null) return recommendation;
+            if (plan.ShopMarkers != null)
+                recommendation.ShopMarkerCardIds.AddRange(
+                    plan.ShopMarkers.Select(marker => marker.CardName ?? ""));
+            if (plan.SellMarkers != null)
+                recommendation.SellMarkerBoardIndices.AddRange(
+                    plan.SellMarkers.Select(marker => marker.BoardIndex));
+            recommendation.PlanHash = ComputeHash(recommendation);
+            return recommendation;
+        }
+
+        public IList<string> Validate()
+        {
+            var errors = new List<string>();
+            if (RecommendedActionType == "Activate"
+                && string.IsNullOrEmpty(ActivateCardId))
+                errors.Add("activate action requires activate hint");
+            if (LiveGold < 0)
+                errors.Add("live gold must be known");
+            if (RecommendedActionType == "BuyMinion"
+                && ShopMarkerCardIds.Count == 0)
+                errors.Add("buy action requires shop marker");
+            return errors;
+        }
 
         public static string ComputeHash(RecommendationPlan plan)
         {

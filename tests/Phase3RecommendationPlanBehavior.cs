@@ -1,6 +1,49 @@
 using System;
 using BobCoach.Engine;
 
+namespace BobCoach.Engine
+{
+    public sealed class VisualPlan
+    {
+        public string RecommendedActionType = "";
+        public StatusInfo Status = new StatusInfo();
+        public UpgradeHint UpgradeHint;
+        public ActivateHint ActivateHint;
+        public System.Collections.Generic.List<ShopMarker> ShopMarkers =
+            new System.Collections.Generic.List<ShopMarker>();
+        public System.Collections.Generic.List<SellMarker> SellMarkers =
+            new System.Collections.Generic.List<SellMarker>();
+    }
+
+    public sealed class StatusInfo
+    {
+        public string HintLine = "";
+    }
+
+    public sealed class UpgradeHint
+    {
+        public string Reason = "";
+    }
+
+    public sealed class ActivateHint
+    {
+        public int BoardIndex;
+        public string CardId = "";
+        public string CardName = "";
+        public int Cost;
+    }
+
+    public sealed class ShopMarker
+    {
+        public string CardName = "";
+    }
+
+    public sealed class SellMarker
+    {
+        public int BoardIndex;
+    }
+}
+
 internal static class Phase3RecommendationPlanBehavior
 {
     private static int _assertions;
@@ -11,6 +54,7 @@ internal static class Phase3RecommendationPlanBehavior
         {
             PlanHashIncludesLiveGoldAndAction();
             PlanHashChangesWhenMarkersChange();
+            FromVisualPlanCapturesActivateAndMarkers();
             Console.WriteLine("PASS phase3 recommendation plan assertions=" + _assertions);
             return 0;
         }
@@ -54,6 +98,30 @@ internal static class Phase3RecommendationPlanBehavior
             == RecommendationPlan.ComputeHash(second), "hash must change with plan text");
     }
 
+    private static void FromVisualPlanCapturesActivateAndMarkers()
+    {
+        var visual = new VisualPlan
+        {
+            RecommendedActionType = "Activate",
+            Status = new StatusInfo { HintLine = "发动→活体监牢" },
+            ActivateHint = new ActivateHint
+            {
+                BoardIndex = 2,
+                CardId = "BG36_180",
+                CardName = "活体监牢",
+                Cost = 1,
+            },
+        };
+        var recommendation = RecommendationPlan.FromVisualPlan(visual, 4, 6);
+        AssertEqual("Activate", recommendation.RecommendedActionType,
+            "recommendation action");
+        AssertEqual("BG36_180", recommendation.ActivateCardId,
+            "recommendation activate card");
+        AssertEqual(4, recommendation.LiveGold, "recommendation live gold");
+        AssertContains(recommendation.PlanHash, "6|4|Activate",
+            "recommendation hash");
+    }
+
     private static void AssertTrue(bool value, string message)
     {
         _assertions++;
@@ -64,6 +132,22 @@ internal static class Phase3RecommendationPlanBehavior
     {
         _assertions++;
         if (value) throw new InvalidOperationException(message);
+    }
+
+    private static void AssertEqual(string expected, string actual, string message)
+    {
+        _assertions++;
+        if (!string.Equals(expected, actual, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                message + ": expected=" + expected + " actual=" + actual);
+    }
+
+    private static void AssertEqual(int expected, int actual, string message)
+    {
+        _assertions++;
+        if (expected != actual)
+            throw new InvalidOperationException(
+                message + ": expected=" + expected + " actual=" + actual);
     }
 
     private static void AssertContains(string text, string value, string message)

@@ -60,6 +60,13 @@ Owner: Codex goal session
 - AppData 部署前归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T082625389Z-39ad60aa`。
 - 程序目录部署前归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T162653Z-program-dir-pre-deploy`。
 
+### 2026-08-10：Activate 决策与 UI 一致性补强
+
+- `Simulator` 新增 `SimulateActivate`：扣铸币、标记本回合已发动，进入决策模拟。
+- `DecisionEngine` 对 Activate 使用 `UnifiedActionScorer`，不再被当作“状态不变”忽略。
+- `BobCoachPlugin` 消费 `VisualPlan.ActivateHint`，铸币足够时渲染目标脉冲和“发动”状态文本。
+- `RecommendationPlan.FromVisualPlan` 从最终 `VisualPlan` 派生统一计划，并在 `DispatchRender` 做一致性校验。
+
 ## 验证记录
 
 | 时间 | 验证项 | 结果 | 证据 |

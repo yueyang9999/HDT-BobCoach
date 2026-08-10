@@ -655,6 +655,29 @@ namespace BobCoach.Engine
                 if (action.Type == ActionType.Refresh && state.Gold < 1 && state.FreeRefreshCount == 0)
                     value *= 0.0;
 
+                // Activate: 发动是 Season14 真实金币动作，必须参与统一评分；
+                // 缺少效果语义时按统一软评分给出有界加成，避免被搜索当作“状态不变”忽略。
+                if (action.Type == ActionType.Activate)
+                {
+                    int liveGold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+                    var activateScore = UnifiedActionScorer.Score(
+                        "Activate",
+                        action.Cost,
+                        liveGold,
+                        (int)boardPwr,
+                        (int)_fe.ComputeAvgOpponentPower(state.Opponents),
+                        state.Health,
+                        state.Turn,
+                        state.TavernTier,
+                        0.5,
+                        0.0,
+                        true,
+                        boardFull,
+                        false);
+                    if (activateScore.Score < 0) value *= 0.0;
+                    else value += activateScore.Score * 1.5;
+                }
+
                 // ── 出售惩罚 (22局实测: Top4卖26.2%Bot4卖10.3%, 换血是优势策略) ──
                 if (action.Type == ActionType.SellMinion && action.CardId != null)
                 {

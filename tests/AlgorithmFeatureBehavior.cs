@@ -24,6 +24,7 @@ internal static class AlgorithmFeatureBehavior
             VerifiesRefreshExpectedValueUsesOnlyVersionMatchedFacts();
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
+            VerifiesActivateSimulationDeductsGoldAndTracksEntity();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
             return 0;
         }
@@ -401,6 +402,36 @@ internal static class AlgorithmFeatureBehavior
         }
     }
 
+    private static void VerifiesActivateSimulationDeductsGoldAndTracksEntity()
+    {
+        var state = State(20);
+        state.Gold = 5;
+        state.LiveGold = 5;
+        state.BoardMinions.Add(new MinionData
+        {
+            CardId = "BG36_180",
+            EntityId = 9001,
+            Attack = 3,
+            Health = 4,
+            Tier = 4,
+        });
+        var activate = new GameAction
+        {
+            Type = ActionType.Activate,
+            TargetIndex = 0,
+            CardId = "BG36_180",
+            Cost = 2,
+        };
+        var next = new Simulator().Simulate(state, activate);
+        AssertEqual(3, next.Gold, "activate consumes gold");
+        AssertEqual(3, next.LiveGold, "activate updates live gold");
+        AssertTrue(next.ActivatedThisTurn.Contains(9001),
+            "activate marks minion used this turn");
+        AssertEqual(5, state.Gold, "source gold remains detached");
+        AssertTrue(!state.ActivatedThisTurn.Contains(9001),
+            "source activate state remains detached");
+    }
+
     private static IEnumerable<GameAction> SupportedActions()
     {
         return new[]
@@ -415,6 +446,7 @@ internal static class AlgorithmFeatureBehavior
             new GameAction { Type = ActionType.PickDiscover, TargetIndex = 0 },
             new GameAction { Type = ActionType.PickTrinket, TargetIndex = 0 },
             new GameAction { Type = ActionType.SendGoldToTeammate, CardId = "POWER_A" },
+            new GameAction { Type = ActionType.Activate, TargetIndex = 0, Cost = 0 },
         };
     }
 
@@ -457,6 +489,8 @@ internal static class AlgorithmFeatureBehavior
         return string.Join("|", new[]
         {
             state.Gold.ToString(),
+            state.LiveGold.ToString(),
+            string.Join(",", state.ActivatedThisTurn ?? new HashSet<int>()),
             string.Join(",", state.BoardMinions.Select(x => x.CardId + ":" + x.Attack + ":" + x.Health)),
             string.Join(",", state.HandMinions.Select(x => x.CardId + ":" + x.Attack + ":" + x.Health)),
             string.Join(",", state.ShopMinions.Select(x => x.CardId + ":" + x.Attack + ":" + x.Health + ":" + x.Tier)),

@@ -1883,6 +1883,22 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "BobCoachPlugin must query HeroSkillCatalog";
     });
 
+    test("[Phase2][Activate] activate hint reaches visible UI", () => {
+        if (!pluginSrc.includes("plan.ActivateHint"))
+            return "BobCoachPlugin must consume ActivateHint";
+        if (!pluginSrc.includes("_renderer.ShowTargetPulse"))
+            return "activate hint must render a target pulse";
+        if (!pluginSrc.includes("liveGold >= plan.ActivateHint.Cost"))
+            return "activate hint must be gated by liveGold";
+    });
+
+    test("[Phase3][Plan] recommendation plan is derived from final visual plan", () => {
+        if (!pluginSrc.includes("RecommendationPlan.FromVisualPlan"))
+            return "BobCoachPlugin must derive RecommendationPlan from final VisualPlan";
+        if (!pluginSrc.includes("recommendationErrors.Count > 0"))
+            return "BobCoachPlugin must validate RecommendationPlan consistency";
+    });
+
     test("[T25] noActionNeeded covers passive/no-recruit and does not hide by passive hero power", () => {
         const idx = pluginSrc.indexOf("bool noActionNeeded = ");
         const block = idx >= 0 ? pluginSrc.slice(idx, idx + 600) : "";

@@ -2432,6 +2432,14 @@ namespace BobCoach
             var markerIds = plan.ShopMarkers.Count > 0
                 ? "|M" + string.Join(",", plan.ShopMarkers.Select(m => m.EntityId + ":" + m.ShopPosition))
                 : "";
+            var recommendationPlan = Engine.RecommendationPlan.FromVisualPlan(
+                plan, state.LiveGold >= 0 ? state.LiveGold : state.Gold, state.Turn);
+            var recommendationErrors = recommendationPlan.Validate();
+            if (recommendationErrors.Count > 0)
+            {
+                Log("RecommendationPlan consistency: "
+                    + string.Join("; ", recommendationErrors));
+            }
             string planHash = state.Turn + "|" + plan.RecommendedActionType + "|"
                 + plan.ShopMarkers.Count + markerIds + "|" + (plan.UpgradeHint?.Level.ToString() ?? "-") + "|"
                 + (plan.HandMarker?.CardName ?? "-") + "|" + (plan.TrinketHints?.Count ?? 0) + "|"
@@ -2755,6 +2763,26 @@ namespace BobCoach
                                 state.BoardMinions[plan.SellMarkers[0].BoardIndex].CardId);
                         else
                             plan.Status.HintLine = "卖";
+                    }
+                    // 5.5 Activate 发动 — 仅当无更高优先动作且铸币足够时显示
+                    if (plan.ActivateHint != null
+                        && liveGold >= plan.ActivateHint.Cost)
+                    {
+                        _renderer.ShowTargetPulse(
+                            plan.ActivateHint.BoardIndex,
+                            state.BoardMinions.Count);
+                        if (!shownPrimary
+                            && plan.ShopMarkers.Count == 0
+                            && plan.UpgradeHint == null
+                            && plan.HandMarker == null
+                            && plan.SellMarkers.Count == 0)
+                        {
+                            shownPrimary = true;
+                            plan.Status.HintLine = "发动→" + ResolveDisplayName(
+                                plan.ActivateHint.CardName,
+                                plan.ActivateHint.CardId)
+                                + " (" + plan.ActivateHint.Cost + "费)";
+                        }
                     }
                     // 兜底: 无任何目标时, 不显示空动作
                     if (!shownPrimary && plan.ShopMarkers.Count == 0

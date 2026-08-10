@@ -55,9 +55,28 @@ namespace BobCoach.Engine
                 case ActionType.SendGoldToTeammate:
                     SimulateSendGoldToTeammate(next, action);
                     break;
+                case ActionType.Activate:
+                    SimulateActivate(next, action);
+                    break;
             }
 
             return next;
+        }
+
+        private void SimulateActivate(GameState state, GameAction action)
+        {
+            if (state == null || action == null
+                || state.BoardMinions == null
+                || action.TargetIndex < 0
+                || action.TargetIndex >= state.BoardMinions.Count)
+                return;
+            int cost = action.Cost > 0 ? action.Cost : 0;
+            if (state.Gold < cost) return;
+            state.Gold = Math.Max(0, state.Gold - cost);
+            state.LiveGold = state.Gold;
+            if (state.ActivatedThisTurn == null)
+                state.ActivatedThisTurn = new HashSet<int>();
+            state.ActivatedThisTurn.Add(state.BoardMinions[action.TargetIndex].EntityId);
         }
 
         private void SimulateBuy(GameState state, GameAction action)
