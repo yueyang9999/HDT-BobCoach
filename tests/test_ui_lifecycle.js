@@ -1897,6 +1897,8 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "BobCoachPlugin must derive RecommendationPlan from final VisualPlan";
         if (!pluginSrc.includes("recommendationErrors.Count > 0"))
             return "BobCoachPlugin must validate RecommendationPlan consistency";
+        if (!pluginSrc.includes("plan.Recommendation = recommendationPlan"))
+            return "BobCoachPlugin must attach RecommendationPlan to final VisualPlan";
     });
 
     test("[T25] noActionNeeded covers passive/no-recruit and does not hide by passive hero power", () => {

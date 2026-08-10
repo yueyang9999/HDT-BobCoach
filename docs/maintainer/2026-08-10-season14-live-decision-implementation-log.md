@@ -70,6 +70,7 @@ Owner: Codex goal session
 - 最新离线包：`BobCoach-1.1.0-win-x64.zip`，SHA256=`590805FCD3102A48B1425F141CEA0914A5CD46E598B049D35A4C0884507A3F9F`。
 - AppData 归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T083753644Z-4b8f17cb`。
 - 程序目录归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T163811Z-program-dir-pre-deploy`。
+- `VisualPlan` 新增 `Recommendation` 字段，`DispatchRender` 把最终 `RecommendationPlan` 挂回计划对象。
 
 ## 验证记录
 

@@ -48,6 +48,7 @@ namespace BobCoach.Engine
         public FreezeHint FreezeHint;  // 冻结推荐提示
         public List<TrinketHint> TrinketHints = new List<TrinketHint>();
         public List<TargetHint> TargetHints = new List<TargetHint>();  // 每屏最多1个
+        public RecommendationPlan Recommendation;  // 最终渲染计划快照，渲染层不得再猜测动作含义
 
         /// <summary>硬上限截断：按Score排序，超限丢弃。V2: 应用视觉预算</summary>
         public void EnforceLimits()

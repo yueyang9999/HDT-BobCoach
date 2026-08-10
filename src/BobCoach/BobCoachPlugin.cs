@@ -2440,6 +2440,7 @@ namespace BobCoach
                 Log("RecommendationPlan consistency: "
                     + string.Join("; ", recommendationErrors));
             }
+            plan.Recommendation = recommendationPlan;
             string planHash = state.Turn + "|" + plan.RecommendedActionType + "|"
                 + plan.ShopMarkers.Count + markerIds + "|" + (plan.UpgradeHint?.Level.ToString() ?? "-") + "|"
                 + (plan.HandMarker?.CardName ?? "-") + "|" + (plan.TrinketHints?.Count ?? 0) + "|"
