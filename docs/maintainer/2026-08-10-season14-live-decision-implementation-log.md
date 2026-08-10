@@ -12,10 +12,10 @@ Owner: Codex goal session
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
-| Phase 1 | In progress | 核心已实现；生成器/未知卡审计门禁待补齐 |
-| Phase 2 | In progress | 三个决策服务已实现并测试；接入 DecisionEngine 待做 |
+| Phase 1 | Completed | 数据对象库、动态铸币、Activate、生成器和未知卡审计已接入 |
+| Phase 2 | Completed | LiveSafetyGate/HeroSkill/DarkGift 已接入玩家可见生产链路 |
 | Phase 3 | In progress | RecommendationPlan 与 planHash liveGold 已加；全量 UI 接管待做 |
-| Phase 4 | In progress | 真实旧日志回放已通过；Release/部署待做 |
+| Phase 4 | In progress | Release 已构建部署；真实 UI 证据仍待用户实测 |
 
 ## 过程记录
 
@@ -52,6 +52,14 @@ Owner: Codex goal session
 - 已生成 `card_object_catalog.json` 816 项、`hero_skill_registry.json` 116 项。
 - 未知卡名兜底审计通过，源码不再使用裸 CardId 作为用户可见卡名。
 
+### 2026-08-10：Release 与部署
+
+- Release DLL：bytes=867840，SHA256=`079DB8AEA85EB78D641C6E54FC1216BC5CE79ABB69CFF8B708914F68D1E1E8A2`。
+- AppData 与 HDT 程序目录均已部署同一 Release DLL，哈希一致。
+- 离线包：`BobCoach-1.1.0-win-x64.zip`，SHA256=`AB207DFD755B66C5CBF768973DDA00F081211914161F892DABA4F0A6BF49EFF1`。
+- AppData 部署前归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T082625389Z-39ad60aa`。
+- 程序目录部署前归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T162653Z-program-dir-pre-deploy`。
+
 ## 验证记录
 
 | 时间 | 验证项 | 结果 | 证据 |
@@ -69,6 +77,10 @@ Owner: Codex goal session
 | 已执行 | UI lifecycle | PASS 178 | 含安全门禁/英雄技能/暗赐 |
 | 已执行 | npm run test:contracts | PASS | 含 phase1 data tools |
 | 已执行 | npm run test:behavior | PASS | Phase1-3 + safety/dark gift |
+| 已执行 | npm run test:package | PASS | Release DLL/ZIP/安装/升级/回滚 |
+| 已执行 | validate_repository.ps1 | PASS 524 files | - |
+| 已执行 | git diff --check | PASS | - |
+| 已执行 | Release 部署 | PASS | AppData + HDT 程序目录哈希一致 |
 
 ## 下一步
 
