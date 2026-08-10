@@ -95,8 +95,8 @@ namespace BobCoach.Engine
                     return cn + "(衍生)";
             }
 
-            // 3. 最终兜底
-            return cardId;
+            // 3. 最终兜底：未知卡不泄漏裸 CardId
+            return "unknown";
             }
         }
 

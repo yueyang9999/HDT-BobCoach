@@ -71,7 +71,10 @@ foreach ($file in @(
     "test_card_semantic_source.ps1",
     "test_semantic_synergy_evaluator.ps1",
     "test_active_trinket_effects.ps1",
-    "test_season14_registries.ps1"
+    "test_season14_registries.ps1",
+    "test_phase1_live_decision.ps1",
+    "test_phase2_decision_services.ps1",
+    "test_phase3_recommendation_plan.ps1"
 )) {
     Invoke-Checked $file "powershell"
 }

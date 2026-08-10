@@ -11,6 +11,7 @@ namespace BobCoach.Engine
         internal string TextEnUs;
         internal string Type;
         internal int Cost;
+        internal int ActivateCost;
         internal int TechLevel;
         internal int Attack;
         internal int Health;
@@ -54,12 +55,49 @@ namespace BobCoach.Engine
                 TextEnUs = source.TextEnUs,
                 Type = source.Type,
                 Cost = source.Cost,
+                ActivateCost = ParseActivateCost(source.TextEnUs, source.TextZhCn),
                 TechLevel = source.TechLevel,
                 Attack = source.Attack,
                 Health = source.Health,
                 IsBattlegroundsPoolMinion = source.IsBattlegroundsPoolMinion,
             };
             return true;
+        }
+
+        internal static int ParseActivateCost(string textEnUs, string textCn)
+        {
+            int value;
+            if (TryParseEnglish(textEnUs, out value) || TryParseChinese(textCn, out value))
+                return value;
+            return 0;
+        }
+
+        private static bool TryParseEnglish(string text, out int cost)
+        {
+            cost = 0;
+            if (string.IsNullOrEmpty(text)) return false;
+            const string marker = "Activate (";
+            int start = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (start < 0) return false;
+            start += marker.Length;
+            int end = start;
+            while (end < text.Length && char.IsDigit(text[end])) end++;
+            if (end == start || end >= text.Length || text[end] != ')') return false;
+            return int.TryParse(text.Substring(start, end - start), out cost) && cost >= 0;
+        }
+
+        private static bool TryParseChinese(string text, out int cost)
+        {
+            cost = 0;
+            if (string.IsNullOrEmpty(text)) return false;
+            const string marker = "发动（";
+            int start = text.IndexOf(marker, StringComparison.Ordinal);
+            if (start < 0) return false;
+            start += marker.Length;
+            int end = start;
+            while (end < text.Length && char.IsDigit(text[end])) end++;
+            if (end == start || end >= text.Length || text[end] != '）') return false;
+            return int.TryParse(text.Substring(start, end - start), out cost) && cost >= 0;
         }
     }
 }

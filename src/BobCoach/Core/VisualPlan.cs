@@ -44,6 +44,7 @@ namespace BobCoach.Engine
         public List<ShopMarker> ShopMarkers = new List<ShopMarker>();
         public List<SellMarker> SellMarkers = new List<SellMarker>();
         public HandMarker HandMarker;  // 每屏最多1个"打"标记
+        public ActivateHint ActivateHint;
         public FreezeHint FreezeHint;  // 冻结推荐提示
         public List<TrinketHint> TrinketHints = new List<TrinketHint>();
         public List<TargetHint> TargetHints = new List<TargetHint>();  // 每屏最多1个
@@ -129,6 +130,16 @@ namespace BobCoach.Engine
         public int Index;
         public string CardName = "";
         public string Reason = "";     // ≤5字
+    }
+
+    /// <summary>发动提示: 仅"发动"一种，每屏最多1个，用完出下一个</summary>
+    public class ActivateHint
+    {
+        public int BoardIndex;
+        public string CardId = "";
+        public string CardName = "";
+        public int Cost;
+        public string Reason = "";
     }
 
     /// <summary>目标提示: 用法术/技能时指向的场上随从</summary>

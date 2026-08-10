@@ -14,7 +14,7 @@ namespace BobCoach.Engine
     public enum ActionType
     {
         BuyMinion, BuySpell, Refresh, Upgrade, SellMinion, FreezeShop,
-        UseHeroPower, PickTrinket, PickDiscover, SendGoldToTeammate,
+        UseHeroPower, PickTrinket, PickDiscover, SendGoldToTeammate, Activate,
     }
 
     public sealed class GameAction
@@ -24,6 +24,7 @@ namespace BobCoach.Engine
         public string CardId = "";
         public string PurchaseSource = "";
         public string Description = "";
+        public int Cost;
     }
 
     public sealed class GameState { }

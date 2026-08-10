@@ -28,6 +28,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\SeasonMechanicProfile.cs"),
     (Join-Path $root "src\BobCoach\Core\CompGuideCatalog.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14CardRegistry.cs"),
+    (Join-Path $root "src\BobCoach\Core\CardObjectDatabase.cs"),
     (Join-Path $root "src\BobCoach\Core\CardPurchaseFactSource.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14MinionRegistry.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14MinionPurchaseFactSource.cs"),

@@ -16,6 +16,7 @@ namespace BobCoach.Engine
         PickTrinket,
         PickDiscover,
         SendGoldToTeammate,
+        Activate,
     }
 
     public class GameAction
@@ -24,6 +25,7 @@ namespace BobCoach.Engine
         public int TargetIndex;    // 酒馆位置 / 手牌位置 / 场面位置
         public string CardId;      // 目标卡牌 ID
         public string PurchaseSource = ""; // tavern_shop/unknown/timewarp
+        public int Cost;
         public string Description;
     }
 
@@ -32,6 +34,22 @@ namespace BobCoach.Engine
     /// </summary>
     public class ActionEnumerator
     {
+        private static Season14RulesEvaluator _season14;
+        private static readonly object Season14Sync = new object();
+
+        private static Season14RulesEvaluator GetSeason14()
+        {
+            lock (Season14Sync)
+            {
+                if (_season14 == null)
+                {
+                    _season14 = new Season14RulesEvaluator();
+                    _season14.LoadFromConfiguredRoot();
+                }
+                return _season14;
+            }
+        }
+
         /// <summary>
         /// 枚举所有合法动作。heroCardId 用于英雄特定规则（米尔豪斯刷新费等）。
         /// </summary>
@@ -42,6 +60,7 @@ namespace BobCoach.Engine
 
             if (state == null || !state.GameActive) return actions;
             var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            int liveGold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
 
             // 购买: 随从需板面空间(<7), 法术需手牌空间(<10)
             bool canBuyMinion = state.BoardMinions.Count < 7;
@@ -54,7 +73,7 @@ namespace BobCoach.Engine
                 if (isSpell && !canBuySpell) continue; // 手牌满→不能买法术
                 if (!isSpell && !canBuyMinion) continue; // 板面满→不能买随从
                 int itemCost = GameRuleEvaluator.GetPurchaseCost(state, m, heroCardId, rules);
-                if (state.Gold >= itemCost)
+                if (liveGold >= itemCost)
                 {
                     string costNote = itemCost != 3 ? " (" + itemCost + "费)" : "";
                     string label = isSpell ? "使用 " : "购买 ";
@@ -71,7 +90,7 @@ namespace BobCoach.Engine
 
             // 刷新
             int refreshCost = GameRuleEvaluator.GetRefreshCost(state, heroCardId, rules);
-            if (rules.ManualRefreshAllowed && state.Gold >= refreshCost)
+            if (rules.ManualRefreshAllowed && liveGold >= refreshCost)
             {
                 string desc = state.FreeRefreshCount > 0
                     ? "免费刷新 (" + state.FreeRefreshCount + " 次可用)"
@@ -86,7 +105,7 @@ namespace BobCoach.Engine
 
             // 升本
             int? upgradeCost = GameRuleEvaluator.GetUpgradeCost(state, rules);
-            if (upgradeCost.HasValue && state.Gold >= upgradeCost.Value)
+            if (upgradeCost.HasValue && liveGold >= upgradeCost.Value)
             {
                 actions.Add(new GameAction
                 {
@@ -96,7 +115,7 @@ namespace BobCoach.Engine
             }
 
             // 冻结商店（未冻结且买不起牌时可操作，冻住好牌等下一回合）
-            if (!state.FrozenShop && state.ShopMinions.Count > 0 && state.Gold < 3)
+            if (!state.FrozenShop && state.ShopMinions.Count > 0 && liveGold < 3)
             {
                 actions.Add(new GameAction
                 {
@@ -111,7 +130,7 @@ namespace BobCoach.Engine
             {
                 int minBuyCost = GameRuleEvaluator.GetPurchaseCost(
                     state, new MinionData { Tier = 1 }, heroCardId, rules);
-                if (state.Gold + 1 >= minBuyCost)
+                if (liveGold + 1 >= minBuyCost)
                 {
                     var sellCandidates = state.BoardMinions
                         .Select((m, idx) => new { m, idx, power = m.Attack * 0.6 + m.Health * 0.4 + m.Tier * 2 })
@@ -142,7 +161,7 @@ namespace BobCoach.Engine
                         && power.CardId == rules.TeammateGoldTransfer.ActionCardId)
                         continue;
                     if (power == null || !power.IsActive || !power.IsUnlocked
-                        || power.Exhausted || state.Gold < power.Cost
+                        || power.Exhausted || liveGold < power.Cost
                         || !HasValidHeroPowerTarget(state, power)) continue;
                     string costDesc = power.Cost > 0
                         ? " (" + power.Cost + " 费)" : " (0费)";
@@ -158,7 +177,7 @@ namespace BobCoach.Engine
                 && (rules.TeammateGoldTransfer == null
                     || state.HeroPowerCardId != rules.TeammateGoldTransfer.ActionCardId)
                 && !state.HeroPowerExhausted
-                && state.Gold >= state.HeroPowerCost
+                && liveGold >= state.HeroPowerCost
                 && state.Turn >= state.HeroPowerUnlockTurn
                 && state.TavernTier >= state.HeroPowerUnlockTier
                 && HasValidHeroPowerTarget(state))
@@ -173,9 +192,42 @@ namespace BobCoach.Engine
                 });
             }
 
+            // 发动: Season14 Activate 词条。每回合一次，费用不足或已发动时不出候选。
+            var season14 = GetSeason14();
+            if (season14.IsLoaded && state.ActivatedThisTurn != null)
+            {
+                foreach (var boardMinion in state.BoardMinions)
+                {
+                    if (boardMinion == null || string.IsNullOrEmpty(boardMinion.CardId))
+                        continue;
+                    if (state.ActivatedThisTurn.Contains(boardMinion.EntityId))
+                        continue;
+                    ActivateFact activate;
+                    if (!season14.TryGetActivate(boardMinion.CardId, out activate))
+                        continue;
+                    if (liveGold < activate.ActivateCost)
+                        continue;
+                    string displayName = !string.IsNullOrEmpty(boardMinion.CardName)
+                        ? boardMinion.CardName
+                        : !string.IsNullOrEmpty(activate.NameZhCn)
+                            ? activate.NameZhCn
+                            : "unknown";
+                    actions.Add(new GameAction
+                    {
+                        Type = ActionType.Activate,
+                        TargetIndex = boardMinion.Position >= 0
+                            ? boardMinion.Position
+                            : state.BoardMinions.IndexOf(boardMinion),
+                        CardId = boardMinion.CardId,
+                        Cost = activate.ActivateCost,
+                        Description = "发动 " + displayName + " (" + activate.ActivateCost + "费)",
+                    });
+                }
+            }
+
             var transferRule = rules.TeammateGoldTransfer;
             if (state.IsDuos && transferRule != null
-                && state.Gold >= transferRule.GoldPerUse
+                && liveGold >= transferRule.GoldPerUse
                 && TeammateGoldTransferEvaluator.GetUsedCount(state, state.Turn)
                     < transferRule.MaxPerTurn)
             {

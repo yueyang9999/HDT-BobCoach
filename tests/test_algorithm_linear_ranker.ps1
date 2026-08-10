@@ -19,7 +19,12 @@ if (!(Test-Path -LiteralPath $newtonsoft)) { throw "Newtonsoft.Json.dll not foun
 $outputDirectory = Join-Path $env:TEMP ("bobcoach_algorithm_linear_ranker_{0}" -f [Guid]::NewGuid().ToString("N"))
 $output = Join-Path $outputDirectory "AlgorithmLinearRankerBehavior.exe"
 $sources = @(
-    "Core\ActionEnumerator.cs", "Core\Simulator.cs",
+    "Core\ActionEnumerator.cs", "Core\BobCoachDataPaths.cs", "Core\Season14RegistryJsonParser.cs",
+    "Core\Season14CardRegistry.cs",
+    "Core\SeasonMechanicProfile.cs", "Core\ActivateRegistry.cs", "Core\ActivateFactSource.cs",
+    "Core\LockboxRegistry.cs", "Core\LockboxFactSource.cs", "Core\FishbaitRegistry.cs",
+    "Core\FishbaitFactSource.cs", "Core\DarkGiftRegistry.cs", "Core\DarkGiftFactSource.cs",
+    "Core\Season14RulesEvaluator.cs", "Core\SeasonDataSelector.cs", "Core\Simulator.cs",
     "Core\Decision\Contracts.cs", "Core\Decision\ActionDescriptor.cs",
     "Core\Decision\ActionFeatureSchema.cs", "Core\Decision\RankingModel.cs",
     "Core\Decision\LinearPairwiseRanker.cs", "Core\Decision\DecisionConfidenceEvaluator.cs",

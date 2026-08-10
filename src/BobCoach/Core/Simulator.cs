@@ -411,6 +411,7 @@ namespace BobCoach.Engine
                 ExhaustedHeroPowerCount = src.ExhaustedHeroPowerCount,
                 PlayerId = src.PlayerId,
                 Gold = src.Gold,
+                LiveGold = src.LiveGold,
                 MaxGold = src.MaxGold,
                 TavernTier = src.TavernTier,
                 TavernUpgradeCost = src.TavernUpgradeCost,
@@ -530,6 +531,9 @@ namespace BobCoach.Engine
                 ReplenishingShopActive = src.ReplenishingShopActive,
                 PassiveChoiceActive = src.PassiveChoiceActive,
                 NormalRecruitAvailable = src.NormalRecruitAvailable,
+                ActivatedThisTurn = src.ActivatedThisTurn != null
+                    ? new HashSet<int>(src.ActivatedThisTurn)
+                    : new HashSet<int>(),
                 Armor = src.Armor,
                 AvailableTribes = src.AvailableTribes != null
                     ? new HashSet<string>(src.AvailableTribes) : new HashSet<string>(),

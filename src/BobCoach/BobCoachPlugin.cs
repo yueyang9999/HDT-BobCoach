@@ -2330,6 +2330,7 @@ namespace BobCoach
                 + "|L" + layoutDecision.LayoutCount + (layoutDecision.UseDenseSlots ? "D" : "R")
                 // 07062242: 金币归零/恢复边界必须触发重绘 — gold=0后若plan其余不变则不dispatch,
                 // 旧刷新光晕残留(T8末段gold=0仍见"找核心牌"提示的根因)
+                + "|" + (state.LiveGold >= 0 ? "G" + state.LiveGold : "G-")
                 + "|" + (state.Gold < 1 && state.FreeRefreshCount == 0 ? "G0" : "G+");
             if (planHash == _lastRenderedPlanHash) return;
             _lastRenderedPlanHash = planHash;

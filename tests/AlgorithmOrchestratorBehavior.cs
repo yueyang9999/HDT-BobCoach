@@ -9,7 +9,7 @@ using BobCoach.Engine.Decision;
 
 namespace BobCoach.Engine
 {
-    public enum ActionType { BuyMinion, Refresh }
+    public enum ActionType { BuyMinion, Refresh, Activate }
 
     public sealed class GameAction
     {
@@ -18,6 +18,7 @@ namespace BobCoach.Engine
         public string CardId = "";
         public string PurchaseSource = "";
         public string Description = "";
+        public int Cost;
     }
 
     public sealed class LevelUpSuggestion

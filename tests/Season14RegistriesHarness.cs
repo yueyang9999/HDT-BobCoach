@@ -13,6 +13,7 @@ internal static class Season14RegistriesHarness
     private static DarkGiftRegistry _darkGift;
     private static TrinketDefinitionRegistry _trinket;
     private static Season14RulesEvaluator _season14;
+    private static CardObjectDatabase _cardDatabase;
     private static CompGuideCatalog _compGuideCatalog;
     private static SeasonMechanicProfile _season14Profile;
 
@@ -21,6 +22,7 @@ internal static class Season14RegistriesHarness
         try
         {
             RealConfiguredRegistriesLoad();
+            CardObjectDatabaseTests();
             ConfiguredRootIsSeason14Evidence();
             SeasonDataSelectorTests();
             MissingConfiguredRootFailsClosed();
@@ -100,6 +102,10 @@ internal static class Season14RegistriesHarness
         True(_trinket.IsLoaded, "trinket loaded");
         Equal(379, _trinket.Count, "trinket count");
 
+        _cardDatabase = new CardObjectDatabase();
+        _cardDatabase.LoadFromConfiguredRoot();
+        True(_cardDatabase.IsLoaded, "card object database loaded");
+
         _compGuideCatalog = new CompGuideCatalog();
         _compGuideCatalog.LoadFromConfiguredRoot();
         True(_compGuideCatalog.IsLoaded, "comp guide catalog loaded");
@@ -155,6 +161,22 @@ internal static class Season14RegistriesHarness
         Equal(0, _fishbait.VerifyCoverage(new[] { "BG36_201" }).Count, "fishbait coverage");
         Equal(0, _darkGift.VerifyCoverage(new[] { "BG36_MidGameEffect_000t" }).Count,
             "dark gift coverage");
+    }
+
+    private static void CardObjectDatabaseTests()
+    {
+        CardObjectFact minion;
+        True(_cardDatabase.TryGet("BG36_180", out minion), "card database minion lookup");
+        Equal("BG36_180", minion.CardId, "card database minion CardId");
+        Equal("活体监牢", minion.NameCn, "card database minion Chinese name");
+        Equal(true, minion.CanActivate, "card database activate flag");
+        Equal(1, minion.ActivateCost, "card database activate cost");
+
+        CardObjectFact unknown;
+        False(_cardDatabase.TryGet("MISSING_CARD_ID", out unknown),
+            "card database unknown fails closed");
+        Equal("unknown", _cardDatabase.ResolveName("MISSING_CARD_ID"),
+            "card database unknown name");
     }
 
     private static void Season14MinionPurchaseSourceTests()

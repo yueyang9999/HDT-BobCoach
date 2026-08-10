@@ -163,6 +163,7 @@ namespace BobCoach
         private int _zonePosDiagCount = 0;  // ZonePosition诊断计数器
         private int _zone6DiagCount = 0;     // 发现区诊断计数器
         private int _zone6DiagTurn = -1;     // 诊断计数所属回合(07062157: 8次上限在T3耗尽, 出售发现时刻全盲 → 改每回合重置)
+        private int _lastActivateTurn = -1;  // Activate 每回合一次的 reset 标记
         private HashSet<int> _prevZone6EntityIds = new HashSet<int>();
         private DateTime _lastZone6EntityRefresh = DateTime.MinValue;
         // zone6实体首次出现时间: 用于过滤长期滞留的过渡实体(战斗衍生物等)
@@ -396,6 +397,11 @@ namespace BobCoach
                 if (turn < 1 || turn > 30) turn = 1;
 
                 state.Turn = turn;
+                if (_lastActivateTurn != turn)
+                {
+                    state.ActivatedThisTurn.Clear();
+                    _lastActivateTurn = turn;
+                }
                 state.TavernTier = GetPlayerTechLevel(entities);
                 state.Health = GetPlayerHealth(playerHero);
                 state.MaxHealth = state.Health > 30 ? state.Health : 30;
@@ -599,6 +605,7 @@ namespace BobCoach
                 if (trackedGold < 0 && state.NormalRecruitAvailable
                     && state.Gold <= 0 && state.ShopMinions.Count > 0 && turn <= 2)
                     state.Gold = state.MaxGold;
+                state.LiveGold = state.Gold;
                 // 手牌减少检测: 记录当前帧手牌数，供发现提取判断"玩家是否刚打出了一张手牌"
                 int currentHandCount = state.HandMinions.Count;
                 bool handDecreased = _prevHandCount >= 0 && currentHandCount < _prevHandCount;

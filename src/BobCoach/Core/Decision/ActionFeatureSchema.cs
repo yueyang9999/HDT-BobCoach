@@ -78,7 +78,19 @@ namespace BobCoach.Engine.Decision
     public static class ActionTypeBiases
     {
         public static readonly IList<ActionType> OrderedTypes =
-            Array.AsReadOnly((ActionType[])Enum.GetValues(typeof(ActionType)));
+            Array.AsReadOnly(new[]
+            {
+                ActionType.BuyMinion,
+                ActionType.BuySpell,
+                ActionType.Refresh,
+                ActionType.Upgrade,
+                ActionType.SellMinion,
+                ActionType.FreezeShop,
+                ActionType.UseHeroPower,
+                ActionType.PickTrinket,
+                ActionType.PickDiscover,
+                ActionType.SendGoldToTeammate,
+            });
 
         public static double[] OneHot(ActionType type)
         {

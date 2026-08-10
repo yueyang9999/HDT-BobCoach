@@ -43,6 +43,7 @@ namespace BobCoach.Engine
         public string Phase = "shop";
         public int Gold;
         public int MaxGold = 10;
+        public int LiveGold = -1;
         public int TavernTier = 3;
         public int TavernUpgradeCost;
         public int Health = 30;
@@ -77,6 +78,7 @@ namespace BobCoach.Engine
         public bool ReplenishingShopActive;
         public bool PassiveChoiceActive;
         public bool NormalRecruitAvailable = true;
+        public HashSet<int> ActivatedThisTurn = new HashSet<int>();
         public HashSet<string> AvailableTribes = new HashSet<string>();
         public List<string> ActiveTrinkets = new List<string>();
         public HashSet<string> ClaimedScheduledGrantOccurrences = new HashSet<string>();

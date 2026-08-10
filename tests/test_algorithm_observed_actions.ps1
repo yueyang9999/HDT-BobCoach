@@ -47,6 +47,11 @@ $sources = @(
     "Core\SharedTurnEventOutcome.cs", "Core\SharedCardVoteOccurrence.cs", "Core\SharedCardVoteSelection.cs",
     "Core\SharedCardGrantExpectation.cs", "Core\SharedCardGrantObservation.cs", "Core\GameRuleEvaluator.cs",
     "Core\ActionEnumerator.cs", "Core\TripleRuleEvaluator.cs", "Core\TeammateGoldTransferEvaluator.cs",
+    "Core\Season14RegistryJsonParser.cs", "Core\Season14CardRegistry.cs", "Core\SeasonMechanicProfile.cs",
+    "Core\ActivateRegistry.cs", "Core\ActivateFactSource.cs", "Core\LockboxRegistry.cs",
+    "Core\LockboxFactSource.cs", "Core\FishbaitRegistry.cs", "Core\FishbaitFactSource.cs",
+    "Core\DarkGiftRegistry.cs", "Core\DarkGiftFactSource.cs", "Core\Season14RulesEvaluator.cs",
+    "Core\SeasonDataSelector.cs",
     "Core\CombatEventQueue.cs", "Core\CombatContext.cs", "Core\CombatEffects.cs", "Core\CombatSimulator.cs",
     "Core\Decision\ActionDescriptor.cs", "Core\Decision\CandidateGenerator.cs",
     "Core\Decision\ObservedActionInference.cs"

@@ -40,6 +40,7 @@ namespace BobCoach.Engine.Decision
         {
             if (type == ActionType.BuyMinion || type == ActionType.BuySpell) return "shop";
             if (type == ActionType.SellMinion) return "board";
+            if (type == ActionType.Activate) return "board";
             if (type == ActionType.PickTrinket || type == ActionType.PickDiscover) return "choice";
             return "tavern";
         }
@@ -49,6 +50,7 @@ namespace BobCoach.Engine.Decision
             if (type == ActionType.BuyMinion || type == ActionType.BuySpell
                 || type == ActionType.PickDiscover) return "hand";
             if (type == ActionType.SellMinion) return "none";
+            if (type == ActionType.Activate) return "board";
             return "tavern";
         }
 
@@ -58,6 +60,9 @@ namespace BobCoach.Engine.Decision
                 && action.TargetIndex >= 0 && action.TargetIndex < state.ShopMinions.Count)
                 return state.ShopMinions[action.TargetIndex].EntityId;
             if (action.Type == ActionType.SellMinion
+                && action.TargetIndex >= 0 && action.TargetIndex < state.BoardMinions.Count)
+                return state.BoardMinions[action.TargetIndex].EntityId;
+            if (action.Type == ActionType.Activate
                 && action.TargetIndex >= 0 && action.TargetIndex < state.BoardMinions.Count)
                 return state.BoardMinions[action.TargetIndex].EntityId;
             if (action.Type == ActionType.PickTrinket
@@ -94,6 +99,7 @@ namespace BobCoach.Engine.Decision
                     ? transferRule.GoldPerUse
                     : int.MaxValue;
             }
+            if (action.Type == ActionType.Activate) return action.Cost;
             return 0;
         }
 
@@ -103,7 +109,8 @@ namespace BobCoach.Engine.Decision
             if (type == ActionType.BuyMinion || type == ActionType.SellMinion
                 || type == ActionType.Upgrade) return SimulatorSupport.Deterministic;
             if (type == ActionType.BuySpell || type == ActionType.FreezeShop
-                || type == ActionType.UseHeroPower) return SimulatorSupport.Partial;
+                || type == ActionType.UseHeroPower || type == ActionType.Activate)
+                return SimulatorSupport.Partial;
             if (type == ActionType.SendGoldToTeammate) return SimulatorSupport.Partial;
             return SimulatorSupport.None;
         }

@@ -196,6 +196,24 @@ namespace BobCoach.Engine
                     plan.SellMarkers.Add(new SellMarker { BoardIndex = bestAction.TargetIndex });
             }
 
+            // ── 发动标记：仅在明确 Activate 动作且目标随从仍存在时显示 ──
+            if (bestAction != null && bestAction.Type == ActionType.Activate
+                && bestAction.TargetIndex >= 0
+                && bestAction.TargetIndex < state.BoardMinions.Count)
+            {
+                var targetMinion = state.BoardMinions[bestAction.TargetIndex];
+                plan.ActivateHint = new ActivateHint
+                {
+                    BoardIndex = bestAction.TargetIndex,
+                    CardId = targetMinion.CardId,
+                    CardName = !string.IsNullOrEmpty(targetMinion.CardName)
+                        ? targetMinion.CardName
+                        : "unknown",
+                    Cost = bestAction.Cost,
+                    Reason = "发动",
+                };
+            }
+
             // ── 手牌标记：流派匹配 + 打出售卖评估 ──
             EvaluateHandCards(state, bestAction, plan);
 

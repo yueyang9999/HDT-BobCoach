@@ -62,6 +62,14 @@
     <Compile Include="Core\TrinketDefinitionFactSource.cs" />
     <Compile Include="Core\TrinketEffectResolver.cs" />
     <Compile Include="Core\Season14RegistryJsonParser.cs" />
+    <Compile Include="Core\EconomySnapshot.cs" />
+    <Compile Include="Core\LiveSceneAnalyzer.cs" />
+    <Compile Include="Core\CardObjectDatabase.cs" />
+    <Compile Include="Core\HeroSkillCatalog.cs" />
+    <Compile Include="Core\UnifiedActionScorer.cs" />
+    <Compile Include="Core\HeroSkillDecisionService.cs" />
+    <Compile Include="Core\DarkGiftDecisionService.cs" />
+    <Compile Include="Core\RecommendationPlan.cs" />
     <Compile Include="Core\SeasonDataSelector.cs" />
     <Compile Include="Core\SeasonMechanicProfile.cs" />
     <Compile Include="Core\CompGuideCatalog.cs" />

@@ -115,6 +115,8 @@ namespace BobCoach.Engine
                 TextEnUs = source.TextEnUs,
                 Type = source.Type,
                 Cost = source.Cost,
+                ActivateCost = ActivateFactSource.ParseActivateCost(
+                    source.TextEnUs, source.TextZhCn),
                 TechLevel = source.TechLevel,
                 Attack = source.Attack,
                 Health = source.Health,
