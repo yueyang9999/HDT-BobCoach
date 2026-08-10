@@ -16,7 +16,15 @@ function Assert-PluginHash([string]$Path) {
     if ($hash -ne $expectedSha256) {
         throw "Plugin DLL hash mismatch: $Path hash=$hash expected=$expectedSha256"
     }
-    Write-Host "PASS plugin DLL $Path sha256=$hash"
+    $checksumPath = $Path + ".sha256"
+    if (!(Test-Path -LiteralPath $checksumPath -PathType Leaf)) {
+        throw "Plugin checksum missing: $checksumPath"
+    }
+    $checksumText = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
+    if ($checksumText -ne "$expectedSha256  BobCoach.dll") {
+        throw "Plugin checksum format mismatch: $checksumPath content=$checksumText"
+    }
+    Write-Host "PASS plugin DLL $Path sha256=$hash checksum=$checksumText"
 }
 
 function Find-LatestPowerLog([string]$LogsRoot) {

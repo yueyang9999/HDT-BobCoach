@@ -144,3 +144,16 @@ Owner: Codex goal session
 - 2026-08-10 用户手动关闭 HDT 后，已通过 `deploy_local_release.ps1` 正式部署 v4 到 AppData 与本地 app 目录。
 - 部署归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T090620500Z-60c731f0`。
 - 四个插件路径的 DLL/checksum 均匹配 Release v4。
+
+## 2026-08-10 实机修复：D 盘 HDT checksum 格式错误
+
+根因：`D:\software\game\HDT-V2.7.0\HDT\Plugins\BobCoach.dll.sha256`
+只包含裸哈希，未包含 `HASH  BobCoach.dll` 格式，插件在 `PluginIntegrityVerifier` 直接失败，
+因此 HDT 日志显示 `Plugin integrity check FAILED: checksum-format-invalid`。
+
+修复：
+
+- 已重写 D 盘 HDT 的 checksum 为 `B0D9A1A272733D01ED9102EDDE32751155ECF39B3CAC2F4B55D4836AE15F32F3  BobCoach.dll`。
+- `deploy_local_release.ps1` 增加 D 盘 HDT 插件目录自动同步。
+- `collect_real_ui_evidence.ps1` 增加 checksum 文件格式校验。
+- 下一步：用户重新启动 HDT，插件应能通过完整性校验并进入 `OnLoad`。

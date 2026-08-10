@@ -12,5 +12,8 @@ assert.ok(source.includes("--replay-only"), "collector must replay tail with --r
 assert.ok(source.includes("LATEST_POWER_LOG"), "collector must identify latest Power.log");
 assert.ok(source.includes("REAL_UI_EVIDENCE_DIR"), "collector must expose evidence directory");
 assert.ok(source.includes("app-1.54.1"), "collector must check local HDT app-1.54.1 plugin dir");
+assert.ok(source.includes("Plugin checksum missing"), "collector must verify checksum sidecar");
+assert.ok(source.includes("D:\\software\\game\\HDT-V2.7.0\\HDT\\Plugins"),
+    "collector must check D-drive HDT plugin dir");
 
 console.log("PASS real UI evidence collector contract");

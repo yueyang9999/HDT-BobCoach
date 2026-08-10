@@ -326,7 +326,8 @@ try {
     Write-TrustedRepositoryRootSidecar $resolvedPlugin
     $localPluginDirs = @(
         (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.1\Plugins"),
-        (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0\Plugins")
+        (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0\Plugins"),
+        "D:\software\game\HDT-V2.7.0\HDT\Plugins"
     )
     foreach ($localDir in $localPluginDirs) {
         if (!(Test-Path -LiteralPath $localDir -PathType Container)) { continue }
