@@ -14,6 +14,7 @@ Scope: Season14 单人模式可见指导链路；不包含 BGDUO、不承诺胜�
 4. 文字指导面板与实际 UI 不一致：状态栏文字、商店高亮、按钮光晕可能来自不同/过期状态。
 5. 发现提示时机错误：非触发发现机制时误捕获酒馆招募面板目标；部分卡牌显示 ID 而不是中文名。
 6. 动态铸币数未正确进入逻辑：铸币不足仍提示购买/刷新，且该提示出售时没有出售建议。
+7. 英雄技能使用不准确：被动技能不需要提示，主动技能需要结合技能描述、费用、目标、时机、性价比和机会成本。
 
 本设计的目标是把可见指导链路从“规则早退 + 分散文本”重构为“同一份实时局面分析 + 同一份可解释推荐计划”，并先把黑暗之赐/发动/新赛季数据规则纳入统一决策服务。
 
@@ -66,6 +67,8 @@ Scope: Season14 单人模式可见指导链路；不包含 BGDUO、不承诺胜�
 4. 动态铸币数成为所有费用合法性、评分、UI 展示的唯一事实源。
 5. 黑暗之赐的官方规则、候选效果、随从条件、回合/本数、费用和机制搭配进入可计算服务。
 6. 所有用户可见卡名必须通过中文映射；无法映射时显示 `unknown`，不显示裸 CardId。
+7. 主动英雄技能与被动英雄技能明确区分：被动技能不提示；主动技能根据技能文本、费用、解锁条件、目标、性价比和机会成本动态评估。
+8. 建立统一英雄技能库和全卡牌对象库，管理版本、规则、英雄/技能/伙伴关系、机制、费用、中文映射等维度。
 
 ## 4. 非目标
 
@@ -75,6 +78,7 @@ Scope: Season14 单人模式可见指导链路；不包含 BGDUO、不承诺胜�
 - 不做完整战斗模拟器或深度强化学习。
 - 不覆盖 BGDUO。
 - 不重写全部历史规则；legacy 保留为回退和 Shadow 对比。
+- 不从未经授权的外部插件导入专有数据；历史日志或其他数据源只能在使用本机已授权来源、有明确来源记录且可校验时用于拟合。
 
 ## 5. 目标架构
 
@@ -88,9 +92,15 @@ GameStateExtractor
         -> UnknownCoverage
     -> CandidateGenerator
         -> UnifiedActionScorer
+        -> HeroSkillDecisionService
         -> DarkGiftDecisionService
         -> RecommendationPlan
     -> OverlayRenderer
+
+CardObjectDatabase
+    -> LiveSceneAnalyzer
+    -> HeroSkillDecisionService
+    -> DarkGiftDecisionService
 ```
 
 ### 5.1 LiveSceneAnalyzer
@@ -133,6 +143,49 @@ GameStateExtractor
 4. 交互规则：如 Echoing Voice 只适合战吼随从、Jaws of Death 只适合亡语随从、Amalgamation 只适合无种族随从等。
 5. 失败关闭：注册表缺失、候选无效果映射、随从无种族/机制事实时，候选标 `unknown`，不给出高置信推荐。
 
+### 5.5 HeroSkillDecisionService
+
+新增英雄技能决策服务，替换当前 `HeroPowerEngine` 的“文本正则猜测 + 固定 PowerValueBias”模式：
+
+1. 从统一英雄技能库读取技能定义，而不是运行时从技能文本猜规则。
+2. 被动/条件被动/光环技能不生成“使用技能”提示；只有主动技能且满足解锁条件时才进入候选。
+3. 主动技能必须评估：
+   - 技能费用；
+   - 当前 `liveGold` 和机会成本；
+   - 技能文本规则化后的效果类型与目标条件；
+   - 当前场面、手牌、商店、对手、回合/本数；
+   - 使用后立即收益、成长收益、经济收益、战斗收益；
+   - 与当前阵容、伙伴、饰品、黑暗之赐的机制搭配。
+4. 每个英雄技能维护独立使用模型：
+   - 什么阶段该用；
+   - 什么场面/目标下价值高；
+   - 什么情况下不值得用；
+   - 是否与特定种族、伙伴、机制协同。
+5. 新英雄和新技能进入技能库时不需要改 `HeroPowerEngine` 的 if/else 分支，只需补充数据定义。
+
+### 5.6 CardObjectDatabase
+
+建立本地版本化卡牌对象库，统一管理所有决策对象：
+
+- 一个 CardId 一个对象记录，包含：
+  - 身份：CardId、DbfId、名称中英文、类型、种族、职业、set；
+  - 版本：season、gameBuild、cardPoolIdentity、schemaVersion、source、sha256；
+  - 规则：费用、星级、身材、关键词、文本规则、生效/禁用状态；
+  - 关系：所属英雄、英雄技能、伙伴、关联种族、相关机制、互斥规则；
+  - 算法：是否可购买、可发动、可发现、可暗赐、可三连、可被出售保护；
+  - 中文映射：正式中文名、`unknown` 状态、缺失原因。
+- 第一版使用本地 JSON 目录/注册表实现，不引入远程数据库或新运行时依赖。
+- 若未来需要 SQLite 等本地数据库，需单独设计并审批，不改变本设计的决策边界。
+
+该对象库同时服务：
+
+- `CardNameService` 和 UI 中文映射；
+- `HeroSkillDecisionService`；
+- `DarkGiftDecisionService`；
+- `ActionEnumerator` 的合法性；
+- 测试 fixture 和覆盖率审计；
+- 后续算法训练的特征来源。
+
 ## 6. 问题到修复映射
 
 | 用户问题 | 根因 | 设计修复 |
@@ -143,16 +196,44 @@ GameStateExtractor
 | 文字与实际 UI 不一致 | `VisualPlan` 生成后被多处改写，渲染层再读旧缓存 | `RecommendationPlan` 单一事实源；状态文本、商店高亮、按钮光晕只消费同一对象 |
 | 发现时机错误/裸 ID | 仍有 zone6 和文本匹配路径；候选名兜底为 CardId | 发现只接受权威 Power.log `WaitThenShowChoices` 触发；所有候选走 `CardNameService`/赛季注册表；未知显示 `unknown` |
 | 动态铸币未进入逻辑 | `state.Gold` 在决策、视觉、渲染多个阶段被重复读取 | `EconomySnapshot.liveGold` 作为唯一输入；所有费用检查、planHash、UI 过滤使用同一值 |
+| 英雄技能使用不当/未提示 | `HeroPowerEngine` 靠 HearthDb 文本正则推断技能类型和用途，缺少数据驱动的主动/被动、费用、目标、性价比和机会成本模型 | `HeroSkillCatalog` + `HeroSkillDecisionService`：被动不提示，主动技能通过费用、解锁、目标、期望价值、机会成本门控后进入推荐 |
 
 ## 7. 数据与中文映射
 
 ### 7.1 注册表校验
 
-- 新增覆盖审计：minion、tavern spell、trinket、activate、dark gift 注册表必须包含 `_meta` 的 season/build/cardPoolIdentity/sha256。
+- 新增覆盖审计：minion、tavern spell、trinket、activate、dark gift、hero、hero skill、buddy 注册表必须包含 `_meta` 的 season/build/cardPoolIdentity/sha256。
 - 所有用户可见候选卡名先查 `CardNameService`，再查 Season14 本地注册表，最后查 HearthDb zhCN；全部失败显示 `unknown`。
 - PowerLog 候选只携带 CardId/CardName 时，渲染前必须重新解析 CardId；不允许把 `CardName` 原样当可信中文名。
 
-### 7.2 黑暗之赐规则化
+### 7.2 HeroSkillCatalog
+
+新增 `hero_skill_registry.json`，字段至少包括：
+
+- `heroCardId`、`heroPowerCardId`、`buddyCardId`；
+- 中英文名称、技能文本、规则化效果类型；
+- `powerType`：Passive/Active/Conditional/Aura；
+- `cost`、`unlockTurn`、`unlockTier`；
+- `usePurpose`、`targetRule`、`validTargetRule`；
+- 种族亲和、机制协同、伙伴配合；
+- 使用时机、使用条件、机会成本提示；
+- 数据来源和版本/checksum。
+
+新英雄/技能通过更新该数据文件加入，不新增 if/else 分支。
+
+### 7.3 卡牌对象库
+
+新增统一 `card_object_catalog.json` 或等价的版本化目录结构，覆盖：
+
+- 英雄、英雄技能、伙伴；
+- 随从、酒馆法术、饰品、发现候选；
+- Activate、Lockbox、Fishbait、Dark Gift 相关卡；
+- 卡牌中文名、机制、费用、星级、身材、文本规则、关系、算法用途；
+- 每份数据带 source、version、checksum，避免旧赛季数据混用。
+
+缺失映射必须进入 `unknown` 覆盖报告，不得静默使用英文名或裸 ID。
+
+### 7.4 黑暗之赐规则化
 
 - 将 `dark_gift_registry.json` 的规则文本拆成结构化谓词：
   - `CanBeOffered(candidateMinion, gift, turn, tier, lobbyTribes)`
@@ -167,10 +248,12 @@ GameStateExtractor
 - 新增 `LiveSceneAnalyzerBehavior`：阵容、经济、生存、未知覆盖。
 - 新增 `EconomySnapshotBehavior`：0/1/2/3 金币、免费刷新、首购免费、升本后剩余铸币。
 - 新增 `ActivateActionBehavior`：注册表已知卡可生成发动候选，未知卡 fail closed。
+- 新增 `HeroSkillDecisionServiceBehavior`：被动不提示；主动技能在费用不足、未解锁、无有效目标、机会成本过高时不提示；新技能通过数据加入后即可测试。
 - 新增 `SellAndHandRecommendationBehavior`：无替换、替换无净提升、手牌弱于最弱随从均不推荐。
 - 新增 `DarkGiftDecisionServiceBehavior`：offering 规则、候选限制、费用、组合评分、未知 fail closed。
 - 新增 `RecommendationPlanConsistencyBehavior`：状态文本、ShopMarkers、UpgradeHint、SellMarkers 来自同一计划。
 - 新增发现来源测试：非权威 entity/zone6 路径不得打开发现面板。
+- 新增 `CardObjectDatabaseBehavior`：CardId 唯一、版本一致、关系完整、中文映射正确、缺失项显式 unknown。
 
 ### 8.2 真实日志回放
 
@@ -185,7 +268,8 @@ GameStateExtractor
 
 ### P0：数据与中文映射审计
 
-- 校验 minion/tavern spell/trinket/activate/dark gift 注册表完整性。
+- 校验 minion/tavern spell/trinket/activate/dark gift/hero/hero skill/buddy 注册表完整性。
+- 建立 `hero_skill_registry.json` 和 `card_object_catalog.json` 数据契约。
 - 建立 `unknown` 卡名审计日志和覆盖报告。
 - 新增注册表/中文映射测试。
 
@@ -198,6 +282,7 @@ GameStateExtractor
 ### P2：统一动作评分
 
 - 新增 `ActionType.Activate`。
+- 实现 `HeroSkillDecisionService`，将主动技能从 `HeroPowerEngine` 迁移到数据驱动的技能库。
 - 将升本、买、卖、刷、冻、技能、发动纳入 `UnifiedActionScorer`。
 - 保留 legacy 为回退和 Shadow 对比。
 
@@ -209,7 +294,7 @@ GameStateExtractor
 
 ### P4：真实日志验证与 UI 一致性
 
-- 用真实 Power.log 回放 6 类问题场景。
+- 用真实 Power.log 回放用户反馈问题场景。
 - 修复发现误触发、中文映射、文字/UI 不一致。
 - 全量跑仓库门禁后进入 Release/部署。
 
@@ -219,6 +304,7 @@ GameStateExtractor
 - 不改 `.env`/密钥/CI/CD/database schema；不读写 `%APPDATA%\bob-coach\data`；不动 BGDUO。
 - 不编造赛季卡牌、机制、权重、tier 或效果；缺数据显式 `unknown`。
 - 不宣称胜率、名次或策略质量提升。
+- 历史日志或其他插件数据源仅可用于本机/已授权、可校验、有来源记录的拟合；不导入未经授权的外部专有数据。
 - 暗赐真实 UI、`BG36_MidGameEffect_000`、`BG36_HERO_101p`、“配置 RG”继续保持 `unknown`。
 - 没有新 HDT/Power.log/截图/录像证据时，源码测试通过不得标为真实 UI PASS。
 
@@ -227,11 +313,14 @@ GameStateExtractor
 1. 金币不足时不显示不可支付购买/刷新/升本/卖牌 UI。
 2. 升本建议不再只看回合和板面数，必须体现战力、血量、对手和替代动作。
 3. 发动机制卡能生成可执行提示。
-4. 出售/手牌建议必须通过“战力净提升”门控。
-5. 发现面板只在权威触发时显示，非权威来源不打开。
-6. 用户可见卡名不再出现裸 CardId。
-7. 暗赐候选显示中文名、费用、评分和推荐原因；未知数据不假装有把握。
-8. 状态栏文字和实际 UI 元素来自同一 `RecommendationPlan`。
+4. 被动英雄技能不提示；主动英雄技能只有费用、解锁、目标、性价比和机会成本都通过才提示。
+5. 新英雄/新技能只需补数据即可进入技能库和决策。
+6. 全卡牌对象库的版本、规则、关系、中文映射可审计，未知项显式 `unknown`。
+7. 出售/手牌建议必须通过“战力净提升”门控。
+8. 发现面板只在权威触发时显示，非权威来源不打开。
+9. 用户可见卡名不再出现裸 CardId。
+10. 暗赐候选显示中文名、费用、评分和推荐原因；未知数据不假装有把握。
+11. 状态栏文字和实际 UI 元素来自同一 `RecommendationPlan`。
 
 ## 12. 后续门禁
 
