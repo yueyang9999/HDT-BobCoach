@@ -11,5 +11,6 @@ const source = fs.readFileSync(collector, "utf8");
 assert.ok(source.includes("--replay-only"), "collector must replay tail with --replay-only");
 assert.ok(source.includes("LATEST_POWER_LOG"), "collector must identify latest Power.log");
 assert.ok(source.includes("REAL_UI_EVIDENCE_DIR"), "collector must expose evidence directory");
+assert.ok(source.includes("app-1.54.1"), "collector must check local HDT app-1.54.1 plugin dir");
 
 console.log("PASS real UI evidence collector contract");

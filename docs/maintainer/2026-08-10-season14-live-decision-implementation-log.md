@@ -124,3 +124,20 @@ Owner: Codex goal session
 - 截图/录像证据目录为空。
 
 采集工具和验收协议已就绪，用户启动 HDT 并进入 Season14 单人模式对局后即可恢复。
+
+## 2026-08-10 实机修复：HDT 实际加载目录未同步
+
+根因：HDT 本机实际加载 `C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1\Plugins\BobCoach.dll`，
+该目录仍为旧版 675840 DLL，导致插件未显示最新 UI。
+
+修复：
+
+- 已关闭 HDT 进程。
+- 已将 Release v4 DLL 和 checksum 同步到：
+  - `app-1.54.1\Plugins`
+  - `app-1.54.0\Plugins`
+  - `%APPDATA%\HearthstoneDeckTracker\Plugins`
+  - `D:\software\game\HDT-V2.7.0\HDT\Plugins`
+- `collect_real_ui_evidence.ps1` 已增加本地 HDT app 目录校验。
+- `deploy_local_release.ps1` 已增加本地 HDT app 目录自动同步。
+- 下一步：重新启动 HDT，进入 Season14 对局验证 UI。

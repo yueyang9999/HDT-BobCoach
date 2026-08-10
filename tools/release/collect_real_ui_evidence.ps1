@@ -43,10 +43,17 @@ function Find-LatestPowerLog([string]$LogsRoot) {
     return $null
 }
 
-$appData = Join-Path $env:APPDATA "HearthstoneDeckTracker\Plugins\BobCoach.dll"
-$programDir = "D:\software\game\HDT-V2.7.0\HDT\Plugins\BobCoach.dll"
-Assert-PluginHash $appData
-Assert-PluginHash $programDir
+$pluginDlls = @(
+    (Join-Path $env:APPDATA "HearthstoneDeckTracker\Plugins\BobCoach.dll"),
+    "D:\software\game\HDT-V2.7.0\HDT\Plugins\BobCoach.dll",
+    (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.1\Plugins\BobCoach.dll"),
+    (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0\Plugins\BobCoach.dll")
+)
+foreach ($pluginDll in $pluginDlls) {
+    if (Test-Path -LiteralPath $pluginDll -PathType Leaf) {
+        Assert-PluginHash $pluginDll
+    }
+}
 
 New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
 $latest = Find-LatestPowerLog $HearthstoneLogs

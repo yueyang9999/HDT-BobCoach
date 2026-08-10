@@ -324,6 +324,25 @@ try {
         throw "Deployed DLL hash mismatch"
     }
     Write-TrustedRepositoryRootSidecar $resolvedPlugin
+    $localPluginDirs = @(
+        (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.1\Plugins"),
+        (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0\Plugins")
+    )
+    foreach ($localDir in $localPluginDirs) {
+        if (!(Test-Path -LiteralPath $localDir -PathType Container)) { continue }
+        $localDll = Join-Path $localDir "BobCoach.dll"
+        Copy-Item -LiteralPath $candidateDll -Destination $localDll -Force
+        $localHash = Get-Sha256 $localDll
+        if ($localHash -ne $candidateHash) {
+            throw "Local HDT plugin hash mismatch: $localDll"
+        }
+        [IO.File]::WriteAllText(
+            (Join-Path $localDir "BobCoach.dll.sha256"),
+            ($candidateHash + "  BobCoach.dll`r`n"),
+            (New-Object Text.UTF8Encoding($false))
+        )
+        Write-Host "PASS synced local HDT plugin $localDll sha256=$localHash"
+    }
     Write-Host "PASS deployed latest release DLL bytes=$candidateSize sha256=$deployedHash archive=$($archiveInfo.Path)"
 } catch {
     Write-Host "FAIL local release deployment"
