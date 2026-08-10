@@ -41,6 +41,7 @@ Owner: Codex goal session
 - 新增 `RecommendationPlan`，`BobCoachPlugin.planHash` 加入精确 `LiveGold`。
 - 完成 Phase 1-4 独立行为测试并接入 `run_behavior_tests.ps1`。
 - 真实 `Power_old.log` 回放通过：Faelin 被动选择保持独立。
+- 阶段性提交：`cbb7db6 feat(season14): add live decision foundation and phase1-3 services`
 
 ## 验证记录
 
