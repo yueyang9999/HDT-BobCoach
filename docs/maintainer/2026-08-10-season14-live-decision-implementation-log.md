@@ -66,6 +66,10 @@ Owner: Codex goal session
 - `DecisionEngine` 对 Activate 使用 `UnifiedActionScorer`，不再被当作“状态不变”忽略。
 - `BobCoachPlugin` 消费 `VisualPlan.ActivateHint`，铸币足够时渲染目标脉冲和“发动”状态文本。
 - `RecommendationPlan.FromVisualPlan` 从最终 `VisualPlan` 派生统一计划，并在 `DispatchRender` 做一致性校验。
+- 最新 Release：`BobCoach.dll` bytes=869888，SHA256=`F0A15DEDF4A909BD59B17E56FF036E3B5832F51D5991DD4F0AAA804762E9AAE5`。
+- 最新离线包：`BobCoach-1.1.0-win-x64.zip`，SHA256=`590805FCD3102A48B1425F141CEA0914A5CD46E598B049D35A4C0884507A3F9F`。
+- AppData 归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T083753644Z-4b8f17cb`。
+- 程序目录归档：`E:\HDT-BobCoach-evidence\dll-archive\20260810T163811Z-program-dir-pre-deploy`。
 
 ## 验证记录
 
