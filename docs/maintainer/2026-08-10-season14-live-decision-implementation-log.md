@@ -113,3 +113,14 @@ Owner: Codex goal session
 - 把 Phase 2 三个服务接入 `DecisionEngine` / `BobCoachPlugin`。
 - 让 `RecommendationPlan` 真正接管文字面板、商店高亮、按钮光晕和暗赐候选。
 - 完成正式 Release 构建、部署、真实 UI 证据和交接文档。
+
+## 阻塞状态
+
+截至 2026-08-10，真实 HDT 对局 UI 证据仍无法采集：
+
+- HDT 进程未启动；
+- 最新 Hearthstone 会话没有完整 Season14 对局 `Power.log`；
+- AppData 中没有新的 BobCoach/HDT 插件运行日志；
+- 截图/录像证据目录为空。
+
+采集工具和验收协议已就绪，用户启动 HDT 并进入 Season14 单人模式对局后即可恢复。
