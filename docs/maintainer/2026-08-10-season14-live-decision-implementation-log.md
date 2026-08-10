@@ -83,6 +83,7 @@ Owner: Codex goal session
   `discover=1 trinket=2 darkGift=0 timewarp=0 completion=2 passive=0`。
 - 尾部回放证据：`E:\HDT-BobCoach-evidence\season14\generated\ui-evidence\power-latest-tail-20000.log`。
 - 真实 UI 证据仍待 HDT 实机截图/录像和插件日志。
+- 新增验收协议：[真实 UI 验收协议](2026-08-10-season14-real-ui-validation-protocol.md)。
 
 ## 验证记录
 
