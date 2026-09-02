@@ -127,7 +127,7 @@ Owner: Codex goal session
 
 ## 2026-08-10 实机修复：HDT 实际加载目录未同步
 
-根因：HDT 本机实际加载 `C:\Users\19844\AppData\Local\HearthstoneDeckTracker\app-1.54.1\Plugins\BobCoach.dll`，
+根因：HDT 本机实际加载 `%LOCALAPPDATA%\HearthstoneDeckTracker\app-1.54.1\Plugins\BobCoach.dll`，
 该目录仍为旧版 675840 DLL，导致插件未显示最新 UI。
 
 修复：

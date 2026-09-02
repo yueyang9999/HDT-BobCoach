@@ -24,6 +24,19 @@ namespace BobCoach.Engine
         public IList<string> ActiveGlobalEffectIds { get { return _activeGlobalEffectIds; } }
         public bool HasAmbiguousPrimary { get; private set; }
 
+        public static AnomalyContext FromSnapshot(
+            string primaryAnomalyId,
+            IEnumerable<string> activeGlobalEffectIds,
+            bool hasAmbiguousPrimary)
+        {
+            return new AnomalyContext(
+                primaryAnomalyId ?? "",
+                new List<string>(
+                    (activeGlobalEffectIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrEmpty(id))),
+                hasAmbiguousPrimary);
+        }
+
         public static AnomalyContext Resolve(
             IEnumerable<string> observedCardIds,
             AnomalyRegistry registry,

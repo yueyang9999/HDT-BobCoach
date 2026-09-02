@@ -121,3 +121,11 @@ node tools\model\evaluate_policy.js
 - Unknown or missing profile data fails closed instead of falling back to guessed Season14 behavior.
 - The legacy unloaded-evaluator behavior remains unchanged.
 - Policy benchmark baseline and post-T7 outputs are compared without claiming real effect metrics.
+
+## 2026-08-09 用户反馈记录（仅记录，未实现）
+
+- 寄生之魂开局暗赐选择只有 2 个候选，且无推荐侧重。
+- 点击暗赐按钮后只看到“暗赐选择中”，未看到发现推荐面板；真实 UI 仍为 `blocked-by-user-availability / unknown`。
+- 改变随从种族/类型的暗赐算法覆盖为 `unknown`，未找到评分或效果覆盖代码。
+- 饰品提示展示方式建议改为文本理解 + 场面 + 饰品评分；当前 `TrinketRecommendationsVisible = false`，此为设计变更建议，未实现。
+- 本轮仅同步用户反馈和待确认缺口，不改变机制 profile、算法或 UI。

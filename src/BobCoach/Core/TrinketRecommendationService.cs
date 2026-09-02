@@ -27,7 +27,9 @@ namespace BobCoach.Engine
         }
 
         public List<TrinketRecommendation> Evaluate(
-            IList<TrinketOption> offers, string dominantTribe)
+            IList<TrinketOption> offers, string dominantTribe,
+            int healthArmor = -1, int turn = 0, IList<string> boardKeywords = null,
+            int boardSize = -1)
         {
             var results = new List<TrinketRecommendation>();
             if (offers == null) return results;
@@ -56,7 +58,7 @@ namespace BobCoach.Engine
                         && _source.TryGet(offer.CardId, out fact)
                         && string.Equals(fact.CardId, offer.CardId, StringComparison.Ordinal))
                     {
-                        TrinketEvaluation evaluation = _evaluator.Evaluate(fact, dominantTribe);
+                        TrinketEvaluation evaluation = _evaluator.Evaluate(fact, dominantTribe, healthArmor, turn, boardKeywords, boardSize);
                         if (evaluation.IsValid)
                         {
                             recommendation.DisplayName = evaluation.DisplayName;

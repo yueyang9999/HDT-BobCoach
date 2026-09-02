@@ -36,7 +36,7 @@ namespace BobCoach.Engine
             { 13, 5.5 }, { 14, 6.0 }, { 15, 6.5 },
         };
 
-        private static Random _rng = new Random();
+        private static Random _rng = new Random(); // 保留: 无调用点, 仅文档说明
 
         /// <summary>
         /// 估算典型对手在当前回合的酒馆等级 (浮点, 含插值)。
@@ -98,6 +98,15 @@ namespace BobCoach.Engine
             if (currentHealth <= 0) return true;
             int expectedDmg = EstimateDamage(turn);
             if (nextTurnDamage > 0) expectedDmg = Math.Max(expectedDmg, nextTurnDamage);
+            // 2026-08-19 实测修复(B1): 残血(≤15)时用保守伤害上界——
+            // 真实对手可能满场高星(等级+5星), 估算偏低会导致"血=结算伤害上限还推荐升本"
+            if (currentHealth <= 15)
+            {
+                int tier = (int)Math.Ceiling(EstimateOpponentTierFloat(turn));
+                int conservative = tier + 5 + 2;
+                if (currentHealth <= Math.Max(expectedDmg + 2, conservative))
+                    return true;
+            }
             return currentHealth <= expectedDmg + 2;
         }
 
@@ -170,6 +179,116 @@ namespace BobCoach.Engine
                 if (count > 0) return sum / count;
             }
             return EstimateOpponentPower(turn);
+        }
+    }
+
+    public sealed class OpponentBoardProfile
+    {
+        public bool HasBoardData;
+        public int AliveOpponentCount;
+        public int TotalMinions;
+        public int BigThreatCount;
+        public int WideFrequencyCount;
+        public int RebornCount;
+        public double MaxHealth;
+        public double MaxStats;
+        public double AvgHealth;
+    }
+
+    /// <summary>
+    /// Uses the live opponent board snapshot to decide whether situational
+    /// tech cards such as The butler-like one-for-one removal are worth keeping
+    /// or buying right now. With no board evidence the helper stays permissive;
+    /// selling is still gated by the normal buy/upgrade improvement checks.
+    /// </summary>
+    public static class OpponentTechAdvisor
+    {
+        public static OpponentBoardProfile AnalyzeOpponentBoard(
+            IList<OpponentData> opponents)
+        {
+            var profile = new OpponentBoardProfile();
+            if (opponents == null) return profile;
+
+            double healthSum = 0;
+            foreach (var opponent in opponents)
+            {
+                if (opponent == null || !opponent.Alive) continue;
+                if (opponent.BoardMinions == null || opponent.BoardMinions.Count == 0)
+                    continue;
+
+                profile.AliveOpponentCount++;
+                profile.HasBoardData = true;
+                foreach (var minion in opponent.BoardMinions)
+                {
+                    if (minion == null) continue;
+                    profile.TotalMinions++;
+                    healthSum += minion.Health;
+                    double stats = minion.Attack + minion.Health;
+                    if (minion.Health > profile.MaxHealth)
+                        profile.MaxHealth = minion.Health;
+                    if (stats > profile.MaxStats)
+                        profile.MaxStats = stats;
+                    if (minion.Health >= 12 || stats >= 20
+                        || (minion.Tier >= 5 && minion.Health >= 8))
+                        profile.BigThreatCount++;
+                    if (minion.Health <= 4 || stats <= 8 || minion.Reborn)
+                        profile.WideFrequencyCount++;
+                    if (minion.Reborn)
+                        profile.RebornCount++;
+                }
+            }
+            if (profile.TotalMinions > 0)
+                profile.AvgHealth = healthSum / profile.TotalMinions;
+            return profile;
+        }
+
+        public static bool IsSituationalTechCard(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return false;
+            // P11 2026-08(用户实测: 只认火车王, 英勇的逆袭者等强制交换卡完全不识别):
+            // 强制交换牌清单扩充——火车王(亡语杀击杀者)/英勇的逆袭者(进击获攻)/剧毒/烈毒/圣盾/复生。
+            if (string.Equals(cardId, "BG23_318", StringComparison.Ordinal)
+                || string.Equals(cardId, "BG23_318_G", StringComparison.Ordinal)
+                || string.Equals(cardId, "BG34_604", StringComparison.Ordinal)
+                || string.Equals(cardId, "BG34_604_G", StringComparison.Ordinal))
+                return true;
+            // 剧毒/烈毒/圣盾: 按卡id关键词识别(覆盖暗赐变体如暴烈毒性 BG36_MidGameEffect_000t69)
+            if (cardId.IndexOf("Venom", StringComparison.Ordinal) >= 0
+                || cardId.IndexOf("Poison", StringComparison.Ordinal) >= 0
+                || cardId.IndexOf("DivineShield", StringComparison.Ordinal) >= 0)
+                return true;
+            return false;
+        }
+
+        public static bool IsTechCardWorthKeeping(
+            string cardId, IList<OpponentData> opponents)
+        {
+            if (!IsSituationalTechCard(cardId)) return false;
+            var profile = AnalyzeOpponentBoard(opponents);
+            if (!profile.HasBoardData) return false;
+
+            double bigScore = 0;
+            if (profile.MaxHealth >= 22 || profile.MaxStats >= 26)
+                bigScore += 0.6;
+            bigScore += Math.Min(0.6, profile.BigThreatCount * 0.18);
+            bigScore += Math.Min(0.25,
+                Math.Max(0, profile.AvgHealth - 6) * 0.04);
+
+            if (profile.BigThreatCount >= 2 && profile.MaxStats >= 14)
+                return true;
+
+            double frequencyPenalty =
+                Math.Min(0.8, profile.WideFrequencyCount * 0.12)
+                + Math.Min(0.25, profile.RebornCount * 0.10);
+            return bigScore - frequencyPenalty >= 0.45;
+        }
+
+        public static double GetSituationalTechMultiplier(
+            string cardId, IList<OpponentData> opponents)
+        {
+            if (!IsSituationalTechCard(cardId)) return 1.0;
+            if (!AnalyzeOpponentBoard(opponents).HasBoardData) return 1.0;
+            return IsTechCardWorthKeeping(cardId, opponents) ? 1.8 : 0.55;
         }
     }
 }

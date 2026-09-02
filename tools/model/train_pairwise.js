@@ -14,7 +14,18 @@ function train(rows, options) {
   validateSettings(settings);
   const normalizedRows = validateRows(rows);
   const featureCount = normalizedRows[0].preferred.features.length;
-  const weights = new Array(featureCount + actionTypes.length).fill(0);
+  // 2026-08-18：先验权重注入（initialWeights）——模拟器验证策略（R100-R171）
+  // 映射为特征先验（STRATEGY_TO_FEATURE_MAPPING），训练时作为初始化；
+  // 默认零权重（行为不变，确定性保持）。
+  const weightCount = featureCount + actionTypes.length;
+  const initial = settings.initialWeights;
+  if (initial !== undefined) {
+    if (!Array.isArray(initial) || initial.length !== weightCount
+        || initial.some(v => !Number.isFinite(v))) {
+      throw new Error('invalid initialWeights: expected ' + weightCount + ' finite numbers');
+    }
+  }
+  const weights = initial ? initial.slice() : new Array(weightCount).fill(0);
   const random = seededRandom(settings.seed);
   for (let epoch = 0; epoch < settings.epochs; epoch++) {
     const order = normalizedRows.slice();
@@ -77,6 +88,11 @@ function validateSettings(settings) {
   ['epochs', 'learningRate', 'lambda', 'seed'].forEach(key => {
     if (!Number.isFinite(settings[key])) throw new Error('invalid ' + key);
   });
+  if (settings.initialWeights !== undefined
+      && (!Array.isArray(settings.initialWeights)
+          || settings.initialWeights.some(v => !Number.isFinite(v)))) {
+    throw new Error('invalid initialWeights');
+  }
   if (!Number.isInteger(settings.epochs) || settings.epochs < 1 || settings.learningRate <= 0 || settings.lambda < 0)
     throw new Error('invalid training settings');
 }

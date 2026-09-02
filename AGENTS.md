@@ -86,6 +86,39 @@ Before effect acceptance passes, the required conclusion is: `新算法基础设
 - All generated registries, datasets, and model artifacts carry contract headers (`schemaVersion`, `season`, `gameBuild`, `cardPoolIdentity`, `source`, `capturedAt`, `sha256`) per `docs/maintainer/SEASON_DATA_CONTRACT.md`; tools implement them in `tools/model/contracts.js`.
 - C# rule registries load definitions through data-backed classes (e.g. `TrinketDefinitionRegistry`) with fail-closed coverage checks; do not add new per-card hardcoded rules. Decision behavior (`Resolve`/policy output) stays unchanged until real, version-matched season data lands.
 - Before the 2026-08-05 content refresh, do not read or migrate production data files under `%APPDATA%\bob-coach\data\`; generate and test only against explicit synthetic data roots (e.g. `BOB_COACH_DATA_ROOT` in disposable temp directories).
+## Simulator Environment Patch Version Control (2026-08-28 固化, 用户明确要求, 违反即投诉)
+
+> 背景: R588 曾用旧补丁回放（firestone build 248348/231720）的卡牌出现频率修改模拟池
+> （cards.json 的 is_battlegrounds_pool/tier flag），被用户否决——**非本赛季回放数据会污染模拟池**。
+> 此规则为不可违反的硬约束。
+
+1. **主数据源唯一权威**: 模拟器卡池/机制数据（`E:/HDT-BobCoach-evidence/simulation-season14/season14-data/`）
+   必须与**主数据源最新单人酒馆模式**对齐:
+   - 标准版本 = **gamerhub 36.2.2.249896（build 249896）**（见 knowledge-base/STANDARD_DATASOURCE_GAMERHUB.md）
+   - 改动前必须确认所依据的数据源 build 与当前标准一致; 标准版本升级时同步迁移 season14-data
+2. **回放数据必须先核对版本再使用**:
+   - 任何回放（firestone XML / HDT 日志 / Power.log）使用前必须读取 `<Game buildNumber="...">`（或等价版本字段）
+     与日期; build ≠ 当前标准版本 → 该回放**只允许用于行为/运营/决策模式分析**（升级节奏、购买习惯、
+     英雄技能使用等不依赖卡池的统计），**禁止用于**:
+     - cards.json 的 is_battlegrounds_pool / tier / 卡池成员修改
+     - SharedPool 等引擎池/机制权重校准
+     - 任何会改变模拟器环境数据（卡池、概率、机制参数）的改动
+   - 混用不同 build 回放做统计时必须在产物中标注各 build 的数量
+3. **产物版本标注纪律**: 所有分析报告/对比 JSON/知识库条目必须标注其数据源的 build/日期;
+   模拟器运行报告已含 rulesSha256/mechanismRegistrySha256（simulate_games.js），保持
+4. **卡池/机制改动流程（强制）**: 改模拟池或机制前, 记录三要素——
+   ①改了哪个文件 ②依据的数据源及其 build（必须=标准版本）③若用了回放样本, 列出样本 build 分布;
+   完成后同 seed 重现验证（防止数据不一致漏改）
+5. **违规示例（禁止, R588 教训）**:
+   - 用旧补丁回放调整 cards.json 池 flag / 卡牌 tier
+   - 用旧补丁回放推断"池成员"直接改 SharedPool / 引擎机制
+   - 不标注 build 就混用不同版本回放做卡池统计
+6. **数据提取/分析/总结工作流（2026-08-28 用户纪律）**: 任何提取/分析/总结任务,
+   先查 `E:/HDT-BobCoach-evidence/simulation-season14/knowledge-base/WORKFLOWS.md`——
+   有现成工作流直接用, 没有再总结新的并登记; 禁止每次从头造流程。
+   关键工作流速查: 版本核对(_probe_builds.js) / 最新偏好提取(Power.log, _parse_powerlog_pref.js) /
+   商店分布对比(_analyze_shop_log.js) / 6seed A/B(_run_rXXX_ab.js) / 偏好×模拟对比(_analyze_pref_sim.js) /
+   救助验证(_rescue_verify.js) / 迭代记录(ITERATION_LEARNINGS.md) / 交接(HANDOVER)。
 
 ## Validation
 
@@ -106,9 +139,29 @@ For release candidates, additionally verify offline install, upgrade, rollback, 
 - GitHub Release publication requires explicit final approval even when repository pushes are authorized.
 - Keep the former repository private and archived as a read-only history source; do not copy its full history into this repository.
 
+## Tool Discipline (2026-08-31 修订: 按环境区分, DSH 原生 read 优先)
+
+- **DSH 环境(默认): 原生 read 工具直接使用**(2026-08-31 实测稳定, 大文件/报告 30+ 次无失败)。
+  - `文件已变更`/`EIO` 报错 = 文件被并发修改(fs-observation-policy 保护, 正常现象) →
+    **重读一次再操作即可, 不是 bug, 不要因此禁用 read**。
+  - 乱码 = 文件非 UTF-8(如 GBK) → 改用 pwsh Get-Content 或 tools/read_file.ps1。
+- **Codex/run_code 环境(旧规则保留)**: 顶层只能调用 run_code; 无原生 read 时用
+  powershell -File tools/read_file.ps1 兜底(需 FullLanguage, 受限沙箱下 [System.IO.File]:: 被拒)。
+- 编辑: 先 read/Get-Content 确认锚点再 edit(old_string 精确匹配); 搜索 grep; 写文件 write。
+
+## Deployment Discipline (2026-08-21 固化, 用户投诉: 部署时强杀运行中的 HDT 干扰对局)
+
+- **HDT 正在运行时, 严禁自动 Stop-Process + 自动重启 HDT。** 用户可能正在对局中, 强杀 = 直接打断游戏。这是用户明确投诉过的错误(R230/R232/R233 部署时犯过)。
+- 部署前必须先检查 Get-Process HearthstoneDeckTracker:
+  - 若在运行 → 暂停部署, 先问用户(是否关闭后部署?)或等用户打完, 绝不自动杀进程。
+  - 若未运行 → 可部署, 部署完成后不自动启动 HDT(让用户自己决定何时开)。
+- 部署完成后验证 3 目录哈希一致(HDT 未运行时无文件锁, 验证最可靠)。
+- 若之前误杀了 HDT, 重新启动前先确认用户不在对局中(可通过 HDT 日志/对局记录判断)。
+
 ## Cleanup
 
 - Generated files belong outside the repository or in ignored directories and must be removable without affecting source.
 - Algorithm tools require an explicit external data root outside the repository. Raw replays, labels, datasets, candidate models, acceptance reports, and validation evidence are never written to the repository and must be removable without changing source.
 - Validation evidence stays in the project evidence store, not Git.
 - Before adding a new top-level directory, update this file with its purpose, naming, and cleanup policy.
+

@@ -10,6 +10,7 @@ namespace BobCoach.Engine
     {
         BuyMinion, BuySpell, Refresh, Upgrade, SellMinion, FreezeShop,
         UseHeroPower, PickTrinket, PickDiscover, SendGoldToTeammate, Activate,
+        PlayMinion, UseSpell,
     }
 
     public sealed class GameAction
@@ -33,10 +34,15 @@ namespace BobCoach.Engine
     public sealed class HeroPowerState
     {
         public string CardId;
+        public string BaseHeroCardId = "";
         public int Cost;
         public bool Exhausted;
         public bool IsActive;
         public bool IsUnlocked;
+        public bool IsPrimary;
+        public bool IsSecondary;
+        public string SpecialRule = "";
+        public bool HasDiscover;
     }
 
     public sealed class EffectiveGameRules
@@ -59,6 +65,7 @@ namespace BobCoach.Engine
         public bool GameActive;
         public bool IsDuos;
         public int Gold;
+        public int LiveGold = -1;
         public int Turn = 1;
         public int TavernTier;
         public int TavernUpgradeCost;
@@ -66,7 +73,15 @@ namespace BobCoach.Engine
         public int MaxBoardSlots = 7;
         public int FreeRefreshCount;
         public bool FrozenShop;
+        public bool NormalRecruitAvailable = true;
         public string HeroCardId = "";
+        public string HeroPowerCardId = "";
+        public string HeroPowerType = "";
+        public bool HeroPowerExhausted;
+        public int HeroPowerUnlockTurn = 1;
+        public int HeroPowerUnlockTier = 1;
+        public string HeroPowerSpecial = "";
+        public bool HeroPowerHasDiscover;
         public EffectiveGameRules EffectiveRules;
         public int TeammateGoldTransfersUsedThisTurn;
         public List<MinionData> BoardMinions = new List<MinionData>();
@@ -75,6 +90,8 @@ namespace BobCoach.Engine
         public List<TrinketOption> TrinketOffer = new List<TrinketOption>();
         public List<TrinketOption> DiscoverOptions = new List<TrinketOption>();
         public List<HeroPowerState> HeroPowers = new List<HeroPowerState>();
+        public HashSet<int> ActivatedThisTurn = new HashSet<int>();
+        public HashSet<int> RecentlyBoughtEntityIds = new HashSet<int>();
     }
 
     public sealed class ActionEnumerator
@@ -127,6 +144,7 @@ internal static class AlgorithmCandidateBehavior
             ChargesAndGatesDuosGoldTransfers();
             CoversAllPublicRejectReasonCodes();
             GeneratesCandidatesInStableKeyOrder();
+            ShadowSerializerMarksOnlyTopAndDeduplicatesKeys();
             Console.WriteLine("PASS candidate identities are stable and hard constraints remain strategy-neutral");
             return 0;
         }
@@ -176,6 +194,42 @@ internal static class AlgorithmCandidateBehavior
         AssertEqual(2, candidates.Count, "candidate count");
         AssertEqual("Refresh|-1||", candidates[0].ActionKey, "stable first candidate");
         AssertEqual("Upgrade|-1||", candidates[1].ActionKey, "stable second candidate");
+    }
+
+    private static void ShadowSerializerMarksOnlyTopAndDeduplicatesKeys()
+    {
+        var state = new GameState { GameActive = true, Gold = 2, TavernTier = 1 };
+        var first = new GameAction
+        {
+            Type = ActionType.UseHeroPower,
+            TargetIndex = 0,
+            CardId = "POWER_A",
+        };
+        var second = new GameAction
+        {
+            Type = ActionType.UseHeroPower,
+            TargetIndex = 0,
+            CardId = "POWER_B",
+        };
+        var ranked = new List<RankedAction>
+        {
+            new RankedAction(first, ActionDescriptor.CreateKey(first), 1.0, null),
+            new RankedAction(first, ActionDescriptor.CreateKey(first), 1.0, null),
+            new RankedAction(second, ActionDescriptor.CreateKey(second), 0.9, null),
+        };
+
+        var json = ShadowScoreSerializer.SerializeScores(state, ranked);
+        var recommendedCount = json.Split(
+            new[] { "\"recommended\":true" }, StringSplitOptions.None).Length - 1;
+        AssertEqual(1, recommendedCount,
+            "shadow serializer marks exactly one recommended action");
+        AssertTrue(json.Contains("\"cardId\":\"POWER_A\""),
+            "shadow serializer retains winning card id");
+        AssertTrue(json.Contains("\"cardId\":\"POWER_B\""),
+            "shadow serializer retains distinct action keys");
+        AssertEqual(1, json.Split(
+            new[] { "\"cardId\":\"POWER_A\"" }, StringSplitOptions.None).Length - 1,
+            "shadow serializer drops duplicate winning keys");
     }
 
     private static void ChargesAndGatesDuosGoldTransfers()

@@ -28,6 +28,10 @@ namespace BobCoach.Engine
                 SecondaryHeroPowerRule fixedRule;
                 bool matchesFixedSecondary = fixedSecondaryRules.TryGetValue(
                     item.CardId, out fixedRule);
+                string specialRule = item.SpecialRule ?? "";
+                string overrideRule = HeroPowerRuleCatalog.GetSpecialRuleOverride(
+                    item.BaseHeroCardId, item.CardId);
+                if (!string.IsNullOrEmpty(overrideRule)) specialRule = overrideRule;
                 int unlockTurn = matchesFixedSecondary
                     ? fixedRule.UnlockTurn
                     : (item.UnlockTurn > 0 ? item.UnlockTurn : 1);
@@ -35,7 +39,9 @@ namespace BobCoach.Engine
                 result.Add(new HeroPowerState
                 {
                     CardId = item.CardId,
+                    BaseHeroCardId = item.BaseHeroCardId ?? "",
                     EntityId = item.EntityId,
+                    ScriptData1 = item.ScriptData1,
                     Cost = item.Cost,
                     Exhausted = item.Exhausted,
                     IsPrimary = isPrimary,
@@ -45,7 +51,7 @@ namespace BobCoach.Engine
                     HasDiscover = item.HasDiscover,
                     UnlockTurn = unlockTurn,
                     UnlockTier = unlockTier,
-                    SpecialRule = item.SpecialRule ?? "",
+                    SpecialRule = specialRule,
                 });
             }
             return result;

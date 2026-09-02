@@ -39,8 +39,11 @@ internal static class Season14RegistriesHarness
             RealSeason14RulesEvaluator();
             EmptyEvaluatorFailsClosed();
             Season14ExtractionGateContract();
+            RealDarkGiftHotfix();
             RealCompGuideCatalog();
+            RealMetaBaselineApplied();
             SyntheticCompGuideCatalog();
+            SyntheticMetaBaseline();
             CompGuideCatalogFailsClosed();
             BattlegroundsDuoCompGuideCatalogRejected();
             SyntheticAnomalyExclusion();
@@ -573,6 +576,95 @@ internal static class Season14RegistriesHarness
             "real unknown weight lookup fails");
     }
 
+    private static void RealDarkGiftHotfix()
+    {
+        string GetMaximum(string name)
+        {
+            foreach (var gift in _darkGift.OfficialGifts)
+            {
+                if (gift != null
+                    && string.Equals(gift.Name, name, StringComparison.Ordinal))
+                    return gift.MaximumTurn;
+            }
+            return null;
+        }
+
+        string GetMinimum(string name)
+        {
+            foreach (var gift in _darkGift.OfficialGifts)
+            {
+                if (gift != null
+                    && string.Equals(gift.Name, name, StringComparison.Ordinal))
+                    return gift.MinimumTurn;
+            }
+            return null;
+        }
+
+        Equal("5", GetMaximum("Steady Growth"), "dark gift hotfix steady growth max");
+        Equal("10", GetMaximum("Battle Scars"), "dark gift hotfix battle scars max");
+        Equal("10", GetMaximum("Death’s Embrace"), "dark gift hotfix death embrace max");
+        Equal("10", GetMaximum("Spell Siphon"), "dark gift hotfix spell siphon max");
+        Equal("6", GetMinimum("Charisma"), "dark gift hotfix charisma min");
+        Equal("9", GetMaximum("Charisma"), "dark gift hotfix charisma max");
+    }
+
+    private static void RealMetaBaselineApplied()
+    {
+        True(_compGuideCatalog.HasMetaBaseline, "real meta baseline loaded");
+        True(!string.IsNullOrEmpty(_compGuideCatalog.MetaBaselineSource),
+            "real meta baseline source present");
+
+        string tier;
+        True(_compGuideCatalog.TryGetMetaTier("野兽-野兽龙虾流", out tier),
+            "real meta tier lookup");
+        Equal("T0", tier, "real meta beast lobster tier");
+
+        CompGuide guide;
+        True(_compGuideCatalog.TryGetGuide("野兽-野兽龙虾流", out guide),
+            "real beast lobster guide lookup");
+        Equal("T0", guide.Tier, "real beast lobster guide tier override");
+
+        List<string> coreIds;
+        True(_compGuideCatalog.TryGetMetaCoreCardIds("野兽-野兽龙虾流", out coreIds),
+            "real meta core ids lookup");
+        True(coreIds.Contains("BG36_201"), "deep diver added to beast core ids");
+        True(coreIds.Contains("BG36_204"), "headhunter gryphon in beast core ids");
+        True(coreIds.Contains("BG36_206"), "snarky shark in beast core ids");
+
+        List<string> resolved = _compGuideCatalog.GetCoreCardIdsForGuide(guide);
+        True(resolved.Contains("BG36_201"), "meta core ids win over guide text matching");
+    }
+
+    private static void SyntheticMetaBaseline()
+    {
+        const string json = @"{
+  ""_meta"": { ""source"": ""synthetic"", ""capturedAt"": ""2026-08-12T00:00:00.000Z"" },
+  ""guides"": {
+    ""SYNTH_GUIDE"": {
+      ""tier"": ""T2"",
+      ""coreCardIds"": [""SYNTH_META_CARD_ID""]
+    }
+  }
+}";
+
+        var baseline = new SeasonMetaBaseline();
+        baseline.LoadFromJson(json);
+        True(baseline.IsLoaded, "synthetic meta baseline loaded");
+        Equal("synthetic", baseline.Source, "synthetic meta baseline source");
+        Equal("2026-08-12T00:00:00.000Z", baseline.CapturedAt,
+            "synthetic meta baseline capturedAt");
+
+        string tier;
+        True(baseline.TryGetTier("SYNTH_GUIDE", out tier), "synthetic meta tier lookup");
+        Equal("T2", tier, "synthetic meta tier value");
+
+        List<string> coreIds;
+        True(baseline.TryGetCoreCardIds("SYNTH_GUIDE", out coreIds),
+            "synthetic meta core ids lookup");
+        Equal(1, coreIds.Count, "synthetic meta core ids count");
+        Equal("SYNTH_META_CARD_ID", coreIds[0], "synthetic meta core id");
+    }
+
     private static void SyntheticCompGuideCatalog()
     {
         const string guidesJson = @"{
@@ -664,8 +756,8 @@ internal static class Season14RegistriesHarness
         Equal(1, tierWeight, "synthetic tier T2 value");
         True(catalog.TryGetTierWeight("T3", out tierWeight), "synthetic tier T3");
         Equal(0, tierWeight, "synthetic tier T3 value");
-        False(catalog.TryGetTierWeight("T4", out tierWeight),
-            "synthetic unknown tier T4 fails closed");
+        True(catalog.TryGetTierWeight("T4", out tierWeight), "synthetic tier T4");
+        Equal(0, tierWeight, "synthetic tier T4 value");
     }
 
     private static void CompGuideCatalogFailsClosed()
@@ -1191,13 +1283,13 @@ internal static class Season14RegistriesHarness
 
         var legacy = new TrinketChoiceBatchLifecycle();
         var legacyBinding = legacy.Observe(magicBatch, 5);
-        Equal(TrinketChoiceContext.AnomalyExtra, legacyBinding.Context,
-            "legacy magic source anomaly extra");
+        Equal(TrinketChoiceContext.MysteryCubeActivation, legacyBinding.Context,
+            "legacy magic source is mystery cube activation");
 
         var season = new TrinketChoiceBatchLifecycle();
         var seasonBinding = season.ObserveSeason14(magicBatch, 5, _season14);
-        Equal(TrinketChoiceContext.OtherTrinket, seasonBinding.Context,
-            "season14 magic source other trinket");
+        Equal(TrinketChoiceContext.MysteryCubeActivation, seasonBinding.Context,
+            "season14 magic source is mystery cube activation");
 
         var scheduledLesserBatch = new PowerLogChoiceBatch
         {
@@ -1226,8 +1318,8 @@ internal static class Season14RegistriesHarness
         var unloaded = new TrinketChoiceBatchLifecycle();
         var unloadedBinding = unloaded.ObserveSeason14(
             magicBatch, 5, new Season14RulesEvaluator());
-        Equal(TrinketChoiceContext.AnomalyExtra, unloadedBinding.Context,
-            "unloaded evaluator falls back to legacy");
+        Equal(TrinketChoiceContext.MysteryCubeActivation, unloadedBinding.Context,
+            "unloaded evaluator preserves mystery cube activation");
 
         const string inactiveTrinketProfileJson = @"{
   ""_meta"": {

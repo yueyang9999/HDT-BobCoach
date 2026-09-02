@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace BobCoach.Engine
@@ -10,7 +10,7 @@ namespace BobCoach.Engine
     public static class VisualBudget
     {
         public const int MAX_GLOW_BORDERS = 1;   // 同屏最多1个闭合发光边框（仅三连/核心首次）
-        public const int MAX_BOTTOM_BEAMS = 3;   // 底部光束最多3条
+        public const int MAX_BOTTOM_BEAMS = 2;   // R217 用户要求: 同屏只标重要的（最多2条）
         public const int MAX_GROUND_POOLS = 3;   // 地灯最多3个
         public const int MAX_ARROWS = 2;         // 方向箭头最多2个（买/卖各1）
         public const int MAX_CORNER_DOTS = 4;    // 角标最多4个
@@ -167,6 +167,10 @@ namespace BobCoach.Engine
         public string LockIcon = "";   // "H"=Hard锁 / "S"=Soft锁 / ""=未锁
         public string ActionSeq = "";     // 动作序列 "打铜须→技能点金"
         public string HintLine = "";      // 动作序列 (浅黄, 行3)
+        // 2026-08-19 阶段规划行（长链路分点式思考）: "中期·成型 | 本回合:买X → 下回合:升4本 → 目标:T7前升4本"
+        public string PlanLine = "";      // 阶段计划 (青色, 行3.5, 分点式)
+        public string StageLabel = "";    // 阶段标签 (开局/前期/中期/中后期/后期)
+        public string ModeLabel = "";     // 模式标签 (标准/防守/激进)
         public string UpgradeLine = "";   // 升级提示 (绿色, 行4)
         public bool ShowFirstBuyFree = false;  // 畸变首购免费状态栏提示
         public string CombatLine = "";    // 战斗预测 (橙色, 行5)
@@ -188,5 +192,8 @@ namespace BobCoach.Engine
     public class CompGuidance
     {
         public string LockIcon = "";
+        public string Archetype = "";
+        public string Reason = "";
+        public List<string> MissingCoreCardNames = new List<string>();
     }
 }

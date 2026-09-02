@@ -21,7 +21,9 @@ const ROOT = path.resolve(__dirname, "..");
 // __dirname = bob-coach/test/  →  ROOT = bob-coach/
 // C# 源码路径: src/BobCoach/...  (从 ROOT 算)
 function readFile(rel) {
-    return fs.readFileSync(path.join(ROOT, rel), "utf-8");
+    // .cs 源码按 .gitattributes 以 CRLF 落盘; 断言只关心结构, 统一归一化为 LF 避免行尾误报
+    const raw = fs.readFileSync(path.join(ROOT, rel), "utf-8");
+    return rel.endsWith(".cs") ? raw.replace(/\r\n/g, "\n") : raw;
 }
 
 function countOccurrences(text, pattern) {
@@ -491,8 +493,8 @@ function warn(name, msg) {
 
     test("[0721][TrinketUI] 饰品本地链路保留但显示经单一默认关闭开关", () => {
         const plugin = readFile("src/BobCoach/BobCoachPlugin.cs");
-        if (!plugin.includes("private const bool TrinketRecommendationsVisible = false;"))
-            return "缺少单一、可测试且默认关闭的饰品推荐显示开关";
+        if (!plugin.includes("private const bool TrinketRecommendationsVisible = true;"))
+            return "饰品推荐显示开关必须已开启";
         if (!plugin.includes("_engine.EvaluateTrinkets(state)"))
             return "饰品本地评估链被删除";
         if (!plugin.includes("OnPowerLogTrinketChoiceActive"))
@@ -710,6 +712,30 @@ function warn(name, msg) {
             return "placeholder path must be diagnosable in real logs";
         if (!pluginSrc.includes("IsScheduledTrinketPlaceholder") || !pluginSrc.includes("!IsScheduledTrinketPlaceholder(state.TrinketOffer)"))
             return "scheduled placeholder must bypass UiTargetStateMachine confirmation clearing";
+    });
+
+    test("[T35][Trinket] mystery cube activation is not treated as scheduled greater trinket", () => {
+        const lifecycle = readFile("src/BobCoach/Core/TrinketChoiceBatchLifecycle.cs");
+        if (!lifecycle.includes("MysteryCubeActivation"))
+            return "missing MysteryCubeActivation context";
+        if (!lifecycle.includes("BG30_MagicItem_703t"))
+            return "mystery cube source is not explicitly recognized";
+    });
+
+    test("[T35][Trinket] mystery cube suppresses scheduled turn filtering", () => {
+        const extractor = readFile("src/BobCoach/GameStateExtractor.cs");
+        if (!extractor.includes("CurrentTrinketChoiceContext"))
+            return "extractor does not receive the lifecycle context";
+        if (!extractor.includes("mysteryCubeActivation"))
+            return "mystery cube does not bypass scheduled trinket filtering";
+    });
+
+    test("[T35][Trinket] mystery cube panel uses authoritative Power.log candidates", () => {
+        const plugin = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!plugin.includes("MysteryCubeActivation"))
+            return "plugin does not branch on mystery cube activation";
+        if (!plugin.includes("UiTargetSource.PowerLog"))
+            return "plugin does not require the authoritative candidate source";
     });
 
     test("[TrinketRound] scheduled placeholder is loading state, not fake recommendation", () => {
@@ -968,8 +994,14 @@ function warn(name, msg) {
         if (!/TierCardWidthPct\[k\] = 0/.test(calib) || !/TierCardGap\[k\] = 0/.test(calib))
             return "调全局卡宽/间隙时须清分档数组避免覆盖";
         const plugin = readFile("src/BobCoach/BobCoachPlugin.cs");
-        if (!/_discoverPanelState[\s\S]{0,160}enforceMaxActive: false/.test(plugin))
-            return "发现面板应 enforceMaxActive:false(靠SendChoices选完关闭, 防慢选时提前超时消失)";
+        // R234/R239(8/23): 恒 false 演进为权威区分——Power.log 权威发现(choiceId+来源卡)不强制超时
+        // (防阮大师等慢选消失), 陈旧复发批次才 8s 超时兜底; 意图仍为"权威发现不强制超时靠选完关闭"
+        if (!/_discoverPanelState[\s\S]{0,200}enforceMaxActive: !discoverHasAuthority/.test(plugin))
+            return "发现面板应 enforceMaxActive:!discoverHasAuthority(Power.log权威发现不强制超时, 陈旧批次8s兜底)";
+        if (!/bool discoverHasAuthority = _discoverBatchFromLog != null/.test(plugin)
+            || !/_discoverBatchFromLog\.ChoiceId >= 0/.test(plugin)
+            || !/!string\.IsNullOrEmpty\(_discoverBatchFromLog\.SourceCardId\)/.test(plugin))
+            return "discoverHasAuthority 须由 choiceId>=0 + 来源卡非空判定(权威=不超时, 陈旧=8s兜底)";
     });
 
     test("[5B.3H] 法术购买费用接受实时0费并对未知费用失败关闭", () => {
@@ -1198,7 +1230,7 @@ function warn(name, msg) {
     test("[StateMachine] planHash 含面板 Phase (相位变化触发重绘)", () => {
         const hashSection = pluginSrc.slice(
             pluginSrc.indexOf("string planHash ="),
-            pluginSrc.indexOf("string planHash =") + 700
+            pluginSrc.indexOf("string planHash =") + 2200
         );
         if (!hashSection.includes("_trinketPanelState.Phase") && !hashSection.includes("_discoverPanelState.Phase"))
             return "planHash 未含面板 Phase — 相位变化不触发重绘";
@@ -1225,7 +1257,7 @@ function warn(name, msg) {
     test("[0711][StateMachine] planHash 含发现/饰品批次身份 (连续同尺寸选择必须重绘)", () => {
         const hashSection = pluginSrc.slice(
             pluginSrc.indexOf("string planHash ="),
-            pluginSrc.indexOf("string planHash =") + 1000
+            pluginSrc.indexOf("string planHash =") + 2200
         );
         if (!hashSection.includes("_discoverTargetState.State.BatchId"))
             return "planHash 未含 discover BatchId — 连续两次3选1且面板保持Active时会吞掉第二批提示";
@@ -1310,15 +1342,17 @@ function warn(name, msg) {
             return "plugin does not own a separate timewarp purchase lifecycle";
         const renderIdx = pluginSrc.indexOf("private void RenderTimewarpPurchaseHint");
         const renderBlock = pluginSrc.slice(renderIdx, renderIdx + 5000);
-        if (renderIdx < 0 || !renderBlock.includes("SelectBestAffordableIndex"))
-            return "timewarp purchase does not select the best affordable candidate";
-        if (!renderBlock.includes("ShowTimewarpPurchaseRating")
+        if (renderIdx < 0 || !renderBlock.includes("SelectAffordableIndices"))
+            return "timewarp purchase does not select affordable candidates";
+        if (!renderBlock.includes("ShowTimewarpPurchaseRatings")
             || renderBlock.includes("ShowDiscoverHints"))
             return "timewarp purchase still uses the discover panel";
-        const overlayIdx = rendererSrc.indexOf("internal void ShowTimewarpPurchaseRating");
+        const overlayIdx = rendererSrc.indexOf("internal void ShowTimewarpPurchaseRatings");
         const overlayBlock = rendererSrc.slice(overlayIdx, overlayIdx + 5000);
-        if (overlayIdx < 0 || !overlayBlock.includes("GetShopCardRect"))
-            return "timewarp purchase marker does not reuse purchase-card layout";
+        if (overlayIdx < 0 || !overlayBlock.includes("GetChoiceCardRect"))
+            return "timewarp purchase marker must use the central choice-card layout";
+        if (!overlayBlock.includes("placeAbove"))
+            return "timewarp purchase marker must move above the choice card to avoid game UI";
         if (!overlayBlock.includes('Tag = "timewarp_purchase"'))
             return "timewarp purchase marker is not isolated from ordinary ShopTag elements";
         const completionIdx = pluginSrc.indexOf("private void OnPowerLogChoiceCompleted");
@@ -1632,7 +1666,9 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
     const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
 
     test("[0708][DiscoverRender] Fading + no options must not SHOW discover panel", () => {
-        if (!pluginSrc.includes("bool discoverShouldShow = discoverPs.IsVisible && (state.DiscoverOptions?.Count ?? 0) >= 2;"))
+        if (!pluginSrc.includes("var authoritativeDiscover = _discoverPanelActive"))
+            return "discover render must use the latest power-log batch";
+        if (!pluginSrc.includes("(discoverPs.IsVisible\n                            && (state.DiscoverOptions?.Count ?? 0) >= 2)"))
             return "discover render must require visible panel and >=2 current options; Fading with empty candidates otherwise leaves stale tavern/recruit hints";
     });
 
@@ -1640,8 +1676,8 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
         const idx = pluginSrc.indexOf("private void DispatchRender");
         const nextIdx = pluginSrc.indexOf("\n        private ", idx + "private void DispatchRender".length);
         const block = pluginSrc.slice(idx, nextIdx >= 0 ? nextIdx : pluginSrc.length);
-        if (!block.includes("int liveGold = state.Gold;"))
-            return "DispatchRender must read live gold from self-tracked state.Gold";
+        if (!block.includes("int liveGold = GetLiveGold(state);"))
+            return "DispatchRender must read live gold from self-tracked live gold";
         if (block.includes("GameTag.RESOURCES"))
             return "DispatchRender still trusts HDT RESOURCES, which stays at turn-start during recruit (0708: 0 gold still suggested 3-cost HP/buy)";
     });
@@ -1675,8 +1711,12 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "dark gift candidates must use an independent dark_gift_panel tag";
         if (!block.includes("_calc.Config.PanelOffsetX") || !block.includes("new ScaleTransform(sc, sc)"))
             return "dark gift candidate panel must use F10 calibration position and scale";
-        if (!block.includes("h.CardName"))
+        if (!overlaySrc.includes("h.CardName ?? h.CardId"))
             return "dark gift candidate rows must show the parsed card name";
+        if (!block.includes("List<Engine.TrinketHint> hints = null"))
+            return "ShowDarkGiftCandidates must accept scored dark gift hints";
+        if (block.includes("hint.Reason"))
+            return "ShowDarkGiftCandidates must hide internal dark gift reason text";
     });
 
     test("[0809][DarkGift] clear lifecycle is independent and survives ClearNonPanel", () => {
@@ -1717,10 +1757,12 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
     });
 
     test("[0809][DarkGift] plugin passes renderDuringCombat=true for dark gift candidates", () => {
-        const expected = "_renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true)";
-        const actual = countOccurrences(pluginSrc, expected);
-        if (actual < 3)
-            return `expected at least 3 dark gift candidate renders with renderDuringCombat=true, found ${actual}`;
+        const renders = countOccurrences(pluginSrc, "_renderer.ShowDarkGiftCandidates(");
+        const scored = countOccurrences(pluginSrc, "ScoreDarkGiftCandidates()");
+        if (renders < 3)
+            return `expected at least 3 dark gift candidate renders, found ${renders}`;
+        if (scored < 3)
+            return `expected each dark gift candidate render to pass scored hints, found ${scored}`;
     });
 
     test("[0809][DarkGift] plugin builds dark gift context from cached GameState", () => {
@@ -1735,10 +1777,12 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             "if (state == null)",
             "StateAvailable = false",
             "GameActive = state.GameActive",
-            'Phase = state.Phase ?? ""',
+            'Phase = inCombat ? "combat" : (state.Phase ?? "")',
             "Turn = state.Turn",
             "TavernTier = state.TavernTier",
-            "Gold = state.Gold",
+            "Gold = liveGold",
+            "GetLiveGold(state)",
+            "_powerLogPhase",
             "BoardMinionCount = state.BoardMinions?.Count ?? 0",
             "ShopMinionCount = state.ShopMinions?.Count ?? 0",
             "HandMinionCount = state.HandMinions?.Count ?? 0",
@@ -1836,8 +1880,9 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
     test("[T25] GoldTracker and TrackGold carry NormalRecruitAvailable fail closed", () => {
         if (!goldSrc.includes("bool normalRecruitAvailable = true"))
             return "GoldTracker.Advance must accept normalRecruitAvailable=true default";
-        if (!goldSrc.includes("if (!normalRecruitAvailable)") || !goldSrc.includes("return 0;"))
-            return "GoldTracker.Advance must fail closed to 0 outside normal recruit";
+        if (!goldSrc.includes("if (!normalRecruitAvailable)")
+            || !goldSrc.includes("return _selfTrackedGold;"))
+            return "GoldTracker.Advance must preserve known gold or unknown -1 outside normal recruit";
         const trackIdx = extractorSrc.indexOf("private int TrackGold(");
         const trackEnd = extractorSrc.indexOf("private int _goldDiagCount", trackIdx);
         const trackBody = trackIdx >= 0 ? extractorSrc.slice(trackIdx, trackEnd > trackIdx ? trackEnd : trackIdx + 4000) : "";
@@ -1865,6 +1910,17 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "refresh affordability must not use stale state.Gold";
     });
 
+    test("[ZeroGold][Refresh] refresh glow must fail closed at 0 gold without free refresh", () => {
+        const idx = pluginSrc.indexOf("bool refreshAffordableByState");
+        const block = idx >= 0 ? pluginSrc.slice(idx, idx + 260) : "";
+        if (!block.includes("renderGold >= liveRefreshCost"))
+            return "refresh UI must re-check captured state gold";
+        if (!block.includes("state.FreeRefreshCount > 0"))
+            return "refresh UI must allow free refresh";
+        if (!pluginSrc.includes("!_lastLiveSafetySuppressRefresh"))
+            return "refresh UI must honor LiveSafetyGate suppression";
+    });
+
     test("[Phase2][Safety] live safety gate is wired into visible decisions", () => {
         if (!pluginSrc.includes("LiveSafetyGate.Evaluate"))
             return "BobCoachPlugin must invoke LiveSafetyGate";
@@ -1876,11 +1932,45 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "buy suppression must be applied to visible plan";
     });
 
+    test("[T35][Refresh] disabled refresh gate clears the previous glow", () => {
+        const plugin = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const block = plugin.slice(
+            plugin.indexOf("bool showRefresh ="),
+            plugin.indexOf("// 冻结提示")
+        );
+        if (!block.includes("ClearRefreshGlow"))
+            return "showRefresh=false path does not clear refresh glow";
+    });
+
+    test("[T35][Refresh] refresh reason text shares the refresh tag", () => {
+        const overlay = readFile("src/BobCoach/OverlayRenderer.cs");
+        const block = overlay.slice(
+            overlay.indexOf("public void ShowRefreshGlow"),
+            overlay.indexOf("public void ShowFreezeGlow")
+        );
+        const reasonIndex = block.indexOf("reasonLabel");
+        if (reasonIndex < 0)
+            return "reason label missing";
+        const reasonBlock = block.slice(reasonIndex, reasonIndex + 700);
+        if (!reasonBlock.includes('Tag = "refresh_glow"'))
+            return "refresh reason label is not cleared with the glow";
+    });
+
     test("[Phase2][HeroSkill] visible hero suggestion uses data-driven decision service", () => {
         if (!pluginSrc.includes("HeroSkillDecisionService.Decide"))
             return "BobCoachPlugin must use HeroSkillDecisionService";
         if (!pluginSrc.includes("_heroSkillCatalog.TryGet"))
             return "BobCoachPlugin must query HeroSkillCatalog";
+    });
+
+    test("[T35][HeroPlaybook] visible hero guidance consumes the versioned playbook", () => {
+        const engine = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!pluginSrc.includes("HeroPlaybookDecisionService.Decide"))
+            return "BobCoachPlugin does not consume the hero playbook service";
+        if (!pluginSrc.includes("_heroPlaybook.GetProfileForPower"))
+            return "BobCoachPlugin does not resolve playbook profiles by hero power";
+        if (!engine.includes("_heroPlaybook.GetProfileForPower"))
+            return "DecisionEngine does not score hero powers through the playbook";
     });
 
     test("[Phase2][Activate] activate hint reaches visible UI", () => {
@@ -1926,6 +2016,976 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             || !pluginSrc.includes("OnPowerLogPassiveChoiceActive")
             || !pluginSrc.includes("OnPowerLogPassiveChoiceCompleted"))
             return "BobCoachPlugin must own and handle passive choice lifecycle state";
+    });
+}
+
+// ============================================================================
+// [SellGold] Projected gold after one sell must feed buy/refresh/upgrade paths
+// ============================================================================
+{
+    const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+    const actionSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+    const hardSrc = readFile("src/BobCoach/Core/Decision/HardConstraintFilter.cs");
+    const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+    const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+
+    test("[SellGold] board-full buy remains legal when hand has space", () => {
+        if (!actionSrc.includes("state.BoardMinions.Count < state.MaxBoardSlots")
+            || !actionSrc.includes("state.HandMinions.Count < 10"))
+            return "ActionEnumerator must allow buying a minion into hand when board is full";
+        if (!hardSrc.includes("state.BoardMinions.Count >= state.MaxBoardSlots")
+            || !hardSrc.includes("state.HandMinions.Count >= 10"))
+            return "HardConstraintFilter must reject full-board buy only when hand is also full";
+    });
+
+    test("[SellGold] sell action is generated when one sale can fund a shop buy", () => {
+        if (!actionSrc.includes("state.ShopMinions.Count > 0")
+            || !actionSrc.includes("hasSellableMinion")
+            || !actionSrc.includes("liveGold + 1 >= minBuyCost"))
+            return "ActionEnumerator must generate sell candidates when shop exists and one sale funds a buy";
+    });
+
+    test("[SellGold] shop scoring projects a sell before an unaffordable buy", () => {
+        if (!engineSrc.includes("CanAffordAfterOneSell"))
+            return "DecisionEngine must expose projected one-sell affordability";
+        if (!engineSrc.includes("simState = _sim.Simulate(state, new GameAction")
+            || !engineSrc.includes("Type = ActionType.SellMinion"))
+            return "DecisionEngine must simulate sell before scoring an after-sell buy";
+    });
+
+    test("[SellGold] visualizer keeps a sell marker for sell-to-buy paths", () => {
+        if (!visualizerSrc.includes("HasAffordableSellTarget"))
+            return "DecisionVisualizer must keep a sell marker only for an affordable sell-to-buy/upgrade target";
+        if (!visualizerSrc.includes("FindWeakestSellCandidateIndex(state)"))
+            return "DecisionVisualizer must fall back to a protected weakest sell candidate";
+    });
+
+    test("[SellGold] dispatcher lets sellPath drive buy/refresh/upgrade affordability", () => {
+        if (!pluginSrc.includes("bool sellPath = plan.SellMarkers.Count > 0"))
+            return "DispatchRender must recognize an existing sell marker as a sellPath";
+        if (!pluginSrc.includes("levelOkViaSell"))
+            return "DispatchRender must support upgrade affordability after one sell";
+        if (!pluginSrc.includes("IsShopMarkerAffordableAfterSell"))
+            return "DispatchRender must keep after-sell affordable shop markers";
+        const sellTextIdx = pluginSrc.indexOf("&& (canBuyMinion || levelOk))");
+        if (sellTextIdx < 0)
+            return "sell text must render when projected buy/upgrade is possible";
+        const sellTextBlock = pluginSrc.slice(sellTextIdx, sellTextIdx + 80);
+        if (sellTextBlock.includes("liveGold >= 1"))
+            return "sell text must not require current gold >= 1 when one sale funds the action";
+    });
+
+    test("[SellGold] FilterAffordableShopScores uses liveGold plus one-sell projection", () => {
+        const filterIdx = pluginSrc.indexOf("private List<ShopCardScore> FilterAffordableShopScores");
+        const filterBlock = pluginSrc.slice(filterIdx, filterIdx + 700);
+        if (!filterBlock.includes("GetLiveGold(state)"))
+            return "FilterAffordableShopScores must use liveGold";
+        if (!filterBlock.includes("IsShopScoreAffordableAfterSell(state, score, liveGold)"))
+            return "FilterAffordableShopScores must keep cards affordable after one sell";
+        if (!pluginSrc.includes("IsShopScoreWorthAfterSell")
+            || !pluginSrc.includes("FindFilterSellCandidateIndex"))
+            return "FilterAffordableShopScores must require an actual worthwhile sell target";
+    });
+
+    test("[SellGold] zero gold never funds refresh by selling", () => {
+        const idx = pluginSrc.indexOf("bool canRefresh = liveGold >= 1");
+        const block = idx >= 0 ? pluginSrc.slice(idx, idx + 120) : "";
+        if (!block.includes("state.FreeRefreshCount > 0"))
+            return "canRefresh must still allow free refresh";
+        if (block.includes("CanAffordAfterOneSell"))
+            return "zero-gold refresh must not become affordable through a sell projection";
+    });
+
+    test("[SellGold] zero gold clears stale non-panel UI when no action exists", () => {
+        if (!pluginSrc.includes("ZeroGoldClear: no spendable action; cleared non-panel UI"))
+            return "zero-gold guard must clear stale buy/refresh UI when no actionable plan exists";
+    });
+
+    test("[SellGold] after-sell buy path requires an explicit shop marker", () => {
+        const idx = pluginSrc.indexOf("bool canBuyMinion = liveGold >= minBuyCost");
+        const block = idx >= 0 ? pluginSrc.slice(idx, idx + 180) : "";
+        if (!block.includes("plan.ShopMarkers.Count > 0"))
+            return "after-sell buy must not render unless a shop marker exists";
+    });
+
+    test("[SellGold][Professor] BG25_HERO_100p is a trusted ordinary discover source", () => {
+        const parserSrc = readFile("src/BobCoach/Core/PowerLogParser.cs");
+        const harnessSrc = readFile("tests/PowerLogChoiceBatchHarness.cs");
+        if (!parserSrc.includes('"BG25_HERO_100p"'))
+            return "PowerLogParser must trust professor discover source BG25_HERO_100p";
+        if (!harnessSrc.includes('cardId=BG25_HERO_100p'))
+            return "PowerLog harness must cover professor discover source BG25_HERO_100p";
+    });
+
+    test("[SellGold][Professor] resource discover skills do not require board target", () => {
+        const skillSrc = readFile("src/BobCoach/Core/HeroSkillDecisionService.cs");
+        if (skillSrc.includes('usePurpose == "Resource" && boardSize >= 7'))
+            return "resource discover must not be blocked by full board";
+        if (!skillSrc.includes('targetOk = hasValidTarget || usePurpose == "Economy"'))
+            return "resource discover must be included in target-free purposes";
+        if (!pluginSrc.includes('heroSkill.UsePurpose == "Resource"'))
+            return "plugin must treat resource discover as target-free for hero skill suggestions";
+    });
+
+    test("[SellGold][EarlyTriple] turn-3 sell-to-triple survives the dispatcher gold gate", () => {
+        const canAffordIdx = pluginSrc.indexOf("private bool CanAffordAfterOneSell");
+        const canAffordBlock = pluginSrc.slice(canAffordIdx, canAffordIdx + 420);
+        if (canAffordBlock.includes("state.Turn < 4"))
+            return "turn-3 triple sells must not be blocked by a blanket turn-4 gate";
+        if (!canAffordBlock.includes("HasPotentialSellAfterTurn(state)"))
+            return "CanAffordAfterOneSell must route through the early-triple-aware sell projection";
+        if (!pluginSrc.includes("HasEarlyTripleSellOpportunity"))
+            return "plugin must recognize early triple shop opportunities for after-sell buys";
+        const markerIdx = pluginSrc.indexOf("private bool IsShopMarkerWorthAfterSell");
+        const markerBlock = pluginSrc.slice(markerIdx, markerIdx + 220);
+        if (markerBlock.includes("state.Turn < 4"))
+            return "IsShopMarkerWorthAfterSell must allow turn-3 triple targets";
+    });
+
+    test("[SellGold][EarlyTriple] visualizer keeps a turn-3 triple sell marker", () => {
+        const affordIdx = visualizerSrc.indexOf("private bool CanAffordAfterOneSell");
+        const affordBlock = visualizerSrc.slice(affordIdx, affordIdx + 420);
+        if (affordBlock.includes("state.Turn < 4"))
+            return "visualizer must not blanket-block turn-3 after-sell targets";
+        if (!visualizerSrc.includes("HasEarlyTripleSellTarget"))
+            return "visualizer must project an early triple sell target";
+        if (!visualizerSrc.includes("IsVisualEarlyTripleSell"))
+            return "visualizer must accept the actual early triple sell candidate";
+    });
+
+    test("[SellUI][StatusConsistency] status strip is rendered after plan pruning and hash includes final-ish status", () => {
+        const statusIdx = pluginSrc.lastIndexOf("_renderer.ShowStatusStrip(status);");
+        const noActionIdx = pluginSrc.indexOf("bool noActionNeeded = ");
+        if (statusIdx < 0 || statusIdx < noActionIdx)
+            return "status strip must be rendered after noActionNeeded/pruning, not before";
+        const hashSection = pluginSrc.slice(
+            pluginSrc.indexOf("string planHash ="),
+            pluginSrc.indexOf("string planHash =") + 2200);
+        if (!hashSection.includes("plan.Status.HintLine"))
+            return "planHash must include status HintLine so stale sell/play text triggers redraw";
+        if (!hashSection.includes("plan.SellMarkers.Count"))
+            return "planHash must include sell marker count so marker clear forces redraw";
+    });
+
+    test("[Mainline] strategy planner is wired into decision engine and guides buy/level/sell", () => {
+        const plannerSrc = readFile("src/BobCoach/Core/MainlineStrategyPlanner.cs");
+        if (!plannerSrc.includes("class MainlineStrategyPlanner"))
+            return "MainlineStrategyPlanner must exist";
+        if (!plannerSrc.includes("Analyze(")
+            || !plannerSrc.includes("Adjust(")
+            || !plannerSrc.includes("ShouldSkipUpgrade("))
+            return "mainline planner must expose analyze/adjust/upgrade-gate APIs";
+        if (!plannerSrc.includes("ShouldBuyCoreFirst")
+            || !plannerSrc.includes("MissingCoreCardNames")
+            || !plannerSrc.includes("HasTripleInShop"))
+            return "mainline planner must track core nodes, missing cores and triple nodes";
+        if (!engineSrc.includes("_mainline = new MainlineStrategyPlanner"))
+            return "DecisionEngine must own the mainline strategy planner";
+        if (!engineSrc.includes("MainlineBlocksUpgrade()"))
+            return "DecisionEngine must let mainline nodes override forced upgrade timing";
+        if (!engineSrc.includes("value = _mainline.Adjust(value, state, action, mainlinePlan)"))
+            return "DecisionEngine must apply mainline adjustment in action scoring";
+        if (!engineSrc.includes("state.Gold + 1 >= tripleCost"))
+            return "DecisionEngine must allow sell-to-triple when current gold is one short";
+    });
+
+    test("[Meta] environment baseline overrides guide tier and core card ids", () => {
+        const baselineSrc = readFile("src/BobCoach/Core/SeasonMetaBaseline.cs");
+        const catalogSrc = readFile("src/BobCoach/Core/CompGuideCatalog.cs");
+        const plannerSrc = readFile("src/BobCoach/Core/MainlineStrategyPlanner.cs");
+        if (!baselineSrc.includes("TryGetTier")
+            || !baselineSrc.includes("TryGetCoreCardIds"))
+            return "SeasonMetaBaseline must expose tier and core-id lookups";
+        if (!catalogSrc.includes("season14_meta_baseline.json")
+            || !catalogSrc.includes("ApplyMetaBaseline"))
+            return "CompGuideCatalog must load and apply the season meta baseline";
+        if (!plannerSrc.includes("MetaSource")
+            || !plannerSrc.includes("Tier = \"\""))
+            return "MainlineStrategyPlanner must carry meta tier and source into replay/audit data";
+    });
+
+    test("[Dynamic] mainline planner exposes stage/mode/pivot/counter fields and adjusts", () => {
+        const plannerSrc = readFile("src/BobCoach/Core/MainlineStrategyPlanner.cs");
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        for (const token of [
+            "ComputeStage(",
+            "ComputePathScoresAndPivot(",
+            "ObservePivotCandidates(",
+            "DecideDynamicMode(",
+            "BuildCounterPlan(",
+            "hasCurrentDirection",
+            "HasGuideEvidence",
+            "GetAlternativeCoreIds",
+            "IsGenericPathEvidenceCard",
+            "distinctEvidence.Count >= 2",
+            "plan.ShouldBuyCoreFirst",
+            "plan.ShouldHoldForNextTurn",
+            "plan.PivotScore >= 0.10 && RecentPivotObservation()",
+            "state.Turn < 7",
+            "ShouldConsiderPivot",
+            "ShouldHedge",
+            "AlternativeCoreCardIds",
+            "PivotObservationCount",
+            "NeedTradeUp",
+        ]) {
+            if (!plannerSrc.includes(token))
+                return `MainlineStrategyPlanner missing dynamic planning token ${token}`;
+        }
+        const commitMode = plannerSrc.indexOf("if (plan.ShouldBuyCoreFirst)");
+        const economyMode = plannerSrc.indexOf("else if (plan.ShouldHoldForNextTurn)");
+        const pivotMode = plannerSrc.indexOf("else if (plan.ShouldConsiderPivot");
+        if (commitMode < 0 || economyMode < 0 || pivotMode < 0
+            || commitMode > economyMode || economyMode > pivotMode)
+            return "dynamic planner must prioritize Commit/Economy over Pivot/Hedge";
+        const priorityCall = plannerSrc.indexOf("DecidePriority(state, plan);");
+        const pathCall = plannerSrc.indexOf("ComputePathScoresAndPivot(state, catalog");
+        if (priorityCall < 0 || pathCall < 0 || priorityCall > pathCall)
+            return "dynamic planner must decide resource priority before path scoring";
+        if (!plannerSrc.includes("plan.Mode == \"Pivot\" || plan.Mode == \"Hedge\""))
+            return "dynamic planner must boost alternative core purchases during hedge/pivot";
+        if (!plannerSrc.includes("plan.NeedTradeUp"))
+            return "dynamic planner must feed late-game trade-up into buy scoring";
+        if (!pluginSrc.includes("currentPathScore")
+            || !pluginSrc.includes("counterPlan")
+            || !pluginSrc.includes("pivotScore"))
+            return "mainlinePlan replay payload must include dynamic planning fields";
+    });
+
+    test("[Mainline][LateCommit] visible buy scoring penalizes off-path cards after the core is established", () => {
+        const plannerSrc = readFile("src/BobCoach/Core/MainlineStrategyPlanner.cs");
+        if (!plannerSrc.includes("latePathCommitment"))
+            return "mainline planner must detect a late-game committed path";
+        if (!plannerSrc.includes("0.62")
+            || !plannerSrc.includes("0.70"))
+            return "late committed path must penalize off-tribe and generic neutral buys";
+    });
+
+    test("[Spell][WinnersBread] early winner's bread is prioritized when a board target exists", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("BG36_883"))
+            return "winner's bread must have an explicit card-id rule";
+        if (!engineSrc.includes("赢家的面包"))
+            return "winner's bread must have a name fallback";
+    });
+
+    test("[Discover][Authoritative] power-log discover batches render from the event batch", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrc.includes("var authoritativeDiscover = _discoverPanelActive"))
+            return "dispatch render must read the latest power-log discover batch";
+        if (!pluginSrc.includes("ShowAuthoritativeDiscoverHints"))
+            return "authoritative discover batches must bypass delayed state extraction";
+    });
+
+    test("[StrategicMemory] decision engine owns memory and exposes replay snapshot", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("_strategyMemory = new StrategicMemory()"))
+            return "DecisionEngine must own StrategicMemory";
+        if (!engineSrc.includes("StrategicMemorySnapshot =>"))
+            return "DecisionEngine must expose defensive memory snapshot";
+        if (!engineSrc.includes("_strategySequencePlanner.Build"))
+            return "DecisionEngine must invoke sequence planner";
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!engineSrc.includes("ResetStrategicMemory()"))
+            return "DecisionEngine must expose cross-game strategic reset";
+        if (!pluginSrc.includes("_engine?.ResetStrategicMemory()"))
+            return "new game lifecycle must clear strategic memory";
+        if (!engineSrc.includes("Shadow memory must never break the visible legacy path"))
+            return "strategic memory failures must stay isolated from legacy policy";
+    });
+
+    test("[StrategicPlan] sequence planner expands simulated action chains", () => {
+        const plannerSrc = readFile("src/BobCoach/Core/Decision/StrategySequencePlanner.cs");
+        if (!plannerSrc.includes("SequenceSearchPlanner.Search"))
+            return "game adapter must use pure sequence search";
+        if (!plannerSrc.includes("_simulator.Simulate"))
+            return "game adapter must simulate candidate steps";
+        if (!plannerSrc.includes("ExpandSequence"))
+            return "game adapter must expand from the accumulated simulated state";
+        if (!plannerSrc.includes("TurnProjector.Advance"))
+            return "game adapter must score future gold";
+        if (!plannerSrc.includes("OpponentTechAdvisor.AnalyzeOpponentBoard"))
+            return "game adapter must account for opponent tech pressure";
+        if (!plannerSrc.includes("MemoryEvidenceScore"))
+            return "game adapter must consume cross-turn memory in scoring";
+    });
+
+    test("[StrategicPlan][Shadow] planner must not mutate visible legacy decision", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const visibleReturn = engineSrc.indexOf("return bestAction;");
+        const rankedMethod = engineSrc.indexOf(
+            "public List<BobCoach.Engine.Decision.RankedAction> GetRankedCandidates");
+        if (visibleReturn < 0 || rankedMethod < 0 || visibleReturn >= rankedMethod)
+            return "sequence planner must remain isolated to Shadow ranking";
+    });
+
+    test("[StrategicPlan][Search] pure search rejects invalid finite-score inputs", () => {
+        const searchSrc = readFile("src/BobCoach/Core/Decision/SequenceSearchPlanner.cs");
+        if (!searchSrc.includes("step.Action != null"))
+            return "search must reject roots without actions";
+        if (!searchSrc.includes("double.IsNaN"))
+            return "search must normalize non-finite scores";
+    });
+
+    test("[Adversarial][Sell] current core and high-tier resource cards are protected", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("_lastMainlinePlan.CoreCardIds.Contains(m.CardId)"))
+            return "sell protection must include current mainline core cards";
+        if (!engineSrc.includes("IsLikelyResourceText"))
+            return "sell protection must include high-tier resource text fallback";
+        if (!engineSrc.includes("始终为金色"))
+            return "always-golden minions must receive an explicit early-game value bonus";
+    });
+
+    test("[Buy][Tempo] wherever-scaling low-tier minions get mid-game transition bonus", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("WhereverScalingTempoBonus"))
+            return "wherever-scaling tempo bonus method must exist";
+        if (!engineSrc.includes("无论本随从在哪"))
+            return "wherever-scaling tempo bonus must use stable card text";
+        if (!engineSrc.includes("card.CardName.Contains(\"星元自动机\")"))
+            return "Star Automaton must be explicitly covered as transition tempo";
+    });
+
+    test("[Replay][Action] power-log buy/sell events request immediate UI refresh", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const sellBlock = pluginSrc.indexOf("oldZone == \"PLAY\" && newZone == \"SETASIDE\"");
+        const sellSlice = pluginSrc.slice(
+            sellBlock,
+            pluginSrc.indexOf("private static bool IsTavernSpellCard", sellBlock)
+        );
+        if (!sellSlice.includes("OnPowerLogStateChanged()"))
+            return "sell zone event must request UI refresh immediately";
+        const actionBlock = pluginSrc.indexOf("private void RecordPowerActionBlock");
+        const actionSlice = pluginSrc.slice(
+            actionBlock,
+            pluginSrc.indexOf("private bool IsLocalPowerEvent", actionBlock)
+        );
+        if (!actionSlice.includes("OnPowerLogStateChanged()"))
+            return "buy/sell/refresh/level power actions must request UI refresh";
+    });
+
+    test("[Adversarial][Discover] race matching must use structured tribes, not only names", () => {
+        const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+        const scoreIdx = pluginSrc.indexOf("private List<Engine.TrinketHint> ScoreDiscoverOptions");
+        const scoreBlock = pluginSrc.slice(scoreIdx, scoreIdx + 4500);
+        if (!extractorSrc.includes("Tribes = GetTribes(e)"))
+            return "GameStateExtractor must populate discover option tribes";
+        if (!scoreBlock.includes("optionTribes.Any"))
+            return "ScoreDiscoverOptions must use structured option tribes";
+        if (!scoreBlock.includes("ResolveCardTribes"))
+            return "ScoreDiscoverOptions must fall back to a card database tribe resolver";
+    });
+
+    test("[Adversarial][Gold] full board must not create a play-hand recommendation without room", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        const pairIdx = visualizerSrc.indexOf("else if (isPair && !hm.IsSpell");
+        const pairBlock = visualizerSrc.slice(pairIdx, pairIdx + 90);
+        if (!pairBlock.includes("!boardFull"))
+            return "pair hand marker must not recommend a minion onto a full board";
+        if (!visualizerSrc.includes("state.BoardMinions.Count < state.MaxBoardSlots"))
+            return "fallback play-hand recommendation must require a free board slot";
+    });
+
+    test("[Adversarial][HeroPower] resource skills may be usable on full board", () => {
+        const heroSrc = readFile("src/BobCoach/Core/HeroPowerEngine.cs");
+        const resourceIdx = heroSrc.indexOf("strategy.UsePurpose == HeroUsePurpose.Resource");
+        const resourceBlock = heroSrc.slice(resourceIdx, resourceIdx + 180);
+        if (resourceBlock.includes("boardFull ?"))
+            return "HeroPowerEngine must not suppress Resource skills on a full board";
+    });
+
+    test("[Adversarial][MCTS] second-step search must not hard-skip full board or zero gold", () => {
+        const mctsSrc = readFile("src/BobCoach/Core/MCTSSearch.cs");
+        if (mctsSrc.includes("state1.Gold < 1 || state1.BoardMinions.Count >= 7"))
+            return "MCTS must let the action enumerator decide after first-step actions";
+    });
+
+    test("[Adversarial][DarkGift] pressable tip can be refreshed while still pressable", () => {
+        const gateSrc = readFile("src/BobCoach/Core/DarkGiftTipGate.cs");
+        if (!gateSrc.includes("public void RefreshPressable"))
+            return "DarkGiftTipRenderCoordinator must support refreshing a still-pressable button";
+        if (!pluginSrc.includes("_darkGiftTipCoordinator.RefreshPressable(DateTime.Now)"))
+            return "plugin timer must refresh dark gift pressable state";
+    });
+
+    test("[Adversarial][DarkGift] candidate hints are scored from board comp and stay fail-closed", () => {
+        const advisorSrc = readFile("src/BobCoach/Core/DarkGiftCandidateAdvisor.cs");
+        if (!advisorSrc.includes("public static List<TrinketHint> Evaluate"))
+            return "DarkGiftCandidateAdvisor must expose a scored hint API";
+        if (!advisorSrc.includes("IsUnrated"))
+            return "DarkGiftCandidateAdvisor must mark unknown candidates unrated";
+        if (!advisorSrc.includes("匹配流派"))
+            return "DarkGiftCandidateAdvisor must reward comp-matched candidates";
+        if (!pluginSrc.includes("private List<Engine.TrinketHint> ScoreDarkGiftCandidates"))
+            return "plugin must own a dark gift candidate scoring path";
+    });
+
+    test("[Adversarial][DarkGift] tip must use live gold and block combat phase", () => {
+        const idx = pluginSrc.indexOf("private Engine.DarkGiftTipContext BuildDarkGiftTipContext");
+        const block = pluginSrc.slice(idx, idx + 2200);
+        if (!block.includes("int liveGold = GetLiveGold(state)"))
+            return "dark gift tip context must use tracked live gold";
+        if (!block.includes("MAIN_COMBAT"))
+            return "dark gift tip context must treat MAIN_COMBAT as combat";
+        if (!block.includes("Phase = inCombat ? \"combat\" : (state.Phase ?? \"\")"))
+            return "dark gift tip context must suppress non-shop phases";
+    });
+
+    test("[Adversarial][DarkGift] top pick candidate font is highlighted", () => {
+        const overlayIdx = overlaySrc.indexOf("internal void ShowDarkGiftCandidates(");
+        const block = overlaySrc.slice(overlayIdx, overlayIdx + 4000);
+        if (!block.includes("isTopPick"))
+            return "ShowDarkGiftCandidates must know the top pick";
+        if (!block.includes("FontWeights.Bold"))
+            return "ShowDarkGiftCandidates must bold the recommended candidate";
+    });
+
+    test("[Adversarial][Sell] sell markers require an actual affordable after-sell target", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const gameStateSrc = readFile("src/BobCoach/Core/GameState.cs");
+        if (!visualizerSrc.includes("IsSellWorthwhileForVisual")
+            || !visualizerSrc.includes("IsVisualProtectedSellMinion"))
+            return "DecisionVisualizer must gate sells by protected cards and actual improvement";
+        if (!engineSrc.includes("IsSellWorthwhile")
+            || !engineSrc.includes("RecentlyBoughtEntityIds"))
+            return "DecisionEngine must gate sells by recent buys and actual improvement";
+        if (!gameStateSrc.includes("RecentlyBoughtEntityIds"))
+            return "GameState must track recently bought entity ids";
+        if (!pluginSrc.includes("handWaitingOnFullBoard")
+            || !pluginSrc.includes("hasUpgradeAfterSell"))
+            return "DispatchRender must preserve sell only for hand-swap or affordable upgrade";
+        if (!pluginSrc.includes("!handWaitingOnFullBoard && !hasUpgradeAfterSell"))
+            return "DispatchRender must clear sell markers when no hand/upgrade/shop target is executable";
+    });
+
+    test("[Adversarial][AFK] early skip heroes disable normal recruit and actions", () => {
+        const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+        const enumeratorSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const gateSrc = readFile("src/BobCoach/Core/EarlyTurnRecruitGate.cs");
+        if (!extractorSrc.includes("afkSkipsEarlyTurns"))
+            return "GameStateExtractor must model AFK early-skip turns";
+        if (!extractorSrc.includes("BlocksEarlyRecruit")
+            || !extractorSrc.includes("_earlyTurnRecruitGate.Observe")
+            || !extractorSrc.includes("_earlyTurnRecruitGate.Reset"))
+            return "GameStateExtractor must persist and reset confirmed AFK signals";
+        if (!gateSrc.includes("TB_BaconShop_HP_044")
+            || !gateSrc.includes("TB_BaconShop_HERO_KelThuzad"))
+            return "EarlyTurnRecruitGate must recognize current and legacy AFK identities";
+        if (!extractorSrc.includes("!afkSkipsEarlyTurns"))
+            return "GameStateExtractor must close normal recruit during AFK early turns";
+        if (!enumeratorSrc.includes("if (!state.NormalRecruitAvailable) return actions;"))
+            return "ActionEnumerator must emit no actions outside normal recruit";
+        if (!engineSrc.includes("!state.NormalRecruitAvailable"))
+            return "DecisionEngine shop scoring must fail closed outside normal recruit";
+        if (!engineSrc.includes("!state.NormalRecruitAvailable")
+            || !engineSrc.includes("当前不可招募"))
+            return "DecisionEngine level-up suggestion must fail closed outside normal recruit";
+    });
+
+    test("[Adversarial][HeroSkin] strategy and target rules use current hero power", () => {
+        const engineSrc = readFile("src/BobCoach/Core/HeroPowerEngine.cs");
+        const stateSrc = readFile("src/BobCoach/Core/HeroPowerState.cs");
+        const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+        const enumeratorSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        if (!engineSrc.includes("GetStrategyForPower"))
+            return "HeroPowerEngine must resolve strategy from the current hero power";
+        if (!stateSrc.includes("BaseHeroCardId"))
+            return "HeroPowerState must carry the resolved base hero identity";
+        if (!extractorSrc.includes("BaseHeroCardId"))
+            return "GameStateExtractor must populate base hero identity from hero power";
+        if (!enumeratorSrc.includes("power.BaseHeroCardId"))
+            return "ActionEnumerator must use base hero identity for skin-independent target rules";
+    });
+
+    test("[Adversarial][Discover] spell sources fall back to HearthDb discover text", () => {
+        const parserSrc = readFile("src/BobCoach/Core/PowerLogParser.cs");
+        const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+        if (!parserSrc.includes("GetLocText(HearthDb.Enums.Locale.zhCN)")
+            || !parserSrc.includes("text.Contains(\"发现\")"))
+            return "PowerLogParser must authorize discover sources from local card text";
+        if (extractorSrc.includes("resolvedName == \"新生幼苗\""))
+            return "GameStateExtractor must not filter the Newborn Sapling tavern spell as a token";
+    });
+
+    test("[Adversarial][Discover] scoring weighs core and early-mid resource cards", () => {
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const advisorSrc = readFile("src/BobCoach/Core/DarkGiftCandidateAdvisor.cs");
+        if (!engineSrc.includes("public bool IsResourceCard")
+            || !engineSrc.includes("public bool IsCoreComboCard"))
+            return "DecisionEngine must expose resource and core-card classification";
+        if (!pluginSrcNow.includes("IsResourceCard(d.CardId)")
+            || !pluginSrcNow.includes("IsCoreComboCard(d.CardId)"))
+            return "ScoreDiscoverOptions must consume resource and core-card classification";
+        if (!pluginSrcNow.includes("state.Turn <= 5 ? 5.5"))
+            return "ScoreDiscoverOptions must give early resource cards the highest bonus";
+        if (!pluginSrcNow.includes("_engine.IsResourceCard")
+            || !pluginSrcNow.includes("_engine.IsCoreComboCard"))
+            return "Dark gift scoring must receive resource and core-card classification";
+        if (!advisorSrc.includes("isResourceCard != null")
+            || !advisorSrc.includes("isCoreCard != null"))
+            return "DarkGiftCandidateAdvisor must consume resource and core-card classification";
+    });
+
+    test("[Adversarial][ShopSlots] special tavern slot rules are modeled", () => {
+        const gameStateSrc = readFile("src/BobCoach/Core/GameState.cs");
+        const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!gameStateSrc.includes("HasAlwaysSevenTavernCards"))
+            return "GameState must model always-seven tavern card effects";
+        if (!gameStateSrc.includes("BG30_MagicItem_423"))
+            return "GameState must model Innkeeper's Stein extra refresh minion";
+        if (!gameStateSrc.includes("HERO_27"))
+            return "GameState must model Sindragosa one-fewer tavern slot";
+        if (!extractorSrc.includes("BG30_MagicItem_991"))
+            return "GameStateExtractor must include Felbat Portrait in always-seven replenishment";
+        if (!pluginSrcNow.includes("state.ShopSlotCount"))
+            return "DispatchRender must use state-aware shop slot count";
+        if (!pluginSrcNow.includes("GetShopSlotCountForTier(layoutTier)"))
+            return "DispatchRender must use the last real refresh tier for shop slot count";
+    });
+
+    test("[Adversarial][UpgradeUI] upgrade hint is primary unless buy then upgrade", () => {
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrcNow.includes("hasBuyThenUpgrade")
+            || !pluginSrcNow.includes("upgradePrimary"))
+            return "DispatchRender must prioritize upgrade and only keep buy-then-upgrade cards";
+        if (!pluginSrcNow.includes("liveGold - buyCost >= plan.UpgradeHint.Cost"))
+            return "buy-then-upgrade must require enough dynamic gold after buying";
+    });
+
+    test("[Adversarial][CardValue] spellcraft attached resources are valued", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("AttachedResourceBonus"))
+            return "DecisionEngine must add attached resource value";
+        if (!engineSrc.includes("BACON_SPELLCRAFT_ID")
+            || !engineSrc.includes("塑造法术"))
+            return "AttachedResourceBonus must recognize Spellcraft minions";
+        if (!engineSrc.includes("immediateCoin")
+            || !engineSrc.includes("return 1.5;"))
+            return "immediate coin minions must receive a stronger resource bonus than spellcraft";
+    });
+
+    test("[Adversarial][SpellHint] buy spell status must include the spell name", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (visualizerSrc.includes('parts.Add("法术"); break;'))
+            return "BuySpell must not render a bare spell label";
+        const buySpellIdx = visualizerSrc.indexOf("case ActionType.BuySpell:");
+        const buySpellBlock = visualizerSrc.slice(buySpellIdx, buySpellIdx + 800);
+        if (!buySpellBlock.includes('parts.Add("买→" + spellName)'))
+            return "BuySpell status must include the targeted spell name";
+        if (!buySpellBlock.includes("spell.CardName"))
+            return "BuySpell status must fall back to the observed spell card name";
+        if (!visualizerSrc.includes("case ActionType.BuySpell:"))
+            return "second-step status must also support BuySpell";
+    });
+
+    test("[Adversarial][TavernCoin] one leftover gold must still recommend BG28_810", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("cid.Contains(\"BG28_810\")"))
+            return "DecisionEngine must recognize the Tavern Coin spell";
+        // 2026-08-19 B11 修复: 回合1(3金)买酒馆币=花1得1净零, 却抢走买3费随从节奏
+        // (实测: 艾萨拉回合1"囤币被荐使用"根因)。新条件: 买后仍买得起3费随从
+        // (Gold-cost>=3) 或 仅剩1金不买浪费 (Gold==cost)。Gold==cost 分支保留。
+        if (!engineSrc.includes("state.Gold == spellCost || state.Gold - spellCost >= 3"))
+            return "Tavern Coin must be buyable when gold exactly equals its cost";
+        if (!engineSrc.includes('sc.CardName.Contains("币")'))
+            return "economy spell fallback must recognize Tavern Coin by name";
+    });
+
+    test("[Adversarial][Busker] T1 must hold next-turn gold battlecry minions", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        const enumeratorSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        if (!visualizerSrc.includes("IsNextTurnGoldBattlecryCard"))
+            return "DecisionVisualizer must recognize next-turn gold battlecry minions";
+        if (!visualizerSrc.includes("state.Turn == 1 && IsNextTurnGoldBattlecryCard(hm.CardId)"))
+            return "T1 must suppress the play marker for Southsea Busker";
+        if (!visualizerSrc.includes("BG26_135")
+            || !visualizerSrc.includes("BG26_135_G"))
+            return "Southsea Busker and its golden copy must be covered";
+        if (!enumeratorSrc.includes("ShouldHoldNextTurnGoldBattlecry"))
+            return "ActionEnumerator must also hold turn-one busker in hand";
+    });
+
+    test("[Adversarial][TrinketPanel] panel must not expose internal scoring attributes", () => {
+        const overlaySrc = readFile("src/BobCoach/OverlayRenderer.cs");
+        const start = overlaySrc.indexOf("public void ShowTrinketHints");
+        const end = overlaySrc.indexOf("public void ShowTrinketLoading", start);
+        const block = overlaySrc.slice(start, end >= 0 ? end : start + 4000);
+        if (!block.includes('if (h.IsTopPick) line += " ★首选";'))
+            return "trinket panel must keep a top-pick marker";
+        if (block.includes('line += "  [" + h.Reason + "]"'))
+            return "trinket panel must not display internal scoring attributes";
+    });
+
+    test("[Adversarial][TrinketPanel] discover panel avoids trinket overlap", () => {
+        const overlaySrc = readFile("src/BobCoach/OverlayRenderer.cs");
+        if (!overlaySrc.includes("bool trinketPanelPresent"))
+            return "discover render must detect the trinket panel";
+        if (!overlaySrc.includes("x += panelTextWidth * sc + _calc.ScaleX(16)"))
+            return "discover panel must shift away when the trinket panel is present";
+    });
+
+    test("[Adversarial][TrinketPanel] Power.log candidates fall back when local facts fail", () => {
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const start = pluginSrcNow.indexOf("private Engine.UiTargetSource ApplyPowerLogTrinketCandidates");
+        const end = pluginSrcNow.indexOf("private Engine.UiTargetSource ApplyScheduledTrinketPlaceholder", start);
+        const block = pluginSrcNow.slice(start, end >= 0 ? end : start + 5000);
+        if (!block.includes("Engine.TrinketFact fact = default(Engine.TrinketFact)"))
+            return "Power.log trinket candidate handling must tolerate missing local facts";
+        if (!block.includes("Engine.DisplayNameResolver.Resolve"))
+            return "Power.log trinket candidates must fall back to resolved display names";
+        if (!block.includes("localOffers.Add(new Engine.TrinketOption"))
+            return "Power.log trinket candidates must still inject offers after fact failure";
+    });
+
+    test("[Adversarial][ShopSlots] purchase exits awaiting-complete even during partial snapshot", () => {
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (pluginSrcNow.includes("else if (!_shopLayoutSlotPolicy.AwaitingCompleteShop)"))
+            return "purchase handling must not skip ObservePurchase while waiting for a full shop";
+        if (!pluginSrcNow.includes("_shopLayoutSlotPolicy.ObservePurchase();"))
+            return "purchase detection must confirm through the shared slot policy";
+    });
+
+    test("[Adversarial][MultiStep] sell generation includes cheap spell targets", () => {
+        const actionSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        const blockStart = actionSrc.indexOf("int minBuyCost = GameRuleEvaluator.GetPurchaseCost");
+        const block = actionSrc.slice(blockStart, blockStart + 500);
+        if (!block.includes("if (cost >= 0 && cost < minBuyCost)"))
+            return "sell enumeration must consider cheaper tavern spell costs";
+        if (!block.includes("minBuyCost = cost"))
+            return "sell enumeration must lower the after-sell funding target for spells";
+    });
+
+    test("[Adversarial][MultiStep] low-gold two-step search can include sell follow-ups", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("bool canExploreTwoStep = !ShouldPreserveHeroPlaybookAction")
+            || !engineSrc.includes("state.Gold >= 1"))
+            return "two-step search must activate with low gold";
+        if (!engineSrc.includes("actions.Any(a => a.Type == ActionType.SellMinion"))
+            return "two-step search must recognize sell-first chains";
+    });
+
+    test("[Adversarial][MultiStep] River Skipper sell-to-economy chain is modeled", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        const simulatorSrc = readFile("src/BobCoach/Core/Simulator.cs");
+        const samplerSrc = readFile("src/BobCoach/Core/CardPoolSampler.cs");
+        if (!engineSrc.includes("IsSelfReplacingEconomySell"))
+            return "DecisionEngine must recognize River Skipper economy sell";
+        if (!visualizerSrc.includes("IsVisualSelfReplacingEconomySell"))
+            return "DecisionVisualizer must mirror River Skipper economy sell";
+        if (!simulatorSrc.includes("sold.CardId == \"BG33_140\""))
+            return "Simulator must handle River Skipper sell replacement";
+        if (!samplerSrc.includes("public static MinionData SampleTierOneReplacement"))
+            return "CardPoolSampler must expose tier-one replacement sampling";
+    });
+
+    test("[Adversarial][UpgradeRisk] lethal level-up risk blocks upgrade", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("bool upgradeLethal = OpponentModel.IsLevelUpLethal"))
+            return "DecisionEngine must compute lethal level-up risk";
+        if (!engineSrc.includes("&& !upgradeLethal"))
+            return "lethal level-up risk must block upgrade actions";
+        if (!engineSrc.includes("当前血量过低，升本被斩杀风险过大"))
+            return "level-up suggestion must report lethal risk";
+    });
+
+    test("[Adversarial][ResourceValue] next-turn gold battlecries are valued", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("nextTurnGold"))
+            return "DecisionEngine must recognize next-turn gold resource cards";
+        if (!engineSrc.includes("text.Contains(\"下回合获得\")"))
+            return "next-turn gold bonus must use Chinese text rules";
+        if (!engineSrc.includes("text.Contains(\"next turn\")"))
+            return "next-turn gold bonus must use English text rules";
+    });
+
+    test("[Adversarial][UnifiedRanking] all actions share a ranked candidate surface", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("GetRankedCandidates"))
+            return "DecisionEngine must expose a unified ranked candidate surface";
+        if (!engineSrc.includes("ActionDescriptor.CreateKey(action)"))
+            return "ranked candidates must carry stable action keys";
+        if (!engineSrc.includes("OpponentModel.IsLevelUpLethal"))
+            return "ranked candidates must apply lethal upgrade safety";
+    });
+
+    test("[Adversarial][UnifiedRanking] ranked fallback fills legacy no-action holes", () => {
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrcNow.includes("TryResolveRankedFallback"))
+            return "plugin must resolve legacy no-action through ranked candidates";
+        if (!pluginSrcNow.includes("ranked-fallback"))
+            return "ranked fallback must carry a stable policy id";
+    });
+
+    test("[Adversarial][CrossTurn] TurnProjector models next-turn gold and state reset", () => {
+        const projectorSrc = readFile("src/BobCoach/Core/TurnProjector.cs");
+        if (!projectorSrc.includes("public static GameState Advance"))
+            return "TurnProjector must expose next-turn state projection";
+        if (!projectorSrc.includes("int baseMaxGold = Math.Min(10, 2 + next.Turn)"))
+            return "TurnProjector must reset next-turn max gold";
+        if (!projectorSrc.includes("carriedGoldCapBonus"))
+            return "TurnProjector must preserve permanent max-gold cap bonuses";
+        if (!projectorSrc.includes("IsNextTurnGoldCard"))
+            return "TurnProjector must model next-turn gold cards";
+    });
+
+    test("[Adversarial][CrossTurn] DecisionEngine exposes cross-turn planning", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("GetCrossTurnPlan"))
+            return "DecisionEngine must expose cross-turn planning";
+        if (!engineSrc.includes("TurnProjector.Advance(afterFirst)"))
+            return "cross-turn planning must project the next turn after the first action";
+        if (!engineSrc.includes("0.1 * nextTurnFeatures[FeatureExtractor.F_GOLD]"))
+            return "ranked candidates must value next-turn gold in unified scoring";
+    });
+
+    test("[Adversarial][HeroPower] utility power entities never enter action enumeration", () => {
+        const extractorSrc = readFile("src/BobCoach/GameStateExtractor.cs");
+        const enumeratorSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        const catalogSrc = readFile("src/BobCoach/Core/HeroPowerRuleCatalog.cs");
+        if (!catalogSrc.includes("TB_BaconShop_UpdateDmgCap"))
+            return "hero power catalog must recognize UpdateDmgCap as utility";
+        if (!extractorSrc.includes("IsUtilityPowerCardId(e.CardId)"))
+            return "extractor must exclude utility hero power entities";
+        if (!enumeratorSrc.includes("HeroPowerRuleCatalog.IsUtilityPowerCardId(power.CardId)"))
+            return "action enumerator must exclude utility hero powers";
+    });
+
+    test("[Adversarial][HeroPower] non-targeted hero powers render without board targets", () => {
+        const enumeratorSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (!enumeratorSrc.includes("RequiresTarget"))
+            return "hero power actions must carry target requirements";
+        if (!visualizerSrc.includes("bestAction.RequiresTarget"))
+            return "visualizer must not attach board targets to non-targeted hero powers";
+    });
+
+    test("[Adversarial][Upgrade] LEVEL_UP suppresses conflicting hero skill guidance", () => {
+        const pluginSrcNow = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrcNow.includes("heroUseSuggestion = \"\""))
+            return "plugin must clear hero skill suggestion when level-up is primary";
+        if (!pluginSrcNow.includes("plan.Status.HintLine = \"\""))
+            return "plugin must clear stale status hint when level-up is primary";
+    });
+
+    test("[Adversarial][UI] discover and dark gift panels hide internal scoring reasons", () => {
+        const overlaySrcNow = readFile("src/BobCoach/OverlayRenderer.cs");
+        const discoverStart = overlaySrcNow.indexOf("private void RenderDiscoverHints");
+        const discoverBlock = overlaySrcNow.slice(discoverStart, discoverStart + 1200);
+        const darkStart = overlaySrcNow.indexOf("internal void ShowDarkGiftCandidates");
+        const darkBlock = overlaySrcNow.slice(darkStart, darkStart + 1200);
+        if (discoverBlock.includes('"  [" + h.Reason + "]"'))
+            return "discover panel must not render internal reason text";
+        if (darkBlock.includes("hint.Reason"))
+            return "dark gift panel must not render internal reason text";
+    });
+
+    test("[Adversarial][Tech] train crew keep and buy value uses opponent board context", () => {
+        const modelSrc = readFile("src/BobCoach/Core/OpponentModel.cs");
+        const engineSrcNow = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const visualizerSrcNow = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (!modelSrc.includes("IsSituationalTechCard")
+            || !modelSrc.includes("IsTechCardWorthKeeping"))
+            return "OpponentModel must expose situational tech evaluation";
+        if (
+            !engineSrcNow.includes("GetSituationalTechMultiplier(shopCard.CardId")
+            || !engineSrcNow.includes("OpponentTechAdvisor.IsTechCardWorthKeeping(")
+            || !engineSrcNow.includes("state.Opponents")
+        ) {
+            return "DecisionEngine must use opponent context for tech buy and sell";
+        }
+        if (
+            !visualizerSrcNow.includes("OpponentTechAdvisor.IsTechCardWorthKeeping(")
+            || !visualizerSrcNow.includes("state.Opponents")
+        ) {
+            return "DecisionVisualizer must use opponent context for tech sell and swap";
+        }
+    });
+
+    test("[Eudora][HandCombat] visual fallback must not suggest playing hand-combat scouts", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (!visualizerSrc.includes("if (Engine.HandCombatCardPolicy.ShouldKeepInHand(hm.CardId)) continue;"))
+            return "hand play fallback must skip hand-combat cards such as BG32_330";
+        if (!visualizerSrc.includes("state.Turn == 1 && IsNextTurnGoldBattlecryCard(hm.CardId)) continue;"))
+            return "hand play fallback must skip next-turn gold cards";
+    });
+
+    test("[Eudora][Freeze] early freeze keeps one gold for the dig power", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (!engineSrc.includes("HasEudoraWorthFreezing"))
+            return "DecisionEngine must evaluate Eudora early freeze targets";
+        if (!engineSrc.includes("IsEudoraHero(")
+            || !engineSrc.includes("state.HeroCardId"))
+            return "DecisionEngine must recognize Eudora hero ids including skins";
+        if (!visualizerSrc.includes("eudoraEarly"))
+            return "DecisionVisualizer must expose the Eudora early freeze hint path";
+        if (!visualizerSrc.includes("\u7559\u0031\u91d1\u6316\u5b9d"))
+            return "Eudora freeze hint must explain reserving one gold for digging";
+    });
+
+    test("[DarkGift][Gold] stale choice and re-armed pressable windows stay hidden at low gold", () => {
+        const gateSrc = readFile("src/BobCoach/Core/DarkGiftTipGate.cs");
+        if (!gateSrc.includes("context.Gold >= 0 && context.Gold < 3"))
+            return "dark gift coordinator must hide stale active choice text when gold is below cost";
+        if (!gateSrc.includes("_gate.ShouldShow(now)"))
+            return "dark gift gate must not endlessly re-arm the pressable window";
+    });
+
+    test("[Gold][Shop] live-gold pruning removes unaffordable purchase markers", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrc.includes("PruneShopMarkersByLiveGold"))
+            return "plugin must prune purchase markers with live gold before render";
+        if (!pluginSrc.includes("plan.ShopMarkers.RemoveAll(marker =>"))
+            return "pruning must use explicit per-marker affordability";
+    });
+
+    test("[T35][Cenarius] simulator uses bounded permanent-gold-cap helper", () => {
+        const simulator = readFile("src/BobCoach/Core/Simulator.cs");
+        if (!simulator.includes("HeroPowerRuleCatalog.AdvancePermanentGoldCap"))
+            return "Cenarius simulation still hard-codes its max-gold cap";
+    });
+
+    test("[Sell][Safety] sell-to-refresh is removed and upgrade sell requires survival margin", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (engineSrc.includes("gold + 1 >= refreshCost"))
+            return "sell should not be recommended merely to fund a refresh";
+        if (!engineSrc.includes("state.Health > 15"))
+            return "upgrade sell must require a survival margin";
+        if (!engineSrc.includes("!OpponentModel.IsLevelUpLethal(state.Health, state.Turn)"))
+            return "upgrade sell must reject lethal level-up risk";
+    });
+
+    test("[T35][Sell] final sell must be revalidated after ranked selection", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrc.includes("IsSellActionValid"))
+            return "final ranked sell action is not revalidated";
+    });
+
+    test("[T35][Sell] resource/core tier alone cannot justify selling a board minion", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const block = engineSrc.slice(
+            engineSrc.indexOf("private bool IsShopMinionBetter"),
+            engineSrc.indexOf("private int MaxShopTier")
+        );
+        if (block.includes("|| shop.Tier >= sold.Tier"))
+            return "resource/core branch still allows tier-only replacement";
+    });
+
+    test("[T35][Sell] plugin after-sell paths must not allow tier-only resource/core replacement", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const scoreIdx = pluginSrc.indexOf("private bool IsShopScoreWorthAfterSell");
+        const scoreBlock = pluginSrc.slice(scoreIdx, scoreIdx + 2200);
+        const markerIdx = pluginSrc.indexOf("private bool IsShopMarkerWorthAfterSell");
+        const markerBlock = pluginSrc.slice(markerIdx, markerIdx + 2400);
+        if (scoreBlock.includes("shopCard.Tier >= sold.Tier"))
+            return "score after-sell path still allows tier-only replacement";
+        if (markerBlock.includes("shop.Tier >= sold.Tier"))
+            return "marker after-sell path still allows tier-only replacement";
+        if (!scoreBlock.includes("shopPower >= soldPower * 1.05")
+            || !markerBlock.includes("shopPower >= soldPower * 1.05"))
+            return "plugin after-sell paths must require a clear board-power improvement";
+    });
+
+    test("[ReplayRegression] global replay states are replayable decision inputs", () => {
+        const recorderSrc = readFile("src/BobCoach/Core/GlobalReplayRecorder.cs");
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const runnerSrc = readFile("tools/evaluate/ReplayDecisionRunner.cs");
+        if (!recorderSrc.includes("public GameState ToGameState()"))
+            return "GlobalReplayState must be convertible back to GameState";
+        if (!recorderSrc.includes("public static GlobalReplayState FromJson"))
+            return "GlobalReplayState must support JSON round-trip parsing";
+        if (!recorderSrc.includes("public List<GlobalHeroPowerRef> HeroPowers")
+            || !recorderSrc.includes("public List<GlobalTrinketRef> TrinketDetails"))
+            return "replay state must capture hero powers and trinket details";
+        if (!pluginSrc.includes("HeroPowers = state.HeroPowers")
+            || !pluginSrc.includes("ActiveTrinkets = state.ActiveTrinkets"))
+            return "plugin must fill replayable decision inputs";
+        if (!engineSrc.includes("public void HydrateReplayRules"))
+            return "DecisionEngine must restore anomaly and trinket rules for replay";
+        if (!runnerSrc.includes("engine.GetRankedCandidates"))
+            return "offline replay runner must re-decide with the current engine";
+    });
+
+    test("[T36][Nuoboton] hero power requires a last used tavern spell", () => {
+        const enumeratorSrc = readFile("src/BobCoach/Core/ActionEnumerator.cs");
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        const recorderSrc = readFile("src/BobCoach/Core/GlobalReplayRecorder.cs");
+        if (!enumeratorSrc.includes("return !string.IsNullOrEmpty(state.LastUsedTavernSpellCardId)"))
+            return "Nuoboton hero power must be unavailable before any tavern spell is used";
+        if (!pluginSrc.includes("_lastUsedTavernSpellCardId")
+            || !pluginSrc.includes("LastUsedTavernSpellCardId = _lastUsedTavernSpellCardId"))
+            return "plugin must track and inject the last used tavern spell";
+        if (!recorderSrc.includes("LastUsedTavernSpellCardId")
+            || !recorderSrc.includes("LastUsedTavernSpellName"))
+            return "replay state must record the last used tavern spell";
+    });
+
+    test("[T36][Sell] already affordable shop targets must not trigger sell-to-buy", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        const engineBlock = engineSrc.slice(
+            engineSrc.indexOf("private bool HasBetterShopAfterSell"),
+            engineSrc.indexOf("private bool IsShopMinionBetter")
+        );
+        const visualBlock = visualizerSrc.slice(
+            visualizerSrc.indexOf("private bool HasVisualShopTargetAfterSell"),
+            visualizerSrc.indexOf("private bool IsVisualShopTargetBetter")
+        );
+        if (!engineBlock.includes("if (gold >= cost) continue;")
+            || !visualBlock.includes("if (gold >= cost) continue;"))
+            return "sell-to-buy must skip shop cards already affordable without selling";
+    });
+
+    test("[T36][Refresh] refresh must leave a meaningful budget or free refresh", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrc.includes("CanRefreshLeaveMeaningfulBudget"))
+            return "plugin must gate refresh by post-refresh budget";
+        if (!pluginSrc.includes("CanRefreshLeaveMeaningfulBudget(state, liveGold)"))
+            return "visible refresh glow must use the post-refresh budget gate";
+    });
+
+    test("[T36][SpellUI] non-targeted tavern spell text says direct use", () => {
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (!visualizerSrc.includes("→直接使用"))
+            return "non-targeted spell recommendations must say direct use";
+    });
+
+    test("[Chromie][HeroPower] free hero suggestion survives affordable upgrade", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrc.includes("goldAfterUpgrade < heroPowerCost"))
+            return "plugin must only clear hero suggestion when upgrade leaves too little gold";
+    });
+
+    test("[Chromie][Spell] spell shop gets score boost and more visible markers", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        const visualizerSrc = readFile("src/BobCoach/Core/DecisionVisualizer.cs");
+        if (!engineSrc.includes("chromieSpellHero"))
+            return "DecisionEngine must recognize Chromie spell-centric scoring";
+        if (!visualizerSrc.includes("spellShopCount >= 3"))
+            return "DecisionVisualizer must show more spell markers after Chromie refresh";
+    });
+
+    test("[FreeRefresh] stored free refreshes survive turn projection and drive freeze", () => {
+        const projectorSrc = readFile("src/BobCoach/Core/TurnProjector.cs");
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!projectorSrc.includes("next.FreeRefreshCount = state.FreeRefreshCount;"))
+            return "TurnProjector must preserve stored free refresh count";
+        if (!engineSrc.includes("preserveFreeRefresh"))
+            return "DecisionEngine must preserve free refresh when shop is worth freezing";
+    });
+
+    test("[Replay] global action inference uses entity identity and records hero powers", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        if (!pluginSrc.includes("prevShopEntities.Contains(hm.EntityId)"))
+            return "global buy inference must use shop entity identity";
+        if (!pluginSrc.includes("actions.Add(\"heroPower:\" + (state.HeroPowerCardId ?? \"\"))"))
+            return "global replay must record active hero power usage";
     });
 }
 

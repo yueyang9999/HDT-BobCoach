@@ -164,6 +164,36 @@ namespace BobCoach.Engine
             return new LayoutRect(x, y, w, h);
         }
 
+        /// <summary>时空酒馆/发现类中央选择区：与底部商店分离，避免提示错位。</summary>
+        public LayoutRect GetChoiceArea()
+        {
+            double w = _clientRect.Width * 0.60;
+            double h = _clientRect.Height * 0.22;
+            double x = (_clientRect.Width - w) / 2;
+            double y = _clientRect.Height * 0.32;
+            return new LayoutRect(x, y, w, h);
+        }
+
+        /// <summary>中央选择卡位：按候选数居中，而不是套用底部商店卡位。</summary>
+        public LayoutRect GetChoiceCardRect(int index, int totalCards)
+        {
+            var area = GetChoiceArea();
+            int count = Math.Max(1, totalCards);
+            double gap = Math.Min(OffsetX(_activeCardGap), area.Width * 0.02);
+            double cardWidth = Math.Min(CardW, (area.Width - (count - 1) * gap) / count);
+            double cardHeight = Math.Min(CardH, area.Height);
+            double totalWidth = count * cardWidth + (count - 1) * gap;
+            double firstLeft = area.Left + (area.Width - totalWidth) / 2;
+            double top = area.Top + (area.Height - cardHeight) / 2;
+            if (index < 0 || index >= count)
+                return new LayoutRect(firstLeft, top, cardWidth, cardHeight);
+            return new LayoutRect(
+                firstLeft + index * (cardWidth + gap),
+                top,
+                cardWidth,
+                cardHeight);
+        }
+
         /// <summary>战场区域: 中下, 与商店对称同尺寸, Y中心~36%</summary>
         public LayoutRect GetBoardArea()
         {

@@ -21,11 +21,11 @@ internal static class StatusStripLayoutPolicyBehavior
         Near(2.0, metrics.Scale, "font scale uses primary 13 DIP baseline");
         Near(26.0, metrics.PrimaryFontSize, "primary font size");
         Near(24.0, metrics.SecondaryFontSize, "secondary font preserves 12/13 ratio");
-        Near(36.0, metrics.PrimaryLineHeight, "primary line height scales");
-        Near(38.0, metrics.EmphasisLineHeight, "emphasis line height scales");
+        Near(38.0, metrics.PrimaryLineHeight, "primary line height scales (R223 19.0 DIP)");
+        Near(42.0, metrics.EmphasisLineHeight, "emphasis line height scales (R223 21.0 DIP)");
         Near(12.0, metrics.HorizontalPadding, "horizontal padding scales");
-        Near(520.0, metrics.NarrowMaxWidth, "260 DIP maximum width scales");
-        Near(560.0, metrics.WideMaxWidth, "280 DIP maximum width scales");
+        Near(560.0, metrics.NarrowMaxWidth, "280 DIP maximum width scales (R223 动作链加宽)");
+        Near(680.0, metrics.WideMaxWidth, "340 DIP maximum width scales (R223 动作链3行加宽)");
 
         StatusStripPosition inside = StatusStripLayoutPolicy.ClampPosition(20, 30, 800, 600, 240, 160);
         Near(20, inside.X, "inside x remains unchanged");

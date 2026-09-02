@@ -81,6 +81,7 @@ namespace BobCoach.Engine
                 case TrinketChoiceContext.ScheduledLesser: return "scheduled_lesser";
                 case TrinketChoiceContext.ScheduledGreater: return "scheduled_greater";
                 case TrinketChoiceContext.AnomalyExtra: return "anomaly_extra";
+                case TrinketChoiceContext.MysteryCubeActivation: return "mystery_cube_activation";
                 case TrinketChoiceContext.OtherTrinket: return "other_trinket";
                 default: return "unknown";
             }

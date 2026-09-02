@@ -53,7 +53,10 @@ namespace BobCoach.Engine
     public class TurnSnapshot
     {
         public int Turn;
-        public int Gold, MaxGold, Tier, Health, Armor;
+        public int Gold, LiveGold, MaxGold, Tier, Health, Armor;
+        public int FreeRefreshCount;
+        public int TavernUpgradeCost;
+        public bool FrozenShop;
         public int BoardSize, ShopSize, HandSize;
         public double BoardPower, OpponentPower;
         // 完整随从数据 (含属性/关键词/金色)
@@ -73,6 +76,8 @@ namespace BobCoach.Engine
         public string FeatureVector;        // 22维特征向量, 逗号分隔 (供回放训练)
         public string RecommendedActionJson; // 推荐动作详情JSON: {type,targetIndex,cardId,score}
         public string ActionScoresJson;      // 所有可选动作评分JSON: [{type,targetIndex,cardId,score},...]
+        public string ShadowRecommendedActionJson; // Shadow 统一评分第一名
+        public string ShadowActionScoresJson;      // Shadow 统一评分列表
         public DateTime Timestamp = DateTime.UtcNow;
     }
 

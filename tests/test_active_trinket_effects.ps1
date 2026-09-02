@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $candidates = @()
@@ -53,6 +53,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\TimewarpOfferRule.cs"),
     (Join-Path $root "src\BobCoach\Core\TimewarpPoolMergeRule.cs"),
     (Join-Path $root "src\BobCoach\Core\HeroPowerState.cs"),
+    (Join-Path $root "src\BobCoach\Core\HeroPowerRuleCatalog.cs"),
     (Join-Path $root "src\BobCoach\Core\HeroIdentityExpectation.cs"),
     (Join-Path $root "src\BobCoach\Core\SecondHeroPowerChoiceExpectation.cs"),
     (Join-Path $root "src\BobCoach\Core\SecondHeroPowerChoiceBatchObservation.cs"),
@@ -72,6 +73,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\SharedCardGrantObservation.cs"),
     (Join-Path $root "src\BobCoach\Core\GameRuleEvaluator.cs"),
     (Join-Path $root "src\BobCoach\Core\ActionEnumerator.cs"),
+    (Join-Path $root "src\BobCoach\Core\HandCombatCardPolicy.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14RegistryJsonParser.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14CardRegistry.cs"),
     (Join-Path $root "src\BobCoach\Core\SeasonMechanicProfile.cs"),
@@ -99,6 +101,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\CombatContext.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatEffects.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatSimulator.cs"),
+    (Join-Path $root "src\BobCoach\Core\DeterministicRng.cs"),
     (Join-Path $PSScriptRoot "ActiveTrinketEffectsHarness.cs")
 )
 

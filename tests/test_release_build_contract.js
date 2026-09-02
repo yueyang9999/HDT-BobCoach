@@ -70,14 +70,36 @@ assert.ok(compileItems.includes("Core\\TrinketDefinitionRegistry.cs"),
     "trinket definition registry must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\CompGuideCatalog.cs"),
     "comp guide catalog must be compiled into BobCoach.dll");
+assert.ok(compileItems.includes("Core\\SeasonMetaBaseline.cs"),
+    "season meta baseline must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\SeasonDataSelector.cs"),
     "season data selector must be compiled into BobCoach.dll");
 assert.ok(compileItems.includes("Core\\DisplayNameResolver.cs"),
     "display name resolver must be compiled into BobCoach.dll");
-assert.strictEqual(compileItems.length, 228, "unexpected compile item count");
-assert.strictEqual(compileDigest,
-    "fc10939b51f38946859dc4051b17bd84fea49cf301364102c2985b64b3a408ba",
-    "compile set changed");
+assert.ok(compileItems.includes("Core\\DarkGiftCandidateAdvisor.cs"),
+    "dark gift candidate advisor must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\TurnProjector.cs"),
+        "cross-turn projector must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\Decision\\StrategicPlan.cs"),
+        "strategic plan contract must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\Decision\\StrategicMemory.cs"),
+        "strategic memory must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\Decision\\SequenceSearchPlanner.cs"),
+        "sequence search planner must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\Decision\\StrategySequencePlanner.cs"),
+        "strategy sequence planner must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\HeroPlaybookProfile.cs"),
+        "hero playbook profile must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\HeroPlaybookRegistry.cs"),
+        "hero playbook registry must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\HeroPlaybookDecisionService.cs"),
+        "hero playbook decision service must be compiled into BobCoach.dll");
+    assert.ok(compileItems.includes("Core\\DeterministicRng.cs"),
+        "deterministic rng for decision pipeline must be compiled into BobCoach.dll");
+    assert.strictEqual(compileItems.length, 246, "unexpected compile item count");
+    assert.strictEqual(compileDigest,
+        "7f689ed5c5aed9f853bb55fbf5347f1e75fc4257dd84a7138ae27b6d9539346e",
+        "compile set changed");
 
 for (const token of [
     "release_identity.json",

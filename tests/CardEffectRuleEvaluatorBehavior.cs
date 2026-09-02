@@ -21,6 +21,7 @@ internal static class CardEffectRuleEvaluatorBehavior
             AssertSignature("召唤一个随从，仅限本场战斗。", "combat_summon=0.5/once");
             AssertSignature("亡语：消灭击杀本随从的随从。", "combat_removal=1/once");
             AssertSignature("你的战吼额外触发一次。", "amplifier=0/");
+            AssertStatGiftRules();
             AssertSignature("花掉铸币后获得+1/+1。", "");
             AssertSignature("使一个随从获得+2/+2。", "");
             AssertSignature("", "");
@@ -109,6 +110,31 @@ internal static class CardEffectRuleEvaluatorBehavior
             throw new InvalidOperationException("unsupported card type did not fail closed");
     }
 
+    private static void AssertStatGiftRules()
+    {
+        AssertTrue(StatGiftRuleEvaluator.IsStatGiftGeneratorText(
+            "塑造法术：随机获取一张能使随从获得属性值的酒馆法术牌。"),
+            "stat-gift spell generator is recognized");
+        AssertTrue(StatGiftRuleEvaluator.IsStatGiftGeneratorText(
+            "在你的回合结束时，随机获取2张能使随从获得属性值的酒馆法术牌。"),
+            "recurring stat-gift spell generator is recognized");
+        AssertTrue(StatGiftRuleEvaluator.IsStatGiftAmplifierText(
+            "你的能使随从获得属性值的元素额外使随从获得+2/+1。"),
+            "stat-gift amplifier trinket is recognized");
+        AssertTrue(StatGiftRuleEvaluator.IsStatGiftAmplifierText(
+            "你的酒馆法术使随从额外获得+1/+2。"),
+            "spell amplifier is recognized");
+        int atk;
+        int hp;
+        AssertTrue(StatGiftRuleEvaluator.TryGetAmplifierBonus(
+            "你的能使随从获得属性值的元素额外使随从获得+2/+1。",
+            out atk, out hp) && atk == 2 && hp == 1,
+            "amplifier bonus is parsed");
+        AssertFalse(StatGiftRuleEvaluator.IsStatGiftAmplifierText(
+            "使一个随从获得+2/+2。"),
+            "plain buff is not treated as a stat-gift amplifier");
+    }
+
     private static string Signature(IEnumerable<CardEffectDefinition> effects)
     {
         return string.Join(";", (effects ?? new CardEffectDefinition[0]).Select(effect =>
@@ -116,5 +142,15 @@ internal static class CardEffectRuleEvaluatorBehavior
             + effect.ValueGold.ToString("0.###############", CultureInfo.InvariantCulture)
             + "/" + effect.Per
             + (string.IsNullOrEmpty(effect.Tribe) ? "" : "@" + effect.Tribe)));
+    }
+
+    private static void AssertTrue(bool condition, string label)
+    {
+        if (!condition) throw new InvalidOperationException(label);
+    }
+
+    private static void AssertFalse(bool condition, string label)
+    {
+        if (condition) throw new InvalidOperationException(label);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace BobCoach.Engine
@@ -18,6 +19,7 @@ namespace BobCoach.Engine
             new Dictionary<string, CompGuideCardWeight>(StringComparer.Ordinal);
         private readonly Dictionary<string, CompGuideCardWeight> _trinketWeights =
             new Dictionary<string, CompGuideCardWeight>(StringComparer.Ordinal);
+        private readonly SeasonMetaBaseline _metaBaseline = new SeasonMetaBaseline();
         private bool _loaded;
         private int _coreCardEntries;
         private int _trinketEntries;
@@ -25,6 +27,10 @@ namespace BobCoach.Engine
         internal string ConfiguredRoot { get; private set; }
 
         internal bool IsLoaded { get { return _loaded; } }
+
+        internal bool HasMetaBaseline { get { return _metaBaseline.IsLoaded; } }
+
+        internal string MetaBaselineSource { get { return _metaBaseline.Source; } }
 
         internal int GuidesCount { get { return _guides.Count; } }
 
@@ -55,6 +61,15 @@ namespace BobCoach.Engine
                 LoadFromJson(
                     File.ReadAllText(guidesFile, Encoding.UTF8),
                     File.ReadAllText(weightsFile, Encoding.UTF8));
+                if (!_loaded) return;
+
+                string baselineFile = Path.Combine(
+                    ConfiguredRoot, "generated", "registries", "season14_meta_baseline.json");
+                if (File.Exists(baselineFile))
+                {
+                    _metaBaseline.LoadFromFile(baselineFile);
+                    ApplyMetaBaseline();
+                }
             }
             catch
             {
@@ -173,7 +188,67 @@ namespace BobCoach.Engine
                 weight = 0;
                 return true;
             }
+            if (string.Equals(tier, "T4", StringComparison.OrdinalIgnoreCase))
+            {
+                weight = 0;
+                return true;
+            }
             return false;
+        }
+
+        internal List<string> GetCoreCardIdsForGuide(CompGuide guide)
+        {
+            var result = new List<string>();
+            if (guide == null) return result;
+
+            List<string> metaCoreIds;
+            if (_metaBaseline.TryGetCoreCardIds(guide.Id, out metaCoreIds)
+                && metaCoreIds.Count > 0)
+                return new List<string>(metaCoreIds);
+
+            if (guide.CoreCards == null || guide.CoreCards.Count == 0
+                || _coreWeights.Count == 0)
+                return result;
+
+            foreach (var weight in _coreWeights.Values)
+            {
+                if (weight == null || string.IsNullOrEmpty(weight.OfficialCardId))
+                    continue;
+                string name = !string.IsNullOrEmpty(weight.OfficialName)
+                    ? weight.OfficialName : weight.Name;
+                if (string.IsNullOrEmpty(name)) continue;
+                if (guide.CoreCards.Any(text =>
+                    !string.IsNullOrEmpty(text)
+                    && (text.Contains(name)
+                        || text.Contains(weight.OfficialCardId))))
+                {
+                    result.Add(weight.OfficialCardId);
+                }
+            }
+            return result.Distinct(StringComparer.Ordinal).ToList();
+        }
+
+        internal bool TryGetMetaTier(string guideId, out string tier)
+        {
+            return _metaBaseline.TryGetTier(guideId, out tier);
+        }
+
+        internal bool TryGetMetaCoreCardIds(string guideId, out List<string> coreIds)
+        {
+            return _metaBaseline.TryGetCoreCardIds(guideId, out coreIds);
+        }
+
+        private void ApplyMetaBaseline()
+        {
+            if (!_metaBaseline.IsLoaded || _guides.Count == 0) return;
+            foreach (var guide in _guides)
+            {
+                if (guide == null || string.IsNullOrEmpty(guide.Id)) continue;
+                string tier;
+                if (_metaBaseline.TryGetTier(guide.Id, out tier)
+                    && !string.IsNullOrWhiteSpace(tier))
+                    guide.Tier = tier;
+            }
         }
 
         private static CompGuide ParseGuide(Dictionary<string, object> row)
@@ -262,6 +337,7 @@ namespace BobCoach.Engine
             _guidesById.Clear();
             _coreWeights.Clear();
             _trinketWeights.Clear();
+            _metaBaseline.Clear();
             _coreCardEntries = 0;
             _trinketEntries = 0;
             _loaded = false;

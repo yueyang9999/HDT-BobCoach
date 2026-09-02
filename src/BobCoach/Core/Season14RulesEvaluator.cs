@@ -11,6 +11,9 @@ namespace BobCoach.Engine
     /// </summary>
     internal sealed class Season14RulesEvaluator
     {
+        private static readonly object SharedSync = new object();
+        private static Season14RulesEvaluator _shared;
+
         private static readonly IReadOnlyList<string> DefaultExcludedAnomalyIds =
             new ReadOnlyCollection<string>(new[] { "BG36_Anomaly_002" });
 
@@ -22,6 +25,19 @@ namespace BobCoach.Engine
 
         internal Season14RulesEvaluator()
         {
+        }
+
+        internal static Season14RulesEvaluator GetShared()
+        {
+            lock (SharedSync)
+            {
+                if (_shared == null)
+                {
+                    _shared = new Season14RulesEvaluator();
+                    _shared.LoadFromConfiguredRoot();
+                }
+                return _shared;
+            }
         }
 
         internal bool IsLoaded

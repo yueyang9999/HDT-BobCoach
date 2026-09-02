@@ -5,9 +5,9 @@
 - Windows x64；
 - .NET Framework 4.7.2 Developer Pack；
 - Node.js（仅执行无第三方依赖的合同测试）；
-- HDT `1.55.0.0` x64 官方发布目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
+- HDT `1.57.1.0` x64 官方发布目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
 
-HDT 程序集由用户本地提供，不能提交或打包进仓库。`hdtBaselineVersion` 是官方 `v2.7.0` 发布资产写入的精确程序集版本 `1.55.0.0`。
+HDT 程序集由用户本地提供，不能提交或打包进仓库。`hdtBaselineVersion` 是官方 `v2.7.0` 发布资产写入的精确程序集版本 `1.57.1.0`。
 
 ## 构建
 
@@ -23,6 +23,47 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\build_rele
 
 输出目录只用于本地验证，不能提交。构建脚本会验证项目、HDT 基线、x64 架构和程序集身份。
 
+## 部署固定流程（2026-08-20 固化）
+
+**每次向用户 HDT 目录部署插件【必须】使用** `tools/release/deploy_plugin_check.ps1`，禁止手写 sha256 文件。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .	oolseleasedeploy_plugin_check.ps1 `
+  -DllPath "$env:TEMP\bobcoach-rXXX-build\BobCoach.dll"
+```
+
+脚本执行与插件 `PluginIntegrityVerifier` **完全一致**的校验：
+1. sha256 文件格式正则 `^([A-F0-9]{64})  BobCoach\.dll(?:\r?\n)?# 构建与验证
+
+## 前置条件
+
+- Windows x64；
+- .NET Framework 4.7.2 Developer Pack；
+- Node.js（仅执行无第三方依赖的合同测试）；
+- HDT `1.57.1.0` x64 官方发布目录，含 `HearthstoneDeckTracker.exe`、`HearthDb.dll` 和 `Newtonsoft.Json.dll`。
+
+HDT 程序集由用户本地提供，不能提交或打包进仓库。`hdtBaselineVersion` 是官方 `v2.7.0` 发布资产写入的精确程序集版本 `1.57.1.0`。
+
+## 构建
+
+设置 HDT 路径后执行：
+
+```powershell
+$env:BOBCOACH_HDT_DIR = 'D:\HDT'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\build_release.ps1 `
+  -HdtDirectory $env:BOBCOACH_HDT_DIR `
+  -OutputDirectory "$env:TEMP\bobcoach-build" `
+  -Force
+```
+
+（**单 CRLF，ASCII 无 BOM**——双 CRLF 会导致插件 integrity check FAILED，插件不加载，历史事故）
+2. 写盘前先对内存内容做格式预检（格式错误不落盘）
+3. 逐目录部署后**读回**验证格式 + 哈希比对
+4. HDT 运行检测（dll 被锁时拒绝部署）
+5. 任一目录 FAIL → exit 1，并回滚已写 sha256
+
+验证输出必须为 `deploy result: 3 OK / 0 FAIL`（3 个标准目录）才算部署成功。
+
 ## 测试与仓库验证
 
 ```powershell
@@ -31,7 +72,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\build\validate_r
 git diff --check
 ```
 
-`npm test` 不安装 npm 运行时依赖；它执行 Node 合同测试和 PowerShell 测试。`validate_repository.ps1` 是仓库内容、敏感数据、个人路径、大文件、发布身份与包白名单的最终检查。CI 在精确 HDT `1.55.0.0` 基线上执行仓库验证、全部测试、Release 构建和正式离线包构建；独立的 latest compatibility 任务还会在每次 push、pull request 及每日定时运行时解析、校验并构建官方最新稳定版，但不生成正式发布包。每日定时运行会跳过正式基线和离线包任务。任一门禁缺失或失败都不能视为通过。
+`npm test` 不安装 npm 运行时依赖；它执行 Node 合同测试和 PowerShell 测试。`validate_repository.ps1` 是仓库内容、敏感数据、个人路径、大文件、发布身份与包白名单的最终检查。CI 在精确 HDT `1.57.1.0` 基线上执行仓库验证、全部测试、Release 构建和正式离线包构建；独立的 latest compatibility 任务还会在每次 push、pull request 及每日定时运行时解析、校验并构建官方最新稳定版，但不生成正式发布包。每日定时运行会跳过正式基线和离线包任务。任一门禁缺失或失败都不能视为通过。
 
 日常更新应先按 [更新版本验证流程](UPDATE_VALIDATION.md) 判定变更等级：开发中可使用与风险匹配的快速反馈，合并前仍需执行本节完整门禁；只有最终候选版本才进入对应的 VM 验收矩阵。
 
@@ -106,7 +147,7 @@ node .\tools\model\evaluate_policy.js `
   --output "reports\linear-v1-acceptance.json"
 ```
 
-当前缺少合格真实证据，因此效果状态保持 `blocked-by-season-data`、`metrics: null`。evaluator 仅在至少 300 个真实、可信、版本匹配标注场景、代表性 Shadow 对比和人工 severe-error review 全部具备后计算指标；无论结果如何都不返回 activation decision。新策略继续保持 Shadow，`legacy-v1.1.0` 保持玩家可见推荐和回退。未来即使效果门禁通过，嵌入模型和切换玩家可见策略也分别需要新的所有者批准与发布变更。
+当前缺少合格真实证据，因此效果状态保持 `blocked-by-season-data`、`metrics: null`。evaluator 仅在至少 300 个真实、可信、版本匹配标注场景、代表性 Shadow 对比和人工 severe-error review 全部具备后计算指标；无论结果如何都不返回 activation decision。新策略继续保持 Shadow，`legacy-v1.2.0` 保持玩家可见推荐和回退。未来即使效果门禁通过，嵌入模型和切换玩家可见策略也分别需要新的所有者批准与发布变更。
 
 ### 新赛季清单
 
@@ -121,7 +162,7 @@ node .\tools\model\evaluate_policy.js `
 8. Roll back by selecting LegacyOnly and retaining the last approved model.
 ```
 
-新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.2.0 承担可见推荐和回退。
 
 ## 离线包
 

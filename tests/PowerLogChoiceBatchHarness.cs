@@ -9,6 +9,19 @@ public static class PowerLogChoiceBatchHarness
 {
     public static int Main(string[] args)
     {
+        try
+        {
+            return RunMain(args);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("FAIL " + SafeException(ex));
+            return 1;
+        }
+    }
+
+    private static int RunMain(string[] args)
+    {
         if (args != null && args.Length >= 1)
         {
             if (args.Length >= 2 && args[1] == "--kelthuzad-20260712")
@@ -56,6 +69,29 @@ public static class PowerLogChoiceBatchHarness
         if (detectedBuild != 246003) return Fail("Power.log BuildNumber was not emitted");
         parser.ParseLine("D 18:09:36.8559084 GameState.DebugPrintGame() - BuildNumber=246003");
         if (parser.CurrentBuildNumber != 246003) return Fail("Power.log current build was not retained");
+
+        var replayEventParser = new PowerLogParser();
+        var replayZoneEvent = replayEventParser.ParseLine(
+            "D 18:09:40.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Wisp id=7 zone=HAND zonePos=0 cardId=BG23_000 player=6] tag=ZONE value=PLAY");
+        if (replayZoneEvent.Count != 1) return Fail("zone change replay event was not parsed");
+        if (replayZoneEvent[0].Type != PLEventType.ZoneChange
+            || replayZoneEvent[0].PlayerId != 6
+            || replayZoneEvent[0].Zone != "HAND"
+            || replayZoneEvent[0].Value != "PLAY"
+            || replayZoneEvent[0].CardId != "BG23_000")
+            return Fail("zone change replay event did not preserve player/zone/card identity");
+
+        var attackEvents = replayEventParser.ParseLine(
+            "D 18:09:41.0000000 GameState.DebugPrintPower() - BLOCK_START BlockType=ATTACK Entity=[entityName=Attacker id=10 zone=PLAY zonePos=0 cardId=BG1 player=6] EffectCardId=X EffectIndex=0 Target=[entityName=Defender id=20 zone=PLAY zonePos=1 cardId=BG2 player=14] SubOption=-1");
+        if (attackEvents.Count != 1) return Fail("attack replay event was not parsed");
+        var attack = attackEvents[0];
+        if (attack.Type != PLEventType.Attack
+            || attack.SourceId != 10
+            || attack.PlayerId != 6
+            || attack.TargetId != 20
+            || attack.TargetCardId != "BG2"
+            || attack.TargetPlayerId != 14)
+            return Fail("attack replay event did not preserve source/target identity");
 
         var scanParser = new PowerLogParser();
         int scannedBuild = 0;
@@ -119,6 +155,35 @@ public static class PowerLogChoiceBatchHarness
             return Fail("discover choice identity missing");
         if (lastDiscover.SourceCardId != "BG33_101" || lastDiscover.Candidates.Count != 3)
             return Fail("discover source or candidates missing");
+
+        parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() - id=31 Player=Local TaskList=5870 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Source=[entityName=Beanstalk id=15018 zone=PLAY zonePos=0 cardId=BG28_821 player=2]");
+        parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Discover A id=15020 zone=SETASIDE zonePos=0 cardId=BG28_300 player=2]");
+        parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Discover B id=15021 zone=SETASIDE zonePos=0 cardId=BG26_146 player=2]");
+        parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Discover C id=15022 zone=SETASIDE zonePos=0 cardId=BG33_140 player=2]");
+        parser.ParseLine("D 11:09:05.5203600 ChoiceCardMgr.WaitThenShowChoices() - id=31 WAIT for taskList 5870");
+        if (lastDiscover == null || lastDiscover.ChoiceId != 31
+            || lastDiscover.SourceCardId != "BG28_821"
+            || lastDiscover.Candidates.Count != 3)
+            return Fail("HearthDb-backed spell discover source was not authorized");
+
+        var heroDiscoverParser = new PowerLogParser();
+        PowerLogChoiceBatch heroDiscover = null;
+        heroDiscoverParser.DiscoverOffered += batch => heroDiscover = batch;
+        heroDiscoverParser.ParseLine(
+            "D 11:09:06.0000000 GameState.DebugPrintEntityChoices() - id=40 Player=Local TaskList=5900 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        heroDiscoverParser.ParseLine(
+            "D 11:09:06.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Scrap for Profit id=17001 zone=PLAY zonePos=0 cardId=TB_BaconShop_HP_075 player=2]");
+        heroDiscoverParser.ParseLine(
+            "D 11:09:06.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Low Tier A id=17010 zone=SETASIDE zonePos=0 cardId=BG23_000 player=2]");
+        heroDiscoverParser.ParseLine(
+            "D 11:09:06.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Low Tier B id=17011 zone=SETASIDE zonePos=0 cardId=BGS_004 player=2]");
+        heroDiscoverParser.ParseLine(
+            "D 11:09:06.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=40 WAIT for taskList 5900");
+        if (heroDiscover == null || heroDiscover.ChoiceId != 40
+            || heroDiscover.SourceCardId != "TB_BaconShop_HP_075"
+            || heroDiscover.Candidates.Count != 2)
+            return Fail("Hooktusk two-choice hero-power discover was not emitted");
 
         parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() - id=30 Player=Local TaskList=5866 ChoiceType=GENERAL CountMin=1 CountMax=1");
         parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Source=[entityName=Timewarp id=14959 zone=PLAY zonePos=0 cardId=BG34_HERO_004p player=2]");
@@ -206,6 +271,26 @@ public static class PowerLogChoiceBatchHarness
         pricedBatch.TimeCoinCount = 3;
         if (TimewarpPurchaseAdvisor.SelectBestAffordableIndex(pricedBatch, purchaseScores) != 0)
             return Fail("three time coins did not unlock the higher-cost best candidate");
+        var twoCoinBatch = new PowerLogChoiceBatch
+        {
+            TimeCoinCount = 2,
+            Candidates = new List<DiscoverCandidate>
+            {
+                new DiscoverCandidate { CardId = "c1", PurchaseCost = 1 },
+                new DiscoverCandidate { CardId = "c2", PurchaseCost = 1 },
+                new DiscoverCandidate { CardId = "c3", PurchaseCost = 3 },
+            },
+        };
+        var twoCoinScores = new Dictionary<int, double>
+        {
+            { 0, 80.0 },
+            { 1, 70.0 },
+            { 2, 100.0 },
+        };
+        var selected = TimewarpPurchaseAdvisor.SelectAffordableIndices(
+            twoCoinBatch, twoCoinScores, 2);
+        if (selected.Count != 2 || selected[0] != 0 || selected[1] != 1)
+            return Fail("two time coins did not suggest both affordable picks");
 
         parser.ParseLine("D 11:10:00.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=GameEntity tag=TURN value=3");
         parser.ParseLine("D 11:10:00.1000000 GameState.DebugPrintPower() - FULL_ENTITY Creating ID=901 CardID=BGDUO_Anomaly_007t");
@@ -239,17 +324,17 @@ public static class PowerLogChoiceBatchHarness
             },
         };
         var cubeBinding = lifecycle.Observe(cubeExtra, 4);
-        if (cubeBinding.Context != TrinketChoiceContext.AnomalyExtra || cubeBinding.TargetTurn != 4)
+        if (cubeBinding.Context != TrinketChoiceContext.MysteryCubeActivation
+            || cubeBinding.TargetTurn != 4)
             return Fail("cube extra trinket was not classified at its observed turn");
-        if (!lifecycle.TryGetForTurn(5, out var cubeAtNextTurn)
-            || cubeAtNextTurn.Batch.ChoiceId != 31)
-            return Fail("explicit cube trinket choice was discarded across combat-to-recruit turn transition");
         if (lifecycle.Complete(new PowerLogChoiceCompletion { ChoiceId = 999 }) != null)
             return Fail("mismatched completion closed the cube trinket batch");
         if (lifecycle.Complete(new PowerLogChoiceCompletion { ChoiceId = 31 }) == null)
-            return Fail("matching completion did not close the cross-turn cube trinket batch");
-        if (lifecycle.TryGetForTurn(5, out _))
-            return Fail("completed cross-turn cube trinket batch remained active");
+            return Fail("matching completion did not close the mystery cube batch");
+        if (lifecycle.TryGetForTurn(4, out _))
+            return Fail("completed mystery cube batch remained active");
+        if (lifecycle.TryGetForTurn(5, out var staleCubeAtNextTurn))
+            return Fail("mystery cube activation leaked past its observed turn");
 
         var anomaly = new PowerLogChoiceBatch
         {
@@ -262,8 +347,8 @@ public static class PowerLogChoiceBatchHarness
             },
         };
         var anomalyBinding = lifecycle.Observe(anomaly, 9);
-        if (anomalyBinding.Context != TrinketChoiceContext.AnomalyExtra)
-            return Fail("anomaly trinket choice was not classified separately");
+        if (anomalyBinding.Context != TrinketChoiceContext.MysteryCubeActivation)
+            return Fail("mystery cube activation was not classified separately");
         if (anomalyBinding.EligibleForCalibration)
             return Fail("anomaly trinket choice was calibration-eligible");
         if (lifecycle.Complete(completed) != null || !lifecycle.TryGetForTurn(9, out _))
@@ -281,8 +366,9 @@ public static class PowerLogChoiceBatchHarness
             return Fail("schema-v2 shadow record was not completed");
         if (shadowRecord.ChoiceId != 13 || shadowRecord.SelectedCardId != "BG32_MagicItem_416")
             return Fail("shadow completion identity was not preserved");
-        if (shadowRecord.EligibleForCalibration || shadowRecord.SelectionContext != "anomaly_extra")
-            return Fail("anomaly shadow record was not excluded from calibration");
+        if (shadowRecord.EligibleForCalibration
+            || shadowRecord.SelectionContext != "mystery_cube_activation")
+            return Fail("mystery cube shadow record was not excluded from calibration");
         var incompleteShadow = new TrinketShadowCaptureSession();
         incompleteShadow.Stage(anomalyBinding, 5, true, 18,
             new System.Collections.Generic.List<TrinketShadowOffer>());
@@ -726,7 +812,7 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 5,
+            Turn = 6,
             TavernTier = 3,
             Gold = 8,
             BoardMinionCount = 2,
@@ -742,14 +828,8 @@ public static class PowerLogChoiceBatchHarness
         var advice = advisor.Evaluate(context);
         if (!advice.ShouldShow)
             return Fail("dark gift tip advisor suppressed a pressable tip with valid game state");
-        if (!advice.StatusText.Contains("\u6697\u8d50\u53ef\u53d1\u73b0")
-            || !advice.StatusText.Contains("T5")
-            || !advice.StatusText.Contains("\u672c3")
-            || !advice.StatusText.Contains("\u91d18")
-            || !advice.StatusText.Contains("\u573a2")
-            || !advice.StatusText.Contains("\u5e974")
-            || !advice.StatusText.Contains("\u624b1"))
-            return Fail("dark gift tip advisor status did not expose the algorithm context");
+        if (!string.Equals(advice.StatusText, "\u5efa\u8bae\u70b9\u51fb\u9ed1\u6697\u53d1\u73b0", StringComparison.Ordinal))
+            return Fail("dark gift tip advisor must render a minimal click prompt, not internal parameters");
 
         var emptyContext = new DarkGiftTipContext
         {
@@ -757,7 +837,7 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 5,
+            Turn = 6,
             TavernTier = 3,
             Gold = 0,
             BoardMinionCount = 0,
@@ -773,6 +853,30 @@ public static class PowerLogChoiceBatchHarness
         var emptyAdvice = advisor.Evaluate(emptyContext);
         if (emptyAdvice.ShouldShow)
             return Fail("dark gift tip advisor opened without any board, shop, hand, or gold context");
+
+        var lowGoldContext = new DarkGiftTipContext
+        {
+            Pressable = true,
+            StateAvailable = true,
+            GameActive = true,
+            Phase = "shop",
+            Turn = 5,
+            TavernTier = 3,
+            Gold = 2,
+            BoardMinionCount = 2,
+            ShopMinionCount = 4,
+            HandMinionCount = 1,
+            Health = 30,
+            BoardPower = 30,
+            OpponentPower = 30,
+            UsesRemaining = 3,
+            OfferedExpectedValue = 0.8,
+            HasCoreSynergy = true,
+        };
+        var lowGoldAdvice = advisor.Evaluate(lowGoldContext);
+        if (lowGoldAdvice.ShouldShow
+            || lowGoldAdvice.Reason != "insufficient-gold")
+            return Fail("dark gift tip advisor must fail closed below 3 gold");
 
         var backfilledContext = new DarkGiftTipContext
         {
@@ -822,7 +926,7 @@ public static class PowerLogChoiceBatchHarness
             StateAvailable = true,
             GameActive = true,
             Phase = "shop",
-            Turn = 5,
+            Turn = 6,
             TavernTier = 3,
             Gold = 8,
             BoardMinionCount = 1,
@@ -844,14 +948,8 @@ public static class PowerLogChoiceBatchHarness
             return Fail("dark gift tip coordinator rendered pressable discovery without algorithm context");
         var contextStatus = coordinator.GetStatus(t0, context);
         if (contextStatus == null
-            || !contextStatus.Contains("\u6697\u8d50\u53ef\u53d1\u73b0")
-            || !contextStatus.Contains("T5")
-            || !contextStatus.Contains("\u672c3")
-            || !contextStatus.Contains("\u91d18")
-            || !contextStatus.Contains("\u573a1")
-            || !contextStatus.Contains("\u5e972")
-            || !contextStatus.Contains("\u624b0"))
-            return Fail("dark gift tip coordinator did not render the algorithm context");
+            || !string.Equals(contextStatus, "\u5efa\u8bae\u70b9\u51fb\u9ed1\u6697\u53d1\u73b0", StringComparison.Ordinal))
+            return Fail("dark gift tip coordinator must render the minimal click prompt");
         if (coordinator.GetStatus(t0.AddSeconds(6), context) != null)
             return Fail("dark gift tip coordinator stayed visible after its 6s window");
 
@@ -1054,6 +1152,19 @@ public static class PowerLogChoiceBatchHarness
                 return Fail("legacy trusted discover source was rejected: " + legacySource);
         }
 
+        var professorParser = new PowerLogParser();
+        var professorOffers = new List<PowerLogChoiceBatch>();
+        professorParser.DiscoverOffered += batch => professorOffers.Add(batch);
+        professorParser.ParseLine("D 18:55:20.0000000 GameState.DebugPrintEntityChoices() - id=10008 Player=Local TaskList=10080 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        professorParser.ParseLine("D 18:55:20.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=构造亡灵 id=10800 zone=PLAY zonePos=0 cardId=BG25_HERO_100p player=4]");
+        professorParser.ParseLine("D 18:55:20.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=A id=10801 zone=SETASIDE zonePos=0 cardId=BG_LOE_012 player=4]");
+        professorParser.ParseLine("D 18:55:20.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=B id=10802 zone=SETASIDE zonePos=0 cardId=BG25_010 player=4]");
+        professorParser.ParseLine("D 18:55:20.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=C id=10803 zone=SETASIDE zonePos=0 cardId=BG26_361 player=4]");
+        professorParser.ParseLine("D 18:55:20.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=10008 WAIT for taskList 10080");
+        if (professorOffers.Count != 1 || professorOffers[0].SourceCardId != "BG25_HERO_100p"
+            || professorOffers[0].Candidates.Count != 3)
+            return Fail("professor discover source BG25_HERO_100p was not emitted as an ordinary discover");
+
         Console.WriteLine("PASS ordinary discover requires a trusted source and stays fail-closed otherwise");
         return 0;
     }
@@ -1243,6 +1354,10 @@ public static class PowerLogChoiceBatchHarness
         resolved = DisplayNameResolver.Resolve("BG26_525", "Board Minion", id => null);
         if (!string.Equals(resolved, "Board Minion", StringComparison.Ordinal))
             return Fail("known log name was not preserved");
+
+        resolved = DisplayNameResolver.Resolve("BG26_525", "unknown", id => "测试卡");
+        if (!string.Equals(resolved, "测试卡", StringComparison.Ordinal))
+            return Fail("placeholder unknown should not suppress database name");
 
         Console.WriteLine("PASS unknown CardIds display as unknown instead of raw IDs");
         return 0;
@@ -1656,6 +1771,22 @@ public static class PowerLogChoiceBatchHarness
     {
         Console.Error.WriteLine("FAIL " + message);
         return 1;
+    }
+
+    private static string SafeException(Exception ex)
+    {
+        if (ex == null) return "unknown exception";
+        try
+        {
+            string message = ex.Message ?? ex.GetType().Name;
+            if (ex.InnerException != null)
+                message += " -> " + SafeException(ex.InnerException);
+            return message;
+        }
+        catch
+        {
+            return ex.GetType().Name;
+        }
     }
 
     private static bool WaitUntil(Func<bool> predicate, int timeoutMilliseconds)

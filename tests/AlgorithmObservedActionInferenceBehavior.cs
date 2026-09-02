@@ -20,6 +20,11 @@ internal static class AlgorithmObservedActionInferenceBehavior
             RejectsBuySpellAcrossTurns();
             MarksMultipleMatchingCandidatesUnresolved();
             IgnoresStateChangesWithoutMatchingCandidates();
+            ToleratesNullHeroPowerEntries();
+            DeduplicatesHeroPowerCandidatesByCardId();
+            DoesNotRecommendHandCombatMinionForPlay();
+            DoesNotRecommendFrozenHandCardForPlayOrSpell();
+            TreatsHandCombatDerivedCardIdsAsHandHeld();
             Console.WriteLine("PASS observed actions require unique player-action evidence");
             return 0;
         }
@@ -164,6 +169,107 @@ internal static class AlgorithmObservedActionInferenceBehavior
             "unmatched state change");
     }
 
+    private static void ToleratesNullHeroPowerEntries()
+    {
+        var state = State(4, 5, 0, 11, 12);
+        state.HeroPowers.Add(null);
+        state.HeroPowers.Add(new HeroPowerState
+        {
+            CardId = "POWER_A",
+            IsActive = true,
+            IsUnlocked = true,
+            Cost = 0,
+            SpecialRule = "secret",
+        });
+
+        var actions = new ActionEnumerator().Enumerate(state);
+        AssertTrue(actions.Any(action => action.Type == ActionType.UseHeroPower
+            && action.CardId == "POWER_A"), "valid hero power survives null list entry");
+    }
+
+    private static void DeduplicatesHeroPowerCandidatesByCardId()
+    {
+        var state = State(4, 5, 0, 11, 12);
+        state.HeroPowers.Add(new HeroPowerState
+        {
+            CardId = "POWER_A",
+            IsActive = true,
+            IsUnlocked = true,
+            Cost = 0,
+            SpecialRule = "secret",
+        });
+        state.HeroPowers.Add(new HeroPowerState
+        {
+            CardId = "POWER_A",
+            IsActive = true,
+            IsUnlocked = true,
+            Cost = 0,
+            SpecialRule = "secret",
+        });
+
+        var actions = new ActionEnumerator().Enumerate(state)
+            .Where(action => action.Type == ActionType.UseHeroPower
+                && action.CardId == "POWER_A")
+            .ToList();
+        AssertTrue(actions.Count == 1, "duplicate hero power card ids collapse to one candidate");
+    }
+
+    private static void DoesNotRecommendHandCombatMinionForPlay()
+    {
+        var state = State(4, 5, 0, 11, 12);
+        state.HandMinions.Add(new MinionData
+        {
+            EntityId = 900,
+            CardId = "BG32_330",
+            IsSpell = false,
+            Cost = 0,
+        });
+
+        var actions = new ActionEnumerator().Enumerate(state);
+        AssertTrue(!actions.Any(action => action.Type == ActionType.PlayMinion
+            && action.CardId == "BG32_330"),
+            "hand combat minion is not enumerated as a play recommendation");
+        AssertTrue(HandCombatCardPolicy.ShouldKeepInHand("BG32_330_G"),
+            "golden hand combat minion is also kept in hand");
+    }
+
+    private static void DoesNotRecommendFrozenHandCardForPlayOrSpell()
+    {
+        var state = State(4, 5, 0, 11, 12);
+        state.HandMinions.Add(new MinionData
+        {
+            EntityId = 910,
+            CardId = "BG36_TEST",
+            IsSpell = false,
+            Cost = 0,
+            IsFrozen = true,
+        });
+        state.HandMinions.Add(new MinionData
+        {
+            EntityId = 911,
+            CardId = "BG36_TEST_SPELL",
+            IsSpell = true,
+            Cost = 1,
+            IsFrozen = true,
+        });
+
+        var actions = new ActionEnumerator().Enumerate(state);
+        AssertTrue(!actions.Any(action =>
+                (action.Type == ActionType.PlayMinion || action.Type == ActionType.UseSpell)
+                && (action.CardId == "BG36_TEST" || action.CardId == "BG36_TEST_SPELL")),
+            "frozen hand cards are not enumerated for play or spell use");
+    }
+
+    private static void TreatsHandCombatDerivedCardIdsAsHandHeld()
+    {
+        AssertTrue(HandCombatCardPolicy.ShouldKeepInHand("BG32_330t"),
+            "temporary hand-combat copy is kept in hand");
+        AssertTrue(HandCombatCardPolicy.ShouldKeepInHand("BG32_330_Ge"),
+            "golden hand-combat enchantment-derived entity is kept in hand");
+        AssertFalse(HandCombatCardPolicy.ShouldKeepInHand("BG32_331"),
+            "unrelated murloc is not held by the hand-combat rule");
+    }
+
     private static GameState State(int turn, int gold, int freeRefreshes,
         params int[] shopIds)
     {
@@ -223,5 +329,10 @@ internal static class AlgorithmObservedActionInferenceBehavior
     private static void AssertTrue(bool condition, string label)
     {
         if (!condition) throw new InvalidOperationException(label);
+    }
+
+    private static void AssertFalse(bool condition, string label)
+    {
+        if (condition) throw new InvalidOperationException(label);
     }
 }

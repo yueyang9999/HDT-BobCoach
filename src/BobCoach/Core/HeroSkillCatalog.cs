@@ -57,6 +57,11 @@ namespace BobCoach.Engine
                 UsePurpose = strategy.UsePurpose.ToString(),
                 IsActive = isActive,
             };
+            if (strategy.SpecialRule == "CHROMIE")
+            {
+                fact.UsePurpose = "Economy";
+                fact.TargetRule = "refresh_spells";
+            }
             return true;
         }
     }

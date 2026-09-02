@@ -23,12 +23,20 @@ namespace BobCoach.Engine
         public PLEventType Type;
         public DateTime Timestamp;
         public int EntityId; public string EntityName = ""; public string CardId = "";
+        public int PlayerId;
+        public string Zone = "";
         public string Tag = ""; public string Value = "";
         public int SourceId; public int TargetId;
+        public string TargetName = "";
+        public string TargetCardId = "";
+        public int TargetPlayerId;
+        public int BeforeHealth;
+        public int AfterHealth;
         public string BlockType = "";
         public string OldCardId = ""; public string NewCardId = "";
         public int Turn; public int NumericValue;
         public string RawLine = "";
+        public string ActionKind = "";
     }
 
     /// <summary>Power.log 一次完整选择的身份与候选快照。</summary>
@@ -76,6 +84,17 @@ namespace BobCoach.Engine
     public class PowerLogParser
     {
         private readonly Dictionary<int, PLEntityState> _entities = new Dictionary<int, PLEntityState>();
+        // R216: 36.2.x ChoiceCardMgr.WaitThenShowChoices() 新格式授权(无 DebugPrintEntityChoices)
+        private bool _waitMarkerAuthorized;
+        private DateTime _waitMarkerAt;
+        private int _waitMarkerId;
+        private bool _newFormatFired;
+        private static readonly TimeSpan WaitMarkerWindow = TimeSpan.FromSeconds(6);
+        // R237: 同 choiceId 发射冷却(对抗性审查: 巴罗夫R234局 seq53/seq905/seq1147
+        // 真实发现后同一 choiceId 以空来源复发, 候选被商店卡污染 → 面板重开)
+        private int _lastEmittedChoiceId = -1;
+        private DateTime _lastEmittedAt = DateTime.MinValue;
+        private static readonly TimeSpan EmitCooldown = TimeSpan.FromSeconds(10);
         private readonly Dictionary<string, int> _alternateCurrencyByPlayer =
             new Dictionary<string, int>(StringComparer.Ordinal);
         private int _currentTurn;
@@ -330,6 +349,13 @@ namespace BobCoach.Engine
                     {
                         _currentEntityChoice = null;
                         _pendingChoiceEntityIds.Clear();
+                        // R239(审查B): 普通 SendChoices 完成也必须清授权与 pending——
+                        // 残留 _pendingChoiceId/_waitMarkerAuthorized 是 choiceId 复用
+                        // 复发的根因链一环(seq53/905/1147 均以旧 id 空来源复发)。
+                        _waitMarkerAuthorized = false;
+                        _waitMarkerAt = DateTime.MinValue;
+                        _waitMarkerId = -1;
+                        _pendingChoiceId = -1;
                         _pendingSendChoiceId = sendChoiceId;
                         _pendingSendChoiceType = scm.Groups[2].Value;
                         _pendingSendChoiceAt = ts;
@@ -425,6 +451,8 @@ namespace BobCoach.Engine
             }
             evt.EntityName = ExtractString(content, "entityName=", " ");
             evt.CardId = ExtractString(content, "cardId=", " ");
+            evt.PlayerId = ExtractInt(content, "player=");
+            evt.Zone = ExtractString(content, "zone=", " ");
             evt.Tag = ExtractString(content, "tag=", " ");
             evt.Value = ExtractString(content, "value=", " ");
             int.TryParse(evt.Value, out evt.NumericValue);
@@ -435,6 +463,7 @@ namespace BobCoach.Engine
             var entity = _entities[evt.EntityId];
             if (!string.IsNullOrEmpty(evt.EntityName)) entity.Name = evt.EntityName;
             if (!string.IsNullOrEmpty(evt.CardId)) entity.CardId = evt.CardId;
+            if (evt.PlayerId > 0) entity.PlayerId = evt.PlayerId;
 
             // 分类标签
             switch (evt.Tag)
@@ -485,11 +514,17 @@ namespace BobCoach.Engine
                         if (IsTrinketEntity(entity)) evt.Type = PLEventType.TrinketSelected;
                     break;
                 case "ATK": entity.Attack = evt.NumericValue; break;
-                case "HEALTH": entity.Health = evt.NumericValue;
-                    if (evt.NumericValue <= 0 && entity.Health > 0)
+                case "HEALTH":
+                    evt.BeforeHealth = entity.Health;
+                    entity.Health = evt.NumericValue;
+                    evt.AfterHealth = entity.Health;
+                    if (evt.NumericValue <= 0 && evt.BeforeHealth > 0)
                         evt.Type = PLEventType.MinionDeath;
                     break;
-                case "DAMAGE": evt.Type = PLEventType.Damage; break;
+                case "DAMAGE":
+                    evt.BeforeHealth = entity.Health;
+                    evt.Type = PLEventType.Damage;
+                    break;
                 case "ARMOR": evt.Type = PLEventType.ArmorChange; break;
                 case "STEP": _currentPhase = evt.Value; evt.Type = PLEventType.PhaseChange; break;
                 case "NEXT_STEP":
@@ -582,11 +617,14 @@ namespace BobCoach.Engine
                 evt.CardId = ExtractString(content, "cardId=", " ");
             evt.EntityName = ExtractString(content, "entityName=", " ");
             int zonePos = -1; int.TryParse(ExtractString(content, "zonePos=", " "), out zonePos);
+            evt.PlayerId = ExtractInt(content, "player=");
+            evt.Zone = ExtractString(content, "zone=", " ");
 
             var entity = new PLEntityState
             {
                 Id = evt.EntityId, Name = evt.EntityName, CardId = evt.CardId,
                 Zone = ExtractString(content, "zone=", " "), ZonePos = zonePos,
+                PlayerId = evt.PlayerId,
             };
             _entities[evt.EntityId] = entity;
 
@@ -605,12 +643,20 @@ namespace BobCoach.Engine
                 cardId = ExtractString(content, "cardId=", " ");
             int entityId = ExtractInt(content, "ID=");
             if (entityId == 0) entityId = ExtractInt(content, "id=");
+            int playerId = ExtractInt(content, "player=");
+            string zone = ExtractString(content, "zone=", " ");
 
             var evt = new PLEvent
             {
                 Type = PLEventType.CardRevealed, Timestamp = ts,
                 EntityId = entityId, CardId = cardId,
+                PlayerId = playerId, Zone = zone,
             };
+            if (_entities.ContainsKey(entityId))
+            {
+                if (playerId > 0) _entities[entityId].PlayerId = playerId;
+                if (!string.IsNullOrEmpty(zone)) _entities[entityId].Zone = zone;
+            }
 
             // 饰品翻开
             if (!string.IsNullOrEmpty(cardId) && (cardId.Contains("MagicItem") || cardId.Contains("Trinket")))
@@ -689,6 +735,22 @@ namespace BobCoach.Engine
             evt.TargetId = ExtractInt(content, "Target=[", "id=");
             evt.EntityName = ExtractString(content, "entityName=", " ");
             evt.CardId = ExtractString(content, "cardId=", " ");
+            evt.PlayerId = ExtractInt(content, "player=");
+            evt.Zone = ExtractString(content, "zone=", " ");
+            int targetStart = content.IndexOf("Target=[", StringComparison.Ordinal);
+            if (targetStart >= 0)
+            {
+                string targetPart = content.Substring(targetStart);
+                evt.TargetName = ExtractString(targetPart, "entityName=", " ");
+                evt.TargetCardId = ExtractString(targetPart, "cardId=", " ");
+                evt.TargetPlayerId = ExtractInt(targetPart, "player=");
+            }
+            if (evt.PlayerId == 0)
+            {
+                PLEntityState sourceEntity;
+                if (_entities.TryGetValue(evt.EntityId, out sourceEntity))
+                    evt.PlayerId = sourceEntity.PlayerId;
+            }
 
             switch (evt.BlockType)
             {
@@ -986,10 +1048,18 @@ namespace BobCoach.Engine
                 return;
             }
 
+            // R216/R233: 36.2.x 新格式授权——WAIT 标记须绑定已知普通发现上下文。
+            // 修复(用户报告: 巴罗夫领主T1发现面板误触发且不消失):
+            // 巴罗夫技能=猜获胜者(无发现机制), 但开局无关 WAIT 标记无条件授权 →
+            // 商店随从(BG36_921等)经 zone6 过渡被误判为发现候选, 面板卡死。
+            // 现在: 无 _currentEntityChoice(已解析的 EntityChoices 上下文)不授权。
             if (_currentEntityChoice == null
                 || !_currentEntityChoice.SourceGrantsOrdinaryDiscover)
                 return;
 
+            _waitMarkerAuthorized = true;
+            _waitMarkerAt = ts;
+            _waitMarkerId = markerId;
             if (markerId != _currentEntityChoice.Id
                 || markerTaskList != _currentEntityChoice.TaskList)
                 return;
@@ -1066,6 +1136,14 @@ namespace BobCoach.Engine
                 || !entityChoice.ShowMarkerReceived
                 || entityChoice.Fired)
                 return;
+            // R237: 同 choiceId 冷却(对抗性审查: choice 完成后上下文残留 → 同 id 复发)
+            if (_lastEmittedChoiceId >= 0
+                && entityChoice.Id == _lastEmittedChoiceId
+                && (ts - _lastEmittedAt) < EmitCooldown)
+            {
+                _discoverBuffer.Clear();
+                return;
+            }
 
             var candidates = new List<DiscoverCandidate>();
             foreach (var candidate in entityChoice.Candidates)
@@ -1080,6 +1158,56 @@ namespace BobCoach.Engine
                 candidates.Count,
                 string.Join(", ", candidates.Select(c => c.CardName ?? c.CardId ?? "?"))));
             EmitDiscoverOffered(candidates, ts, entityChoice);
+            // R234/R239: 发射后立即清理上下文——防 choiceId 复用/残留重发射
+            // (巴罗夫T8实测: 真实三连发现 choiceId=11 完成后, 13秒后同 id 空来源
+            // 二次发射, 候选被商店卡污染 → 面板卡死。Fired 上下文残留是根因。)
+            // R239 补齐: 旧格式清理原来不清授权标志(与 NewFormat 不对称) →
+            // 授权粘性 + 残留 _pendingChoiceId → 同 id 复发。现在全部清除。
+            _currentEntityChoice = null;
+            _pendingChoiceEntityIds.Clear();
+            _discoverBuffer.Clear();
+            _waitMarkerAuthorized = false;
+            _waitMarkerAt = DateTime.MinValue;
+            _waitMarkerId = -1;
+            _pendingChoiceId = -1;
+            _lastChoiceContextAt = DateTime.MinValue;  // 修复: 发射完成即视为无活跃选择上下文(勿留3s窗口)
+            // R237: 记录冷却
+            _lastEmittedChoiceId = entityChoice.Id;
+            _lastEmittedAt = ts;
+        }
+
+        // R216: 新格式(36.2.x) 发现事件发射——仅依赖 WAIT 授权 + FULL_ENTITY 候选
+        private void TryEmitOrdinaryDiscoverNewFormat(DateTime ts)
+        {
+            if (!_waitMarkerAuthorized || _newFormatFired) return;
+            // R237: 同 choiceId 冷却——choice 完成后授权残留导致的复发, 直接拦截
+            if (_lastEmittedChoiceId >= 0
+                && _pendingChoiceId == _lastEmittedChoiceId
+                && (ts - _lastEmittedAt) < EmitCooldown)
+            {
+                _discoverBuffer.Clear();
+                return;
+            }
+            // R217: 回填 choice id(面板按 id 关闭, -1 会导致面板异常)
+            if (_pendingChoiceId < 0) _pendingChoiceId = _waitMarkerId;
+            var candidates = new List<DiscoverCandidate>();
+            foreach (var candidate in _discoverBuffer)
+                AddOrdinaryDiscoverCandidate(candidates, candidate);
+            if (candidates.Count < 2 || candidates.Count > 3) return;
+            _newFormatFired = true;
+            DiagLog(string.Format("Discover via ChoiceCardMgr(36.2.x): {0} candidates [{1}]",
+                candidates.Count,
+                string.Join(", ", candidates.Select(c => c.CardName ?? c.CardId ?? "?"))));
+            EmitDiscoverOffered(candidates, ts, null);
+            // R234: 新格式发射后同样清理授权+缓冲, 防重复发射/面板残留
+            _waitMarkerAuthorized = false;
+            _waitMarkerAt = DateTime.MinValue;
+            _discoverBuffer.Clear();
+            _newFormatFired = false;
+            _lastChoiceContextAt = DateTime.MinValue;  // 发射完成即视为无活跃选择上下文
+            // R237: 记录本次发射的 choiceId 供冷却判断
+            _lastEmittedChoiceId = _pendingChoiceId;
+            _lastEmittedAt = ts;
         }
 
         private static void AddOrdinaryDiscoverCandidate(
@@ -1307,6 +1435,8 @@ namespace BobCoach.Engine
                 "BG28_550",
                 "BG31_890",
                 "BG34_330",
+                "TB_BaconShop_HP_075",
+                "BG25_HERO_100p",
                 "BG32_MagicItem_361",
                 "BG34_Treasure_606pe",
                 "BG27_Anomaly_716",
@@ -1314,14 +1444,42 @@ namespace BobCoach.Engine
 
         private static bool IsTrustedOrdinaryDiscoverSource(string sourceCardId)
         {
-            return !string.IsNullOrEmpty(sourceCardId)
-                && TrustedOrdinaryDiscoverSourceIds.Contains(sourceCardId);
+            if (!string.IsNullOrEmpty(sourceCardId)
+                && TrustedOrdinaryDiscoverSourceIds.Contains(sourceCardId))
+                return true;
+            if (string.IsNullOrEmpty(sourceCardId)) return false;
+
+            try
+            {
+                HearthDb.Card card;
+                if (!HearthDb.Cards.All.TryGetValue(sourceCardId, out card)
+                    || card == null)
+                    return false;
+                string text = card.GetLocText(HearthDb.Enums.Locale.zhCN)
+                    ?? card.Text ?? "";
+                text = Regex.Replace(text, "<[^>]+>", "");
+                return text.Contains("发现") || text.Contains("Discover");
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private bool IsOrdinaryDiscoverSourceAuthorized()
         {
-            return _currentEntityChoice != null
-                && _currentEntityChoice.SourceGrantsOrdinaryDiscover;
+            // R216: 新格式(36.2.x) WAIT 标记授权也通过(6秒窗口)
+            if (_currentEntityChoice != null
+                && _currentEntityChoice.SourceGrantsOrdinaryDiscover)
+                return true;
+            // R239 对抗性审查修复(审查B): 时区 Kind 缺陷——_waitMarkerAt 来自
+            // ExtractTimestamp(DateTime.TryParse → Kind=Unspecified 本地时间),
+            // 原代码用 UtcNow 相减在 UTC+8 机器上恒 -8h → 6秒窗口永不失效 →
+            // 授权粘性常驻 → choiceId 复用复发。按 Kind 分支(参照 HasActiveChoiceContext)。
+            return _waitMarkerAuthorized
+                && (_waitMarkerAt.Kind == DateTimeKind.Utc
+                    ? (DateTime.UtcNow - _waitMarkerAt)
+                    : (DateTime.Now - _waitMarkerAt)) < WaitMarkerWindow;
         }
 
         // ── 辅助解析 ──
@@ -1391,6 +1549,8 @@ namespace BobCoach.Engine
                 return;
             }
             if (string.IsNullOrEmpty(fe.CardId)) return;
+            // R217: 只看本机(player=4)实体, 排除对手/源实体污染候选
+            if (fe.PlayerId > 0 && fe.PlayerId != 4) return;
             // 仅关注BG随从/法术, 排除英雄/技能/饰品
             if (!IsDiscoverCandidateCardId(fe.CardId)) return;
 
@@ -1426,7 +1586,10 @@ namespace BobCoach.Engine
             }
             else
             {
-                TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
+                if (_currentEntityChoice != null)
+                    TryEmitOrdinaryDiscover(_currentEntityChoice, ts);
+                else
+                    TryEmitOrdinaryDiscoverNewFormat(ts); // R216
             }
         }
 
@@ -1498,6 +1661,10 @@ namespace BobCoach.Engine
         private void ClearOrdinaryChoiceContext()
         {
             _currentEntityChoice = null;
+            // R216: 选择完成时清除新格式授权
+            _waitMarkerAuthorized = false;
+            _newFormatFired = false;
+            _waitMarkerId = -1;
             _lastChoiceContextAt = DateTime.MinValue;
             _pendingChoiceEntityIds.Clear();
             _pendingChoiceId = -1;
@@ -1624,6 +1791,7 @@ namespace BobCoach.Engine
     public class PLEntityState
     {
         public int Id; public string Name = ""; public string CardId = "";
+        public int PlayerId;
         public string Zone = ""; public int ZonePos; public int Attack; public int Health;
         public int Cost; public bool IsGolden; public bool HasDivineShield;
         public int AlternateCost;

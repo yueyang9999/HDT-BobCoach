@@ -8,14 +8,22 @@ namespace BobCoach.Engine
         public static bool IsEligibleHeroCardId(string cardId)
         {
             if (string.IsNullOrEmpty(cardId)) return false;
-            if (cardId.IndexOf("_PH", StringComparison.Ordinal) >= 0
-                || cardId.IndexOf("_SKIN", StringComparison.Ordinal) >= 0)
+            if (cardId.IndexOf("_PH", StringComparison.Ordinal) >= 0)
                 return false;
             if (cardId.EndsWith("p", StringComparison.Ordinal)) return false;
             if (cardId.StartsWith("TB_BaconShop_HERO", StringComparison.Ordinal))
                 return true;
             return cardId.StartsWith("BG", StringComparison.Ordinal)
                 && cardId.IndexOf("_HERO_", StringComparison.Ordinal) >= 0;
+        }
+
+        public static string NormalizeHeroCardId(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return cardId ?? "";
+            int skinIndex = cardId.IndexOf("_SKIN_", StringComparison.Ordinal);
+            if (skinIndex > 0)
+                return cardId.Substring(0, skinIndex);
+            return cardId;
         }
     }
 }

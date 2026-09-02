@@ -25,6 +25,12 @@ internal static class AlgorithmFeatureBehavior
             VerifiesDeterministicPreferenceFreeExtraction();
             VerifiesSimulatorBranchesAreDetached();
             VerifiesActivateSimulationDeductsGoldAndTracksEntity();
+            VerifiesRiverSkipperSellAddsReplacementToHand();
+            VerifiesSellEnumerationSupportsCheapSpellTargets();
+            VerifiesStrikeOilSimulationRaisesMaxGold();
+            VerifiesTurnProjectorAdvancesGoldAndClearsTurnState();
+            VerifiesTurnProjectorAddsNextTurnGoldBonus();
+            VerifiesTurnProjectorCarriesPermanentGoldCapBonus();
             Console.WriteLine("PASS 45 named state-action features are deterministic and preference-free");
             return 0;
         }
@@ -430,6 +436,167 @@ internal static class AlgorithmFeatureBehavior
         AssertEqual(5, state.Gold, "source gold remains detached");
         AssertTrue(!state.ActivatedThisTurn.Contains(9001),
             "source activate state remains detached");
+    }
+
+    private static void VerifiesRiverSkipperSellAddsReplacementToHand()
+    {
+        var state = State(20);
+        state.Turn = 1;
+        state.Gold = 0;
+        state.LiveGold = 0;
+        state.BoardMinions.Add(new MinionData
+        {
+            CardId = "BG33_140",
+            EntityId = 9002,
+            Attack = 1,
+            Health = 1,
+            Tier = 1,
+        });
+        int handBefore = state.HandMinions.Count;
+
+        var next = new Simulator().Simulate(state, new GameAction
+        {
+            Type = ActionType.SellMinion,
+            TargetIndex = 0,
+            CardId = "BG33_140",
+        });
+
+        AssertEqual(handBefore + 1, next.HandMinions.Count,
+            "river skipper sell adds a tier-one replacement to hand");
+        AssertEqual(1, next.Gold, "river skipper sell grants one gold");
+        AssertEqual(1, next.LiveGold, "river skipper sell syncs live gold");
+        AssertTrue(next.HandMinions.Any(card => card != null
+            && !card.IsSpell && card.Tier == 1),
+            "river skipper replacement must be a tier-one minion");
+    }
+
+    private static void VerifiesSellEnumerationSupportsCheapSpellTargets()
+    {
+        var state = State(20);
+        state.Turn = 1;
+        state.Gold = 0;
+        state.LiveGold = 0;
+        state.BoardMinions.Add(new MinionData
+        {
+            CardId = "BG26_135",
+            EntityId = 9003,
+            Attack = 1,
+            Health = 1,
+            Tier = 1,
+        });
+        state.ShopMinions.Add(new MinionData
+        {
+            CardId = "BG28_810",
+            CardName = "酒馆币",
+            EntityId = 9004,
+            Tier = 1,
+            Cost = 1,
+            IsSpell = true,
+        });
+
+        var actions = new ActionEnumerator().Enumerate(state, state.HeroCardId);
+        AssertTrue(actions.Any(action => action.Type == ActionType.SellMinion
+            && action.TargetIndex == 0),
+            "one-gold-after-sell shop spell must generate a sell candidate");
+
+        var afterSell = new Simulator().Simulate(state, new GameAction
+        {
+            Type = ActionType.SellMinion,
+            TargetIndex = 0,
+            CardId = "BG26_135",
+        });
+        var afterSellActions = new ActionEnumerator().Enumerate(
+            afterSell, afterSell.HeroCardId);
+        AssertTrue(afterSellActions.Any(action => action.Type == ActionType.BuySpell
+            && action.TargetIndex == 1),
+            "one-gold-after-sell shop spell must become a buy candidate");
+    }
+
+    private static void VerifiesTurnProjectorAdvancesGoldAndClearsTurnState()
+    {
+        var state = State(20);
+        state.Turn = 5;
+        state.Gold = 0;
+        state.LiveGold = 0;
+        state.MaxGold = 7;
+        state.FreeRefreshCount = 1;
+        state.FirstPurchaseUsedThisTurn = true;
+        state.FirstMinionPurchaseUsedThisTurn = true;
+        state.HeroPowerExhausted = true;
+
+        var next = TurnProjector.Advance(state);
+
+        AssertEqual(6, next.Turn, "turn projector advances turn");
+        AssertEqual(8, next.MaxGold, "turn projector resets max gold");
+        AssertEqual(8, next.Gold, "turn projector resets gold");
+        AssertEqual(8, next.LiveGold, "turn projector resets live gold");
+        AssertEqual(1, next.FreeRefreshCount, "turn projector preserves stored free refresh");
+        AssertTrue(!next.FirstPurchaseUsedThisTurn, "turn projector clears first purchase");
+        AssertTrue(!next.HeroPowerExhausted, "turn projector refreshes hero power");
+        AssertTrue(next.RecentlyBoughtEntityIds.Count == 0,
+            "turn projector clears recent-buy protection");
+    }
+
+    private static void VerifiesStrikeOilSimulationRaisesMaxGold()
+    {
+        var state = State(20);
+        state.Turn = 3;
+        state.MaxGold = 5;
+        state.HandMinions.Add(new MinionData
+        {
+            CardId = "BG28_805",
+            EntityId = 9201,
+            IsSpell = true,
+            Cost = 0,
+        });
+
+        var next = new Simulator().Simulate(state, new GameAction
+        {
+            Type = ActionType.UseSpell,
+            TargetIndex = 0,
+            Cost = 0,
+        });
+
+        AssertEqual(6, next.MaxGold, "strike oil raises permanent max gold");
+        AssertEqual(0, next.HandMinions.Count, "strike oil is consumed");
+    }
+
+    private static void VerifiesTurnProjectorAddsNextTurnGoldBonus()
+    {
+        var state = State(20);
+        state.Turn = 1;
+        state.Gold = 0;
+        state.LiveGold = 0;
+        state.MaxGold = 3;
+        state.BoardMinions.Add(new MinionData
+        {
+            CardId = "BG26_135",
+            EntityId = 9100,
+            Attack = 1,
+            Health = 1,
+            Tier = 1,
+        });
+
+        var next = TurnProjector.Advance(state);
+
+        AssertEqual(2, next.Turn, "busker next turn remains turn two");
+        AssertEqual(5, next.MaxGold, "busker adds one gold to next-turn cap");
+        AssertEqual(5, next.Gold, "busker adds one gold to next-turn budget");
+    }
+
+    private static void VerifiesTurnProjectorCarriesPermanentGoldCapBonus()
+    {
+        var state = State(20);
+        state.Turn = 3;
+        state.Gold = 0;
+        state.LiveGold = 0;
+        state.MaxGold = 6;
+
+        var next = TurnProjector.Advance(state);
+
+        AssertEqual(4, next.Turn, "strike oil projection advances turn");
+        AssertEqual(7, next.MaxGold, "strike oil projection carries +1 max gold");
+        AssertEqual(7, next.Gold, "strike oil projection funds the raised cap");
     }
 
     private static IEnumerable<GameAction> SupportedActions()

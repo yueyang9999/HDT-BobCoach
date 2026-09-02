@@ -2,6 +2,15 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.0 - 2026-09-02
+
+- Promoted the Season14 live decision chain to production: hero skill, dark gift, hero playbook, activate, and live-gold safety wired into the visible recommendation path; legacy-v1.1.0 remains the deterministic fallback.
+- Added global event-level replay recording (replays/global_*.jsonl) capturing state, recommendation scores, player actions, power-log actions, choices, and combat events per game for offline decision-diff review.
+- Added shadow score serialization and decision-event recording so algorithmic recommendations can be compared against the player's actual decisions.
+- Added strategic planning/cross-turn projection (StrategicPlan, StrategicMemory, SequenceSearchPlanner, StrategySequencePlanner, TurnProjector, EarlyTurnRecruitGate) and hero playbook/rule catalogs derived from version-matched Season14 data.
+- Updated HDT build baseline from 1.56.1.0 to 1.57.1.0 and pinned assembly identity 1.2.0.0.
+- Expanded UI lifecycle and behavior test coverage (269 UI lifecycle assertions); kept shop layout and status-strip layout behavior stable (R223 values preserved as deployed).
+
 ## Unreleased
 
 - Established the clean public product repository, CI, community files, and maintainer documentation.
@@ -12,7 +21,7 @@ All notable changes are recorded here. The project follows Semantic Versioning f
 - Added an adjustable status-guidance font size with immediate preview and persisted settings.
 - Added an explicit unlock mode so the status panel can be dragged in the Hearthstone window, then automatically returns to mouse passthrough when settings close.
 - Persisted the custom status-panel position, added restore-default behavior, and kept the panel locked on startup.
-- Updated the build and dependency contracts for Hearthstone Deck Tracker `1.55.0.0` while preserving the offline-only runtime boundary.
+- Updated the build and dependency contracts for Hearthstone Deck Tracker `1.55.5.0` while preserving the offline-only runtime boundary.
 - Fixed shop UI timing and layout handling so recommendations remain aligned through shop refreshes, purchases, and current HDT overlay lifecycle events.
 
 ## 1.0.0 - 2026-07-28

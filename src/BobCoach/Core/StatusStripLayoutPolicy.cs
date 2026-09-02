@@ -18,11 +18,11 @@ namespace BobCoach.Engine
             Scale = scale;
             PrimaryFontSize = primaryFontSize;
             SecondaryFontSize = 12.0 * scale;
-            PrimaryLineHeight = 18.0 * scale;
-            EmphasisLineHeight = 19.0 * scale;
+            PrimaryLineHeight = 19.0 * scale;
+            EmphasisLineHeight = 21.0 * scale;  // R223 中文行高加高
             HorizontalPadding = 6.0 * scale;
-            NarrowMaxWidth = 260.0 * scale;
-            WideMaxWidth = 280.0 * scale;
+            NarrowMaxWidth = 280.0 * scale;
+            WideMaxWidth = 340.0 * scale;   // R223 动作链3行加宽
         }
     }
 

@@ -8,6 +8,7 @@ namespace BobCoach.Engine
         ScheduledLesser,
         ScheduledGreater,
         AnomalyExtra,
+        MysteryCubeActivation,
         OtherTrinket,
     }
 
@@ -55,6 +56,10 @@ namespace BobCoach.Engine
 
             bool scheduled = !string.IsNullOrEmpty(batch.SourceCardId)
                 && batch.SourceCardId.StartsWith("BG30_Trinket_", StringComparison.Ordinal);
+            bool mysteryCube = string.Equals(
+                batch.SourceCardId,
+                "BG30_MagicItem_703t",
+                StringComparison.Ordinal);
             bool anomalyExtra = !season14Active
                 && string.Equals(batch.SourceCardId, "BG30_MagicItem_703t", StringComparison.Ordinal);
             int targetTurn = scheduled && (observedTurn == 5 || observedTurn == 8)
@@ -64,6 +69,7 @@ namespace BobCoach.Engine
             var context = TrinketChoiceContext.OtherTrinket;
             if (scheduled && targetTurn == 6) context = TrinketChoiceContext.ScheduledLesser;
             else if (scheduled && targetTurn == 9) context = TrinketChoiceContext.ScheduledGreater;
+            else if (mysteryCube) context = TrinketChoiceContext.MysteryCubeActivation;
             else if (anomalyExtra) context = TrinketChoiceContext.AnomalyExtra;
 
             Current = new TrinketChoiceBinding
@@ -82,6 +88,13 @@ namespace BobCoach.Engine
         {
             binding = Current;
             if (binding == null) return false;
+            if (binding.Context == TrinketChoiceContext.MysteryCubeActivation
+                && turn > binding.ObservedTurn)
+            {
+                Current = null;
+                binding = null;
+                return false;
+            }
             // 带 choiceId 的 Power.log 批次是当前真实选择，生命周期由匹配的
             // CHOSEN/空批次结束。它可能在战斗中到达并跨入下一招募回合；
             // TargetTurn 只用于计划饰品分类和校准，不能充当过期条件。

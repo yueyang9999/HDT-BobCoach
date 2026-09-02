@@ -75,10 +75,13 @@ namespace BobCoach.Engine
         public int HeroPowerUnlockTier;
         public string HeroPowerSpecial = "";
         public bool HeroPowerHasDiscover;
+        public string LastUsedTavernSpellCardId = "";
+        public string LastUsedTavernSpellName = "";
         public bool ReplenishingShopActive;
         public bool PassiveChoiceActive;
         public bool NormalRecruitAvailable = true;
         public HashSet<int> ActivatedThisTurn = new HashSet<int>();
+        public HashSet<int> RecentlyBoughtEntityIds = new HashSet<int>();
         public HashSet<string> AvailableTribes = new HashSet<string>();
         public List<string> ActiveTrinkets = new List<string>();
         public HashSet<string> ClaimedScheduledGrantOccurrences = new HashSet<string>();
@@ -179,6 +182,7 @@ namespace BobCoach.Engine
     public sealed class HeroPowerState
     {
         public string CardId = "";
+        public string BaseHeroCardId = "";
         public int Cost;
         public bool IsActive;
         public bool IsUnlocked;
@@ -244,6 +248,11 @@ namespace BobCoach.Engine
         public static bool IsInitialized { get { return false; } }
         public static List<MinionData> SampleShop(int tavernTier, HashSet<string> availableTribes,
             EffectiveGameRules rules, int turn) { return new List<MinionData>(); }
+        public static MinionData SampleTierOneReplacement(
+            EffectiveGameRules rules, int turn)
+        {
+            return new MinionData { CardId = "sim_tier1", CardName = "随机1星随从", Tier = 1 };
+        }
     }
 
     public sealed class ActiveTrinketContext

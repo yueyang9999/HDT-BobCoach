@@ -4,7 +4,9 @@ namespace BobCoach.Engine
     public sealed class HeroPowerObservation
     {
         public string CardId = "";
+        public string BaseHeroCardId = "";
         public int EntityId;
+        public int ScriptData1 = -1;
         public int Cost;
         public bool Exhausted;
         public bool IsActive;
@@ -18,7 +20,9 @@ namespace BobCoach.Engine
     public sealed class HeroPowerState
     {
         public string CardId = "";
+        public string BaseHeroCardId = "";
         public int EntityId;
+        public int ScriptData1 = -1;
         public int Cost;
         public bool Exhausted;
         public bool IsPrimary;

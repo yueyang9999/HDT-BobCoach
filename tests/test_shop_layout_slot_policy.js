@@ -23,12 +23,18 @@ if (!plugin.includes("_shopLayoutSlotPolicy.Resolve("))
     fail("initial rendering must resolve layout through the shared stateful policy");
 if (!plugin.includes("_renderer.SyncShopTagPositions(_cachedState.ShopMinions, _shopLayoutDecision)"))
     fail("frame synchronization must receive the same saved layout decision");
-if (!plugin.includes("else if (!_shopLayoutSlotPolicy.AwaitingCompleteShop)"))
-    fail("a partial post-combat snapshot must not be allowed to masquerade as a confirmed purchase");
+if (plugin.includes("else if (!_shopLayoutSlotPolicy.AwaitingCompleteShop)"))
+    fail("a purchase must end the awaiting-complete window even during a partial snapshot");
+if (!plugin.includes("_shopLayoutSlotPolicy.ObservePurchase();"))
+    fail("purchase detection must confirm a real purchase through the shared policy");
 if (!plugin.includes("_shopLayoutSlotPolicy.MarkRefreshDetected()"))
     fail("only a detected entity refresh may advance the remembered shop tier");
-if (!plugin.includes("_shopLayoutSlotPolicy.ObserveShopTier(state.TavernTier, state.ShopMinions.Count)"))
-    fail("render evaluation must consume a pending refresh tier from the extracted shop state");
+if (!plugin.includes("_shopLayoutSlotPolicy.ObserveShopTier(")
+    || !plugin.includes("state.ShopMinions.Count")
+    || !plugin.includes("state.ShopSlotCount"))
+    fail("render evaluation must consume a pending refresh tier only after the full shop arrives");
+if (!plugin.includes("GetShopSlotCountForTier(layoutTier)"))
+    fail("initial shop labels must use the last real refresh tier, not the newly upgraded tier");
 if (plugin.includes("_lastShopContentHash") || plugin.includes("_lastShopRefreshTier"))
     fail("generic shop-content changes must not update the remembered refresh tier");
 if (!plugin.includes('"|L" + layoutDecision.LayoutCount'))

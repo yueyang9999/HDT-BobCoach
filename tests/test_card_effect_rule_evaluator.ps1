@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $candidates = @()
@@ -15,6 +15,7 @@ $output = Join-Path $env:TEMP "bobcoach_card_effect_rule_evaluator.exe"
 $sources = @(
     (Join-Path $root "src\BobCoach\Core\CardEffectFactSource.cs"),
     (Join-Path $root "src\BobCoach\Core\CardEffectRuleEvaluator.cs"),
+    (Join-Path $root "src\BobCoach\Core\StatGiftRuleEvaluator.cs"),
     (Join-Path $PSScriptRoot "CardEffectRuleEvaluatorBehavior.cs")
 )
 & $csc /nologo /langversion:latest /target:exe "/out:$output" @sources

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$HdtDirectory = $env:BOBCOACH_HDT_DIR,
     [string]$PluginDirectory = [IO.Path]::GetFullPath(
@@ -76,8 +76,8 @@ function Assert-HdtBaseline([string]$Path) {
         throw "HDT executable missing: $executable"
     }
     $version = [Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString()
-    if ($version -ne "1.55.0.0") {
-        throw "HDT baseline mismatch: expected 1.55.0.0, got $version"
+    if ($version -ne "1.57.1.0") {
+        throw "HDT baseline mismatch: expected 1.57.1.0, got $version"
     }
 }
 
@@ -329,6 +329,14 @@ try {
         (Join-Path $env:LOCALAPPDATA "HearthstoneDeckTracker\app-1.54.0\Plugins"),
         "D:\software\game\HDT-V2.7.0\HDT\Plugins"
     )
+    $teamEditionRoot = Get-ChildItem -LiteralPath "D:\software\game" -Directory -Filter "HDT*2.5.9" |
+        Select-Object -First 1
+    if ($teamEditionRoot -ne $null) {
+        $teamPlugin = Join-Path $teamEditionRoot.FullName "HDT\Plugins"
+        if (Test-Path -LiteralPath $teamPlugin -PathType Container) {
+            $localPluginDirs += $teamPlugin
+        }
+    }
     foreach ($localDir in $localPluginDirs) {
         if (!(Test-Path -LiteralPath $localDir -PathType Container)) { continue }
         $localDll = Join-Path $localDir "BobCoach.dll"

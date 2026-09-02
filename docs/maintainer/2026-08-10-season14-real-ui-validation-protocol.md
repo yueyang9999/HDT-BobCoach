@@ -10,7 +10,7 @@ Status: Ready for real-device validation
 ## 前置条件
 
 1. HDT 已安装 BobCoach v4：
-   - AppData：`C:\Users\19844\AppData\Roaming\HearthstoneDeckTracker\Plugins\BobCoach.dll`
+   - AppData：`%APPDATA%\HearthstoneDeckTracker\Plugins\BobCoach.dll`
    - 程序目录：`D:\software\game\HDT-V2.7.0\HDT\Plugins\BobCoach.dll`
 2. 两处 DLL SHA256 均为：
    `B0D9A1A272733D01ED9102EDDE32751155ECF39B3CAC2F4B55D4836AE15F32F3`

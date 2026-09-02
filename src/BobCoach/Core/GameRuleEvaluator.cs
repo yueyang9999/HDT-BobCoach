@@ -50,7 +50,20 @@ namespace BobCoach.Engine
                 return Math.Max(0, rules.FirstMinionPurchaseCost.Value);
             if (rules.MinionPurchaseCostOverride.HasValue)
                 return Math.Max(0, rules.MinionPurchaseCostOverride.Value);
-            return IsMillhouse(heroCardId) ? 2 : 3;
+            // R232: 辛达苟萨(冰冷静滞)"随从消耗(2)枚铸币"→ 2金; 米尔豪斯同理。
+            if (IsMillhouse(heroCardId) || IsSindragosaHero(heroCardId))
+                return 2;
+            return 3;
+        }
+
+        // R232: 辛达苟萨(冰冷静滞): 商店随从减1 + 随从2金 + 回合末冻结
+        public static bool IsSindragosaHero(string heroCardId)
+        {
+            if (string.IsNullOrEmpty(heroCardId)) return false;
+            return string.Equals(heroCardId, "TB_BaconShop_HERO_27",
+                    StringComparison.Ordinal)
+                || string.Equals(heroCardId, "TB_BaconShop_HERO_27_SKIN_D",
+                    StringComparison.Ordinal);
         }
 
         public static int? GetUpgradeCost(GameState state, EffectiveGameRules rules)

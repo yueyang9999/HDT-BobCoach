@@ -13,28 +13,38 @@ internal static class ShopLayoutSlotPolicyBehavior
             "a new game must start with the tier-one shop width");
 
         policy.MarkRefreshDetected();
-        Equal(true, policy.ObserveShopTier(2, 5),
+        Equal(true, policy.ObserveShopTier(2, 5, 5),
             "a real refresh must consume the current tavern tier");
         Equal(2, policy.LastRefreshTier,
             "a tier-two refresh must advance the remembered shop tier");
 
         policy.ObservePurchase();
-        Equal(false, policy.ObserveShopTier(3, 4),
+        Equal(false, policy.ObserveShopTier(3, 4, 5),
             "buying after upgrading must not masquerade as a refresh");
         Equal(2, policy.LastRefreshTier,
             "buying after upgrading must preserve the last real refresh tier");
 
         policy.BeginRefresh();
-        Equal(false, policy.ObserveShopTier(3, 4),
+        Equal(false, policy.ObserveShopTier(3, 4, 5),
             "a frozen cross-turn shop must not consume the current tavern tier");
         Equal(2, policy.LastRefreshTier,
             "a frozen cross-turn shop must keep its original layout tier");
 
         policy.MarkRefreshDetected();
-        Equal(true, policy.ObserveShopTier(3, 5),
+        Equal(true, policy.ObserveShopTier(3, 5, 5),
             "the next actual refresh must consume the upgraded tavern tier");
         Equal(3, policy.LastRefreshTier,
             "the next actual refresh must update the layout tier");
+
+        policy.MarkRefreshDetected();
+        Equal(false, policy.ObserveShopTier(6, 6, 7),
+            "upgrade to tier six with old six-card shop must not advance layout");
+        Equal(3, policy.LastRefreshTier,
+            "old shop before a tier-six refresh must keep the previous layout tier");
+        Equal(true, policy.ObserveShopTier(6, 7, 7),
+            "tier-six refresh must consume the new slot count after full shop appears");
+        Equal(6, policy.LastRefreshTier,
+            "tier-six refresh must update layout to seven-slot width");
 
         policy.BeginRefresh();
         var lateRightSlot = policy.Resolve(5, new[] { 0, 1, 2, 3 }, false);
@@ -65,6 +75,16 @@ internal static class ShopLayoutSlotPolicyBehavior
             "confirmed purchase must center the four remaining cards");
         Equal(true, afterPurchase.UseDenseSlots,
             "confirmed purchase must compact remaining cards");
+
+        policy.BeginRefresh();
+        policy.ObservePurchase();
+        var purchaseWhileWaiting = policy.Resolve(5, new[] { 0, 1, 2, 3 }, false);
+        Equal(4, purchaseWhileWaiting.LayoutCount,
+            "purchase during a partial snapshot must still center remaining cards");
+        Equal(true, purchaseWhileWaiting.UseDenseSlots,
+            "purchase during a partial snapshot must compact remaining cards");
+        Equal(false, policy.AwaitingCompleteShop,
+            "purchase during a partial snapshot must exit the waiting state");
 
         policy.BeginRefresh();
         var replenishing = policy.Resolve(5, new[] { 1, 3, 4 }, true);

@@ -12,6 +12,8 @@ internal static class Phase2DecisionServicesBehavior
             UnifiedActionScorerRejectsUnaffordableActions();
             HeroSkillDecisionServicePassiveNeverPrompts();
             HeroSkillDecisionServiceActiveChecksTargets();
+            HeroSkillDecisionServiceRespectsUsedThisTurn();
+            HeroSkillDecisionServiceResourceAllowsEmptyAndFullBoard();
             DarkGiftDecisionServiceRespectsOfficialGates();
             LiveSafetyGateSuppressesRiskyUpgrade();
             Console.WriteLine("PASS phase2 decision services assertions=" + _assertions);
@@ -55,6 +57,25 @@ internal static class Phase2DecisionServicesBehavior
         AssertTrue(valid.ShouldUse, "buff with target");
     }
 
+    private static void HeroSkillDecisionServiceResourceAllowsEmptyAndFullBoard()
+    {
+        var emptyBoard = HeroSkillDecisionService.Decide(
+            "Active", 1, 1, 1, 3, 3, 2, 0, 0, "Resource", false);
+        AssertTrue(emptyBoard.ShouldUse, "resource discover with no board target");
+
+        var fullBoard = HeroSkillDecisionService.Decide(
+            "Active", 1, 1, 1, 5, 3, 2, 7, 2, "Resource", false);
+        AssertTrue(fullBoard.ShouldUse, "resource discover with full board");
+    }
+
+    private static void HeroSkillDecisionServiceRespectsUsedThisTurn()
+    {
+        var used = HeroSkillDecisionService.Decide(
+            "Active", 1, 1, 1, 5, 3, 2, 3, 2, "Buff", true, true);
+        AssertFalse(used.ShouldUse, "active skill already used this turn");
+        AssertEqual("used-this-turn", used.Reason, "used reason");
+    }
+
     private static void DarkGiftDecisionServiceRespectsOfficialGates()
     {
         var early = DarkGiftDecisionService.Decide(
@@ -76,6 +97,16 @@ internal static class Phase2DecisionServicesBehavior
         var good = DarkGiftDecisionService.Decide(
             5, 8, 3, false, 10, 10, 30, 0.9, true);
         AssertTrue(good.ShouldOpen, "dark gift high value");
+
+        var hold = DarkGiftDecisionService.Decide(
+            5, 8, 3, false, 10, 10, 30, 0.7, true);
+        AssertFalse(hold.ShouldOpen, "dark gift holds early without a high value offer");
+        AssertEqual("hold-early", hold.Reason, "dark gift hold early reason");
+
+        var last = DarkGiftDecisionService.Decide(
+            10, 8, 1, false, 10, 10, 30, 0.5, true);
+        AssertTrue(last.ShouldOpen, "dark gift opens on last chance");
+        AssertEqual("last-open", last.Reason, "dark gift last chance reason");
     }
 
     private static void LiveSafetyGateSuppressesRiskyUpgrade()

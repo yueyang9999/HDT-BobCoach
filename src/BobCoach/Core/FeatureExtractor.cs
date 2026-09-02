@@ -69,11 +69,17 @@ namespace BobCoach.Engine
         };
         private const double GoldenMultiplier = 1.5;
 
-        // ── 数据驱动阈值 (来源: 438局V3.2回放分析) ──
-        /// <summary>升本安全边际 P25 (覆盖75%前4玩家)</summary>
+        // ── 数据驱动阈值 ──
+        // R227 重校准: 当前赛季实测 24 局 (rank5-8失败局 9 局 vs rank1-4成功局 15 局,
+        // 96 条升级事件, 训练集 upgrade_safety_training.json) 升级时板面战力分布:
+        //   升4本: 失败局均值2.0(25-75%: 1.0~2.6) vs 成功局均值5.2(25-75%: 2.4~7.4)
+        //   升5本: 失败局均值5.5(25-75%: 4.0~6.5) vs 成功局均值7.4(25-75%: 6.1~8.4)
+        //   升6本: 失败局均值7.4(25-75%: 5.7~9.0) vs 成功局均值15.2(25-75%: 11.1~17.1)
+        // 安全线取「成功局25%分位」, 低于此线升本 = 速败高发区, 必须延迟升本先稳场。
+        /// <summary>升本安全边际 P25 (R227: 成功局25%分位, 覆盖75%前4玩家)</summary>
         public static readonly Dictionary<int, double> LevelUpSafePower = new Dictionary<int, double>
         {
-            { 2, 0.9 }, { 3, 0.9 }, { 4, 1.6 }, { 5, 1.8 }, { 6, 4.0 }
+            { 2, 0.9 }, { 3, 1.5 }, { 4, 3.0 }, { 5, 6.5 }, { 6, 10.0 }
         };
         /// <summary>升本激进边际 P10 (覆盖90%前4玩家)</summary>
         public static readonly Dictionary<int, double> LevelUpAggressivePower = new Dictionary<int, double>
@@ -90,7 +96,10 @@ namespace BobCoach.Engine
         {
             { 2, 3 }, { 3, 2 }, { 4, 2 }, { 5, 2 }, { 6, 3 }
         };
-        /// <summary>标准升本回合 (22局0604-0606实测Top4: 3本T3.7, 4本T4.9, 6本T8.7)</summary>
+        /// <summary>标准升本回合 (22局0604-0606实测Top4: 3本T3.7, 4本T4.9, 6本T8.7)
+        /// R245 审查: 这是"不早于"下限(R-time 仅 Turn>=stdTurn 时允许升), 保留旧值——
+        /// 真实回放(25局)存在激进分位: T3升3本20%/T5升4本36%/T9升6本30%,
+        /// 收紧会误伤激进路径; 主动节奏由 R0 期望曲线驱动(R245 已对齐 T7→5本)</summary>
         public static readonly Dictionary<int, int> StandardLevelTurn = new Dictionary<int, int>
         {
             { 2, 2 }, { 3, 3 }, { 4, 5 }, { 5, 7 }, { 6, 9 }

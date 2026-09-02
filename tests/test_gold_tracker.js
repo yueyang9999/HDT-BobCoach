@@ -58,7 +58,7 @@ function applyBuyCost(g, p, minionCost) {
 function advance(g, p) {
     const turn = p.turn;
     const normalRecruitAvailable = p.normalRecruitAvailable !== false;
-    if (!normalRecruitAvailable) return 0;
+    if (!normalRecruitAvailable) return g.selfTrackedGold;
     let maxGold = Math.min(10, 2 + turn);
     maxGold = Math.min(20, maxGold + (p.goldPerTurn || 0));
     const effBonus = g.bonusGoldApplied ? 0 : (p.bonusGold || 0);
@@ -152,7 +152,9 @@ function advance(g, p) {
     g.prevHandCount = curHand;
     g.prevTavernTier = p.tavernTier;
     g.prevShopEntityIds = curShopIds;
-
+    // R251: spell-gold correction - positive only
+    const adj = p.goldAdjustment || 0;
+    if (adj > 0) g.selfTrackedGold = Math.min(maxGoldWithBonus, g.selfTrackedGold + adj);
     return Math.max(0, Math.min(maxGoldWithBonus, g.selfTrackedGold));
 }
 
@@ -182,6 +184,19 @@ function test(name, fn) {
 // 测试用例
 // ============================================================================
 
+
+test("[GT-R251] 法术给币正向修正(拼命挖掘等扣血得币)", () => {
+    const g = newTracker();
+    let cur = advance(g, frame(2, 4, [11,12,13,14], 0, 1, { hdtTag: 4 }));
+    if (cur !== 4) return "T2 start gold=" + cur;
+    cur = advance(g, frame(2, 3, [11,12,13], 0, 1, { hdtTag: 4, observedPurchaseCosts: [3], observedPurchasedMinionCount: 1 }));
+    if (cur !== 1) return "after buy gold=" + cur;
+    cur = advance(g, frame(2, 3, [11,12,13], 0, 1, { hdtTag: 4, goldAdjustment: 3 }));
+    if (cur !== 4) return "after spell +3 gold=" + cur;
+    cur = advance(g, frame(2, 3, [11,12,13], 0, 1, { hdtTag: 4, goldAdjustment: -5 }));
+    if (cur !== 4) return "negative rejected gold=" + cur;
+    return true;
+});
 test("[GT] maxGold 公式 Min(10,2+turn): T1=3 T2=4 T6=8 T8=10 T9封顶10", () => {
     const cases = [[1, 3], [2, 4], [6, 8], [8, 10], [9, 10], [12, 10]];
     for (const [turn, exp] of cases) {
@@ -387,7 +402,7 @@ test("[GT-T25] 无正常招募期保持0/unknown，不抬到maxGold=3", () => {
         hdtTag: -1,
         normalRecruitAvailable: false,
     }));
-    if (gold !== 0) return "无正常招募期首帧应为0/unknown，实际 " + gold;
+    if (gold !== -1) return "无正常招募期首帧应为-1/unknown，实际 " + gold;
     if (g.selfTrackedGold !== -1) return "无正常招募期不得执行回合基准，实际 " + g.selfTrackedGold;
 });
 
@@ -398,8 +413,36 @@ test("[GT-T25] 无正常招募期不做购买/刷新/升本/售出推进", () =>
     const gold = advance(g, frame(5, 3, [20, 21, 22, 23], 2, 1, {
         normalRecruitAvailable: false,
     }));
-    if (gold !== 0) return "无正常招募期返回值应为0/unknown，实际 " + gold;
+    if (gold !== before) return "无正常招募期应保留上一已知金币，实际 " + gold;
     if (g.selfTrackedGold !== before) return "无正常招募期不得推进自追踪金币，实际 " + g.selfTrackedGold;
+});
+
+test("[GT-T32] 新回合先处于非招募期，之后恢复招募必须重算满金基准", () => {
+    const g = newTracker();
+    const unavailableTurn1 = advance(g, frame(1, 0, [], 0, 1, {
+        hdtTag: 0,
+        normalRecruitAvailable: false,
+    }));
+    if (unavailableTurn1 !== -1) return "非招募期返回应为-1，实际 " + unavailableTurn1;
+    if (g.selfTrackedGold !== -1) return "首次非招募期不得执行回合基准，实际 " + g.selfTrackedGold;
+
+    const availableTurn1 = advance(g, frame(1, 4, [1, 2, 3, 4], 0, 1, {
+        hdtTag: 3,
+        normalRecruitAvailable: true,
+    }));
+    if (availableTurn1 !== 3) return "恢复招募后T1应为3，实际 " + availableTurn1;
+
+    const unavailableTurn2 = advance(g, frame(2, 4, [5, 6, 7, 8], 0, 1, {
+        hdtTag: 4,
+        normalRecruitAvailable: false,
+    }));
+    if (unavailableTurn2 !== 3) return "T2非招募帧应保留T1已知金币3，实际 " + unavailableTurn2;
+
+    const availableTurn2 = advance(g, frame(2, 4, [5, 6, 7, 8], 0, 1, {
+        hdtTag: 4,
+        normalRecruitAvailable: true,
+    }));
+    if (availableTurn2 !== 4) return "恢复招募后T2应为4，实际 " + availableTurn2;
 });
 
 // ============================================================================
@@ -413,6 +456,6 @@ if (failed > 0) {
     console.log(`\n${failed} 项失败 — 修复后再提交`);
     process.exit(1);
 } else {
-    console.log(`\n全部 ${passed} 项通过`);
+console.log(`\n全部 ${passed} 项通过`);
     process.exit(0);
 }

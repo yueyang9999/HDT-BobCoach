@@ -20,6 +20,7 @@ namespace BobCoach.Engine
                 var candidate = BuildStrategy(
                     fact.HeroCardId, "", text, fact.PowerCost, fact.HeroArmor);
                 ApplySpecialRules(candidate);
+                ApplyDataDrivenCalibration(candidate, fact.HeroCardId);  // R225 数据驱动英雄校准(最终覆盖规则)
 
                 candidate.PowerType = DerivePowerType(
                     fact.PowerCost,
@@ -101,6 +102,30 @@ namespace BobCoach.Engine
             if ((text.StartsWith("每", StringComparison.Ordinal)
                 || text.StartsWith("在每", StringComparison.Ordinal))
                 && text.Contains("时")) return "recurring-time-trigger";
+            // R236 描述式被动识别(对抗性审查修正 R236b/R236final):
+            // 顺序关键——先判明确主动动作词(优先), 再判明确被动描述词。
+            // 宽泛词(获得/铸币/在你)不单独判被动, 防误伤主动buff(使一个随从获得)。
+            string[] activeVerbs =
+            {
+                "选择一个", "选择2个", "使一个随从", "投一个", "获取一个",
+                "发现一个", "替换为", "偷取", "施放", "消灭一个", "购买一张",
+                "选择一条", "使一个友方随从", "触发一个", "投一",
+            };
+            // 文本以"被动"开头: 直接判被动(托里姆"被动 对战开始时,发现一个…")
+            if (text.StartsWith("被动", StringComparison.Ordinal))
+                return "passive-header";
+            foreach (var av in activeVerbs)
+                if (text.Contains(av)) return "";
+            string[] passiveMarkers =
+            {
+                "随从消耗", "购买随从和刷新", "购买随从", "出售一个随从",
+                "升级酒馆后", "回合结束时", "回合开始时", "每4个回合",
+                "每回合开始时", "在你使用3张", "在你购买一个", "在你升级",
+                "你的下一个", "被动", "开局时拥有", "每局对战限一次",
+                "在你出售一个", "当你购买", "战斗开始时", "在每个回合开始时",
+            };
+            foreach (var marker in passiveMarkers)
+                if (text.Contains(marker)) return "descriptive-passive";
             return "";
         }
 
@@ -200,6 +225,12 @@ namespace BobCoach.Engine
                 strat.LevelAggression = 0.90f;
                 strat.PowerValueBias = 0.12f;
             }
+            // R253: cost-decay hero (Togwaggle: next hero power costs 1 less each turn)
+            if (hint.Contains("铸币减少") || (hint.Contains("减少") && hint.Contains("英雄技能")))
+            {
+                strat.SpecialRule = "COST_DECAY";
+                strat.LevelAggression = 0.87f;
+            }
             if (hint.Contains("升级") && hint.Contains("发现"))
             {
                 strat.SpecialRule = "ELISE";
@@ -235,6 +266,7 @@ namespace BobCoach.Engine
                 strat.SpecialRule = "CHROMIE";
                 strat.PowerValueBias = 0.04f;
                 strat.BuyValueBias = 0.06f;
+                strat.LevelAggression = 0.75f;  // R224 数据驱动: 前期不升本(0/21 局 T1-T3)
             }
             if (hint.Contains("制造") && hint.Contains("亡灵") && hint.Contains("作品"))
             {
@@ -369,5 +401,128 @@ namespace BobCoach.Engine
             if (hint.Contains("发现")) tags.Add("DISCOVER");
             return tags;
         }
+
+                // R225/R226 数据驱动英雄校准(1281局): [levelAgg, earlySuppressTurn, buyBias, powerBias, refBias, earlyBuyBias, earlyRefBias]
+        private static readonly Dictionary<string, float[]> DataDrivenHeroParams = new Dictionary<string, float[]>(StringComparer.Ordinal)
+        {
+            { "BG24_HERO_100", new float[] { 0.9f, 0f, 0.039f, 0f, 0.012f, -0.17f, -0.03f } },
+            { "BG25_HERO_105", new float[] { 0.91f, 0f, 0.028f, 0f, 0.016f, -0.32f, 0.02f } },
+            { "BG20_HERO_202", new float[] { 0.93f, 0f, 0.039f, 0f, 0.02f, 0.08f, 0.04f } },
+            { "TB_BaconShop_HERO_27", new float[] { 0.95f, 0f, 0.041f, 0f, -0.034f, -0.04f, -0.61f } },
+            { "TB_BaconShop_HERO_50", new float[] { 0.86f, 0f, 0.018f, 0.02f, 0f, -0.17f, -0.18f } },
+            { "BG30_HERO_304", new float[] { 0.86f, 0f, 0.017f, 0f, 0f, -0.25f, -0.21f } },
+            { "BG31_HERO_811", new float[] { 0.86f, 0f, 0.014f, 0f, -0.01f, -0.23f, -0.31f } },
+            { "TB_BaconShop_HERO_10", new float[] { 0.83f, 0f, 0.071f, 0.02f, 0.006f, -0.03f, -0.11f } },
+            { "BG32_HERO_001", new float[] { 0.88f, 0f, 0.05f, 0f, 0.01f, -0.38f, -0.06f } },
+            { "BG23_HERO_305", new float[] { 0.87f, 0f, 0.035f, 0f, 0.002f, -0.3f, -0.16f } },
+            { "TB_BaconShop_HERO_16", new float[] { 0.62f, 4f, 0.006f, 0.05f, 0.022f, 0.68f, 0.09f } },
+            { "TB_BaconShop_HERO_34", new float[] { 0.89f, 0f, 0.031f, 0f, 0.01f, -0.27f, -0.08f } },
+            { "BG20_HERO_242", new float[] { 0.79f, 4f, 0.038f, 0f, -0.006f, -0.15f, -0.23f } },
+            { "BG21_HERO_010", new float[] { 0.8f, 0f, 0.045f, 0f, 0f, 0.45f, -0.18f } },
+            { "TB_BaconShop_HERO_62", new float[] { 0.9f, 0f, 0.039f, 0f, 0.012f, 0.05f, -0.01f } },
+            { "BG20_HERO_283", new float[] { 0.96f, 0f, 0.036f, 0f, 0.004f, 0f, -0.13f } },
+            { "TB_BaconShop_HERO_43", new float[] { 0.86f, 0f, 0.085f, 0.05f, 0.026f, 0.11f, 0.14f } },
+            { "TB_BaconShop_HERO_40", new float[] { 0.95f, 0f, 0.054f, 0f, 0.014f, -0.08f, -0.01f } },
+            { "BG34_HERO_001", new float[] { 0.95f, 0f, 0.026f, 0.05f, 0.018f, 0.16f, 0.04f } },
+            { "BG31_HERO_003", new float[] { 0.82f, 0f, 0.035f, 0.02f, 0.022f, 0.05f, 0.09f } },
+            { "BG20_HERO_280", new float[] { 0.92f, 0f, 0.036f, 0f, 0.028f, -0.05f, 0.17f } },
+            { "BG34_HERO_000", new float[] { 1.12f, 0f, 0.022f, 0f, 0.016f, -0.19f, -0.01f } },
+            { "TB_BaconShop_HERO_67", new float[] { 0.74f, 4f, 0.064f, 0.02f, 0.13f, 2.37f, 1.42f } },
+            { "TB_BaconShop_HERO_41", new float[] { 0.85f, 0f, 0.024f, 0f, 0.012f, -0.32f, -0.03f } },
+            { "BG32_HERO_002", new float[] { 0.87f, 0f, 0.032f, 0f, 0.012f, -0.02f, -0.03f } },
+            { "BG34_HERO_004", new float[] { 1.13f, 0f, 0.027f, 0f, 0.006f, -0.21f, -0.11f } },
+            { "BG27_HERO_801", new float[] { 0.91f, 0f, 0.033f, 0f, -0.004f, 0f, -0.23f } },
+            { "BG22_HERO_201", new float[] { 0.83f, 0f, 0.025f, 0f, 0.044f, 0.83f, 0.34f } },
+            { "TB_BaconShop_HERO_90", new float[] { 0.94f, 0f, 0.031f, 0f, 0.016f, 0.08f, -0.01f } },
+            { "BG21_HERO_020", new float[] { 0.82f, 0f, 0.025f, 0f, 0.044f, 0.4f, 0.37f } },
+            { "TB_BaconShop_HERO_57", new float[] { 0.76f, 4f, 0.022f, 0f, 0.092f, 0.49f, 0.99f } },
+            { "BG25_HERO_103", new float[] { 0.92f, 0f, 0.007f, 0f, 0.012f, -0.09f, -0.03f } },
+            { "BG31_HERO_005", new float[] { 0.89f, 0f, 0.023f, 0f, 0.024f, -0.17f, 0.14f } },
+            { "TB_BaconShop_HERO_49", new float[] { 0.8f, 0f, 0.071f, 0f, 0.01f, -0.02f, -0.06f } },
+            { "BG22_HERO_000", new float[] { 0.91f, 0f, 0.015f, 0f, 0.01f, -0.21f, -0.06f } },
+            { "TB_BaconShop_HERO_68", new float[] { 0.78f, 4f, 0.068f, 0f, 0.032f, 0.15f, 0.22f } },
+            { "TB_BaconShop_HERO_02", new float[] { 0.86f, 0f, 0.012f, 0f, 0.06f, -0.19f, 0.57f } },
+            { "BG35_HERO_001", new float[] { 0.76f, 4f, -0.001f, 0f, 0.026f, -0.11f, 0.14f } },
+            { "BG26_HERO_104", new float[] { 0.86f, 0f, 0.034f, 0f, 0.022f, -0.17f, 0.12f } },
+            { "BG28_HERO_400", new float[] { 0.83f, 0f, 0.012f, 0f, 0.028f, -0.21f, 0.19f } },
+            { "TB_BaconShop_HERO_702", new float[] { 0.99f, 0f, 0.008f, 0f, 0.028f, 0.12f, 0.17f } },
+            { "TB_BaconShop_HERO_44", new float[] { 0.9f, 0f, 0.02f, 0f, 0.062f, 0.59f, 0.59f } },
+            { "TB_BaconShop_HERO_35", new float[] { 0.95f, 0f, 0.028f, 0f, 0.008f, -0.1f, -0.11f } },
+            { "BG26_HERO_101", new float[] { 0.81f, 0f, 0.061f, 0f, 0.01f, -0.28f, -0.03f } },
+            { "TB_BaconShop_HERO_64", new float[] { 0.86f, 0f, 0.024f, 0.05f, 0.012f, 0f, -0.03f } },
+            { "BG28_HERO_800", new float[] { 0.76f, 4f, 0.03f, 0f, 0.014f, 0.14f, -0.01f } },
+            { "TB_BaconShop_HERO_74", new float[] { 0.87f, 0f, 0.031f, 0f, 0.036f, 0.22f, 0.27f } },
+            { "BG20_HERO_101", new float[] { 0.93f, 0f, 0.021f, 0f, -0.012f, -0.41f, -0.33f } },
+            { "TB_BaconShop_HERO_55", new float[] { 0.9f, 0f, 0.033f, 0f, 0.01f, -0.26f, -0.06f } },
+            { "BG21_HERO_000", new float[] { 0.93f, 0f, 0.025f, 0f, 0.01f, -0.26f, -0.06f } },
+            { "TB_BaconShop_HERO_22", new float[] { 0.92f, 0f, -0.002f, 0f, 0.002f, 0f, 0f } },
+            { "TB_BaconShop_HERO_23", new float[] { 0.88f, 0f, 0.024f, 0f, 0.002f, 0f, 0f } },
+            { "TB_BaconShop_HERO_94", new float[] { 0.82f, 0f, 0.045f, 0f, 0.056f, 0f, 0f } },
+            { "TB_BaconShop_HERO_75", new float[] { 0.94f, 0f, -0.007f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_21", new float[] { 0.88f, 0f, 0.033f, 0f, 0.014f, 0f, 0f } },
+            { "TB_BaconShop_HERO_93", new float[] { 0.88f, 0f, 0f, 0.05f, 0.026f, 0f, 0f } },
+            { "BG31_HERO_006", new float[] { 0.84f, 0f, 0.057f, 0f, 0.032f, 0f, 0f } },
+            { "TB_BaconShop_HERO_60", new float[] { 0.68f, 0f, 0.04f, 0f, -0.002f, 0f, 0f } },
+            { "TB_BaconShop_HERO_28", new float[] { 0.84f, 0f, 0.019f, 0f, 0.046f, 0f, 0f } },
+            { "BG23_HERO_303", new float[] { 0.84f, 0f, 0.016f, 0f, 0.012f, 0f, 0f } },
+            { "TB_BaconShop_HERO_12", new float[] { 0.8f, 4f, 0.026f, 0f, 0.086f, 0f, 0f } },
+            { "TB_BaconShop_HERO_56", new float[] { 0.81f, 0f, 0.015f, 0f, -0.004f, 0f, 0f } },
+            { "TB_BaconShop_HERO_42", new float[] { 0.95f, 0f, 0.014f, 0f, 0.034f, 0f, 0f } },
+            { "BG28_HERO_801", new float[] { 0.76f, 4f, 0.021f, 0f, 0.016f, 0f, 0f } },
+            { "BG34_HERO_002", new float[] { 0.76f, 4f, -0.001f, 0f, -0.024f, 0f, 0f } },
+            { "BG36_HERO_105", new float[] { 0.76f, 4f, 0.025f, 0.05f, -0.01f, 0f, 0f } },
+            { "BG20_HERO_282", new float[] { 0.93f, 0f, -0.011f, 0f, 0.012f, 0f, 0f } },
+            { "TB_BaconShop_HERO_11", new float[] { 0.76f, 4f, -0.004f, 0.05f, -0.004f, 0f, 0f } },
+            { "TB_BaconShop_HERO_18", new float[] { 0.82f, 0f, 0.048f, 0f, 0.02f, 0f, 0f } },
+            { "BG20_HERO_103", new float[] { 0.82f, 0f, 0.022f, 0f, -0.02f, 0f, 0f } },
+            { "TB_BaconShop_HERO_17", new float[] { 0.82f, 0f, 0.006f, 0f, 0.036f, 0f, 0f } },
+            { "TB_BaconShop_HERO_70", new float[] { 0.82f, 0f, 0.057f, 0f, 0.008f, 0f, 0f } },
+            { "TB_BaconShop_HERO_14", new float[] { 0.96f, 0f, -0.005f, 0f, 0.016f, 0f, 0f } },
+            { "BG22_HERO_007", new float[] { 0.87f, 0f, 0.002f, 0.05f, 0.008f, 0f, 0f } },
+
+            { "BG20_HERO_201", new float[] { 1.08f, 0f, 0.02f, 0f, 0f, 0f, 0f } },
+            { "BG20_HERO_301", new float[] { 0.96f, 0f, 0.015f, 0f, 0f, 0f, 0f } },
+            { "BG21_HERO_030", new float[] { 0.9f, 0f, 0.038f, 0f, 0f, 0f, 0f } },
+            { "BG22_HERO_003", new float[] { 0.72f, 0f, 0.025f, 0f, 0f, 0f, 0f } },
+            { "BG22_HERO_305", new float[] { 0.84f, 0f, 0.017f, 0f, 0f, 0f, 0f } },
+            { "BG23_HERO_201", new float[] { 0.72f, 0f, 0.028f, 0f, 0f, 0f, 0f } },
+            { "BG26_HERO_102", new float[] { 0.72f, 0f, 0.011f, 0f, 0f, 0f, 0f } },
+            { "BG31_HERO_801", new float[] { 0.66f, 0f, 0.013f, 0f, 0f, 0f, 0f } },
+            { "BG31_HERO_802", new float[] { 0.72f, 0f, 0.017f, 0f, 0f, 0f, 0f } },
+            { "BG33_HERO_001", new float[] { 0.81f, 0f, 0.017f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_08", new float[] { 0.9f, 0f, 0.015f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_25", new float[] { 0.84f, 0f, 0.049f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_36", new float[] { 1.08f, 0f, 0.046f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_38", new float[] { 0.72f, 0f, 0.019f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_39", new float[] { 0.72f, 0f, 0.021f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_45", new float[] { 0.72f, 0f, 0.012f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_53", new float[] { 0.72f, 0f, 0.005f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_58", new float[] { 0.81f, 0f, 0.026f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_59", new float[] { 0.81f, 0f, 0.027f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_71", new float[] { 0.72f, 0f, 0.018f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_72", new float[] { 0.72f, 0f, 0.014f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_76", new float[] { 0.72f, 0f, 0.014f, 0f, 0f, 0f, 0f } },
+            { "TB_BaconShop_HERO_78", new float[] { 0.72f, 0f, 0.014f, 0f, 0f, 0f, 0f } },
+            // R236 数据块已删除(2026-09-02): 63条与 R225 权威表(hero_strategy_params.json 97英雄)重复47键+
+            // 含16条 Buddy/非英雄实体, 导致 Dictionary 重复键→类型初始化异常→HeroPowerEngine 静默降级。
+            // 修复: 保留与权威数据源一致的 R225 97条; R236 "HP频率" 数据如需校准走独立通道。
+        };
+
+        // R225: 数据驱动英雄校准——按英雄应用核心参数
+        private static void ApplyDataDrivenCalibration(HeroStrategy strategy, string heroCardId)
+        {
+            if (strategy == null || string.IsNullOrEmpty(heroCardId)) return;
+            float[] prm;
+            if (!DataDrivenHeroParams.TryGetValue(heroCardId, out prm)) return;
+            strategy.LevelAggression = prm[0];
+            strategy.EarlyUpgradeSuppressTurn = (int)prm[1];
+            strategy.BuyValueBias = prm[2];
+            strategy.PowerValueBias = Math.Max(strategy.PowerValueBias, prm[3]);
+            strategy.RefreshValueBias = prm[4];
+            strategy.EarlyBuyBias = prm[5];
+            strategy.EarlyRefBias = prm[6];
+        }
     }
+
+
 }

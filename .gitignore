@@ -39,3 +39,13 @@ vm/
 *.iso
 *.qcow
 *.qcow2
+
+# Local semantic code index (CodeGraph)
+.codegraph/
+
+# Simulator test environment (never part of the distributable repository; AGENTS.md)
+tools/simulation/
+tools/evaluate/
+tools/verifier-mcp/
+docs/maintainer/t_session_state.md
+

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 function Invoke-Checked([string]$File, [string]$Kind) {
     $path = Join-Path $PSScriptRoot $File
@@ -24,7 +24,17 @@ foreach ($file in @(
     "test_season14_guide_sync.js",
     "test_season14_guide_fetch.js",
     "test_season14_guide_refresh.js",
-    "test_season14_guide_weights.js"
+    "test_season14_guide_weights.js",
+    "test_replay_decision_evaluator.js",
+    "test_replay_snapshot_analyzer.js",
+    "test_firestone_review_extract.js",
+    "test_firestone_xml_to_snapshot.js",
+    "test_global_replay_recorder.js",
+    "test_global_replay_analyzer.js",
+    "test_replay_sequence_compare.js",
+    "test_structural_upgrade_contract.js",
+    "test_t33_live_feedback_contract.js",
+    "test_t34_live_feedback_contract.js"
 )) {
     Invoke-Checked $file "node"
 }
@@ -57,8 +67,15 @@ foreach ($file in @(
     "test_prize_spell_source.ps1",
     "test_prize_spell_decision.ps1",
     "test_hero_strategy_rule_evaluator.ps1",
+    "test_early_turn_recruit_gate.ps1",
     "test_hero_strategy_source.ps1",
     "test_hero_strategy_facade.ps1",
+    "test_battlegrounds_hero_identity.ps1",
+    "test_hero_power_rule_catalog.ps1",
+    "test_hero_playbook_registry.ps1",
+    "test_hero_playbook_decision_service.ps1",
+    "test_opponent_tech_advisor.ps1",
+    "test_strategic_plan_contract.ps1",
     "test_anomaly_rule_evaluator_core.ps1",
     "test_anomaly_rule_evaluator_scheduled.ps1",
     "test_anomaly_fact_source.ps1",
@@ -74,7 +91,8 @@ foreach ($file in @(
     "test_season14_registries.ps1",
     "test_phase1_live_decision.ps1",
     "test_phase2_decision_services.ps1",
-    "test_phase3_recommendation_plan.ps1"
+    "test_phase3_recommendation_plan.ps1",
+    "test_t35_live_feedback.ps1"
 )) {
     Invoke-Checked $file "powershell"
 }

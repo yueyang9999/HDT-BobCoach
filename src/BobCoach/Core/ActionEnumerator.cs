@@ -17,6 +17,8 @@ namespace BobCoach.Engine
         PickDiscover,
         SendGoldToTeammate,
         Activate,
+        PlayMinion,
+        UseSpell,
     }
 
     public class GameAction
@@ -27,6 +29,7 @@ namespace BobCoach.Engine
         public string PurchaseSource = ""; // tavern_shop/unknown/timewarp
         public int Cost;
         public string Description;
+        public bool RequiresTarget;
     }
 
     /// <summary>
@@ -59,11 +62,13 @@ namespace BobCoach.Engine
             var actions = new List<GameAction>();
 
             if (state == null || !state.GameActive) return actions;
+            if (!state.NormalRecruitAvailable) return actions;
             var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
             int liveGold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
 
             // 购买: 随从需板面空间(<7), 法术需手牌空间(<10)
-            bool canBuyMinion = state.BoardMinions.Count < 7;
+            bool canBuyMinion = state.BoardMinions.Count < state.MaxBoardSlots
+                || state.HandMinions.Count < 10;
             bool canBuySpell = state.HandMinions.Count < 10;
             for (int i = 0; i < state.ShopMinions.Count; i++)
             {
@@ -89,6 +94,39 @@ namespace BobCoach.Engine
             }
 
             // 刷新
+            for (int i = 0; i < state.HandMinions.Count; i++)
+            {
+                var hand = state.HandMinions[i];
+                if (hand == null) continue;
+                if (hand.IsFrozen) continue;
+                if (hand.IsSpell)
+                {
+                    int spellCost = 0;
+                    if (liveGold < spellCost) continue;
+                    actions.Add(new GameAction
+                    {
+                        Type = ActionType.UseSpell,
+                        TargetIndex = i,
+                        CardId = hand.CardId,
+                        Cost = spellCost,
+                        Description = "use " + hand.CardName + " (" + spellCost + " gold)"
+                    });
+                }
+                else if (state.BoardMinions.Count < state.MaxBoardSlots
+                    && !HandCombatCardPolicy.ShouldKeepInHand(hand.CardId)
+                    && !HeroPowerRuleCatalog.ShouldHoldNextTurnGoldBattlecry(
+                        state.Turn, hand.CardId, state.HeroPowerCardId))
+                {
+                    actions.Add(new GameAction
+                    {
+                        Type = ActionType.PlayMinion,
+                        TargetIndex = i,
+                        CardId = hand.CardId,
+                        Description = "play " + hand.CardName
+                    });
+                }
+            }
+
             int refreshCost = GameRuleEvaluator.GetRefreshCost(state, heroCardId, rules);
             if (rules.ManualRefreshAllowed && liveGold >= refreshCost)
             {
@@ -126,15 +164,27 @@ namespace BobCoach.Engine
 
             // 出售随从: 仅满场(7)且卖后有金买牌时才生成
             // 板面不满→有空位直接买, 不需要卖
-            if (state.BoardMinions.Count >= state.MaxBoardSlots)
+            if (state.ShopMinions.Count > 0)
             {
                 int minBuyCost = GameRuleEvaluator.GetPurchaseCost(
                     state, new MinionData { Tier = 1 }, heroCardId, rules);
-                if (liveGold + 1 >= minBuyCost)
+                foreach (var shop in state.ShopMinions)
+                {
+                    if (shop == null) continue;
+                    int cost = GameRuleEvaluator.GetPurchaseCost(
+                        state, shop, heroCardId, rules);
+                    if (cost >= 0 && cost < minBuyCost)
+                        minBuyCost = cost;
+                }
+                bool hasSellableMinion = state.BoardMinions
+                    .Any(m => m != null && !m.Golden);
+                if (liveGold + 1 >= minBuyCost && hasSellableMinion)
                 {
                     var sellCandidates = state.BoardMinions
                         .Select((m, idx) => new { m, idx, power = m.Attack * 0.6 + m.Health * 0.4 + m.Tier * 2 })
-                        .Where(x => !x.m.Golden)
+                        .Where(x => !x.m.Golden
+                            && (state.RecentlyBoughtEntityIds == null
+                                || !state.RecentlyBoughtEntityIds.Contains(x.m.EntityId)))
                         .OrderBy(x => x.power)
                         .Take(3)
                         .ToList();
@@ -154,26 +204,43 @@ namespace BobCoach.Engine
             // 英雄技能：新状态模型按技能独立枚举；空列表时保留主技能兼容路径。
             if (state.HeroPowers != null && state.HeroPowers.Count > 0)
             {
+                var seenPowers = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var power in state.HeroPowers)
                 {
+                    if (power == null) continue;
+                    if (HeroPowerRuleCatalog.IsUtilityPowerCardId(power.CardId))
+                        continue;
+                    if (!string.IsNullOrEmpty(power.CardId)
+                        && !seenPowers.Add(power.CardId))
+                        continue;
                     if (rules.TeammateGoldTransfer != null
-                        && power != null
                         && power.CardId == rules.TeammateGoldTransfer.ActionCardId)
                         continue;
-                    if (power == null || !power.IsActive || !power.IsUnlocked
-                        || power.Exhausted || liveGold < power.Cost
+                    int effectiveCost = power.Cost > 0
+                        ? power.Cost
+                        : (state.HeroPowerCost >= 0 ? state.HeroPowerCost : power.Cost);
+                    if (!power.IsActive || !power.IsUnlocked
+                        || power.Exhausted || liveGold < effectiveCost
                         || !HasValidHeroPowerTarget(state, power)) continue;
-                    string costDesc = power.Cost > 0
-                        ? " (" + power.Cost + " 费)" : " (0费)";
+                    bool requiresTarget = HeroPowerRuleCatalog.RequiresTarget(
+                        GetHeroCardIdForPower(state, power),
+                        power.SpecialRule,
+                        power.HasDiscover);
+                    string costDesc = effectiveCost > 0
+                        ? " (" + effectiveCost + " 费)" : " (0费)";
                     actions.Add(new GameAction
                     {
                         Type = ActionType.UseHeroPower,
                         CardId = power.CardId,
+                        Cost = effectiveCost,
+                        RequiresTarget = requiresTarget,
+                        TargetIndex = requiresTarget ? 0 : -1,
                         Description = "使用技能" + costDesc
                     });
                 }
             }
             else if (state.HeroPowerType == "Active"
+                && !HeroPowerRuleCatalog.IsUtilityPowerCardId(state.HeroPowerCardId)
                 && (rules.TeammateGoldTransfer == null
                     || state.HeroPowerCardId != rules.TeammateGoldTransfer.ActionCardId)
                 && !state.HeroPowerExhausted
@@ -184,10 +251,16 @@ namespace BobCoach.Engine
             {
                 string costDesc = state.HeroPowerCost > 0
                     ? " (" + state.HeroPowerCost + " 费)" : " (0费)";
+                bool requiresTarget = HeroPowerRuleCatalog.RequiresTarget(
+                    state.HeroCardId,
+                    state.HeroPowerSpecial,
+                    state.HeroPowerHasDiscover);
                 actions.Add(new GameAction
                 {
                     Type = ActionType.UseHeroPower,
                     CardId = state.HeroPowerCardId,
+                    RequiresTarget = requiresTarget,
+                    TargetIndex = requiresTarget ? 0 : -1,
                     Description = "使用技能" + costDesc
                 });
             }
@@ -287,8 +360,13 @@ namespace BobCoach.Engine
         private static bool HasValidHeroPowerTarget(GameState state, HeroPowerState power = null)
         {
             var sp = power != null ? (power.SpecialRule ?? "") : (state.HeroPowerSpecial ?? "");
-            string hid = power != null && power.IsSecondary
-                ? "" : (state.HeroCardId ?? "");
+            string hid = power != null
+                ? (power.IsSecondary
+                    ? (power.BaseHeroCardId ?? "")
+                    : (!string.IsNullOrEmpty(power.BaseHeroCardId)
+                        ? power.BaseHeroCardId
+                        : state.HeroCardId ?? ""))
+                : (state.HeroCardId ?? "");
             int board = state.BoardMinions.Count;
             int shop = state.ShopMinions.Count;
 
@@ -308,6 +386,10 @@ namespace BobCoach.Engine
             if (hid.Contains("TB_BaconShop_HERO_39"))
                 return shop > 0;
 
+            // 钩牙船长: 移除一个友方随从后发现在低一级随从
+            if (hid.Contains("TB_BaconShop_HERO_67"))
+                return board > 0;
+
             // 巫妖王: 给任意随从(板面或商店)加复生
             if (hid.Contains("TB_BaconShop_HERO_22"))
                 return board > 0 || shop > 0;
@@ -326,7 +408,7 @@ namespace BobCoach.Engine
 
             // 努波顿: 获取上一法术复制(需使用过酒馆法术,游戏端校验)
             if (hid.Contains("BG31_HERO_003"))
-                return true;
+                return !string.IsNullOrEmpty(state.LastUsedTavernSpellCardId);
 
             // ═══════════════════════════════════════
             // special规则匹配
@@ -391,16 +473,25 @@ namespace BobCoach.Engine
             //   spell_synergy(法术协同), discover_buddy(发现伙伴), magnetic(磁力发现),
             //   armor_based_budget(护甲转铸币等), free_swap_per_turn(随机替换),
             //   replace_higher_tier(传递随从)
-            if (sp == "secret" || sp == "bet_on_winner" || sp == "choose_element"
-                || sp == "dig_golden" || sp == "steal_first_kill" || sp == "steal_opponent_board"
-                || sp == "refresh_to_spells" || sp == "blood_gem" || sp == "custom_undead"
-                || sp == "spell_synergy" || sp == "discover_buddy" || sp == "magnetic"
-                || sp == "armor_based_budget" || sp == "free_swap_per_turn"
-                || sp == "replace_higher_tier")
+            if (HeroPowerRuleCatalog.IsNoTargetSpecialRule(
+                    sp,
+                    hid,
+                    power != null ? power.CardId : state.HeroPowerCardId))
                 return true;
 
             // 未知special: 默认拒绝
             return false;
+        }
+
+        private static string GetHeroCardIdForPower(
+            GameState state, HeroPowerState power)
+        {
+            if (power == null) return state != null ? state.HeroCardId : "";
+            if (power.IsSecondary)
+                return power.BaseHeroCardId ?? "";
+            return !string.IsNullOrEmpty(power.BaseHeroCardId)
+                ? power.BaseHeroCardId
+                : (state != null ? state.HeroCardId : "");
         }
 
         private static bool HasPairOnBoard(GameState state)

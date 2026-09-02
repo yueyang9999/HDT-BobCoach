@@ -31,6 +31,409 @@ namespace BobCoach.Engine
             _reportedRawIds.Clear();  // 每局重置: 同一缺数据卡每局可重新记录一次, 避免静态集合跨会话无界增长
         }
 
+        private int GetBaseMinionCost(GameState state)
+        {
+            if (state == null) return 3;
+            return GameRuleEvaluator.GetPurchaseCost(
+                state, new MinionData { Tier = 1 }, state.HeroCardId,
+                state.EffectiveRules ?? EffectiveGameRules.Default);
+        }
+
+        private bool CanAffordAfterOneSell(GameState state, int cost)
+        {
+            if (state == null) return false;
+            if (state.Turn < 3) return false;
+            int liveGold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+            if (liveGold >= cost) return true;
+            if (cost > liveGold + 1) return false;
+            return FindWeakestSellCandidateIndex(state) >= 0
+                || HasEarlyTripleSellTarget(state);
+        }
+
+        private bool HasEarlyTripleSellTarget(GameState state)
+        {
+            if (state == null || state.Turn < 3 || state.Turn > 4
+                || state.BoardMinions == null || state.BoardMinions.Count < 4
+                || state.ShopMinions == null || state.ShopMinions.Count == 0)
+                return false;
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            return state.ShopMinions.Any(shop =>
+                shop != null && !shop.IsSpell
+                    && TripleRuleEvaluator.CompletesGolden(
+                        state, shop.CardId, rules))
+                && state.BoardMinions.Any(m => m != null && !m.Golden);
+        }
+
+        private bool HasAffordableSellTarget(GameState state, VisualPlan plan)
+        {
+            if (state == null || plan == null) return false;
+            if (plan.UpgradeHint != null
+                && plan.UpgradeHint.Cost > 0
+                && CanAffordAfterOneSell(state, plan.UpgradeHint.Cost))
+                return true;
+            if (state.ShopMinions == null || plan.ShopMarkers == null)
+                return false;
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            foreach (var marker in plan.ShopMarkers)
+            {
+                if (marker == null) continue;
+                if (marker.Level != DecisionLevel.Critical
+                    && marker.Level != DecisionLevel.Major)
+                    continue;
+                MinionData card = null;
+                if (marker.Index >= 0 && marker.Index < state.ShopMinions.Count)
+                    card = state.ShopMinions[marker.Index];
+                if (card == null && marker.EntityId > 0)
+                    card = state.ShopMinions.FirstOrDefault(
+                        m => m != null && m.EntityId == marker.EntityId);
+                if (card == null) continue;
+                int cost = GameRuleEvaluator.GetPurchaseCost(
+                    state, card, state.HeroCardId, rules);
+                if (CanAffordAfterOneSell(state, cost))
+                    return true;
+            }
+            return false;
+        }
+
+        private int FindWeakestSellCandidateIndex(GameState state)
+        {
+            if (state == null || state.BoardMinions == null || state.BoardMinions.Count == 0)
+                return -1;
+            int bestIdx = -1;
+            double bestScore = double.MaxValue;
+            for (int i = 0; i < state.BoardMinions.Count; i++)
+            {
+                var m = state.BoardMinions[i];
+                if (m == null || m.Golden) continue;
+                if (state.RecentlyBoughtEntityIds != null
+                    && state.RecentlyBoughtEntityIds.Contains(m.EntityId))
+                    continue;
+                if (IsVisualProtectedSellMinion(state, i, m)) continue;
+                if (m.Tier >= 3 && (m.DivineShield || m.Poisonous || m.Venomous)) continue;
+                if (m.Tier >= 4 && m.Reborn) continue;
+                if (m.Taunt)
+                {
+                    int tauntCount = state.BoardMinions.Count(
+                        other => other != null && other.Taunt);
+                    if (tauntCount <= 1) continue;
+                }
+                if (IsUniqueTribeVisual(state, i)) continue;
+                if (m.Tier >= 4 && (m.DivineShield || m.Poisonous || m.Venomous || m.Reborn))
+                    continue;
+                double score = m.Tier * 8.0 + m.Attack * 0.5 + m.Health * 0.3;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestIdx = i;
+                }
+            }
+            return bestIdx;
+        }
+
+        private bool IsSellWorthwhileForVisual(
+            GameState state,
+            VisualPlan plan,
+            List<ShopCardScore> cardScores,
+            MinionData sold,
+            int sellIndex)
+        {
+            if (state == null || plan == null || sold == null
+                || sellIndex < 0 || sellIndex >= state.BoardMinions.Count)
+                return false;
+            if (sold.Golden) return false;
+            if (IsVisualSelfReplacingEconomySell(state, sold)) return true;
+            if (IsVisualEarlyTripleSell(state, sold)) return true;
+            if (state.RecentlyBoughtEntityIds != null
+                && state.RecentlyBoughtEntityIds.Contains(sold.EntityId))
+                return false;
+            if (IsVisualProtectedSellMinion(state, sellIndex, sold)) return false;
+            // 2026-08-19 实测修复(B12): 对子保护——板面同名>=2(对子/三连机会)不推荐卖。
+            // 卖对子去买低价值牌=破坏三连机会, 越算越亏(用户艾萨拉回合5反馈)
+            if (state.BoardMinions != null)
+            {
+                int sameNameCount = 0;
+                foreach (var m in state.BoardMinions)
+                    if (m != null && m.CardId == sold.CardId && !m.Golden)
+                        sameNameCount++;
+                if (sameNameCount >= 2) return false;
+            }
+
+            int gold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+            if (state.BoardMinions.Count >= state.MaxBoardSlots)
+            {
+                var hand = state.HandMinions != null
+                    ? state.HandMinions.FirstOrDefault(card => card != null && !card.IsSpell)
+                    : null;
+                if (hand != null && IsVisualHandReplacementBetter(state, sold, hand))
+                    return true;
+            }
+            if (HasVisualShopTargetAfterSell(state, plan, cardScores, sold, gold))
+                return true;
+
+            if (plan.UpgradeHint != null
+                && plan.UpgradeHint.Cost > 0
+                && CanAffordAfterOneSell(state, plan.UpgradeHint.Cost)
+                && state.BoardMinions.Count >= 3
+                && IsVisualDeadWeight(state, sellIndex, sold))
+                return true;
+            return false;
+        }
+
+        private bool IsVisualEarlyTripleSell(
+            GameState state, MinionData sold)
+        {
+            if (state == null || sold == null || state.Turn < 3 || state.Turn > 4
+                || state.BoardMinions == null || state.BoardMinions.Count < 4
+                || state.ShopMinions == null || state.ShopMinions.Count == 0)
+                return false;
+            if (sold.Golden || sold.Tier > Math.Max(1, state.TavernTier))
+                return false;
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            bool tripleInShop = false;
+            foreach (var shop in state.ShopMinions)
+            {
+                if (shop == null || shop.IsSpell) continue;
+                if (!TripleRuleEvaluator.CompletesGolden(
+                    state, shop.CardId, rules))
+                    continue;
+                tripleInShop = true;
+                if (string.Equals(shop.CardId, sold.CardId,
+                    StringComparison.Ordinal)
+                    && TripleRuleEvaluator.CountOwnedCopies(
+                        state, sold.CardId) >= 2)
+                    return false;
+            }
+            if (!tripleInShop) return false;
+            double soldPower = VisualPower(sold);
+            double total = 0;
+            foreach (var m in state.BoardMinions)
+                if (m != null) total += VisualPower(m);
+            double avg = state.BoardMinions.Count > 0
+                ? total / state.BoardMinions.Count : 0;
+            return avg > 0 && soldPower <= avg * 1.05;
+        }
+
+        private static bool IsVisualSelfReplacingEconomySell(
+            GameState state, MinionData sold)
+        {
+            if (state == null || sold == null
+                || (sold.CardId != "BG33_140" && sold.CardId != "BG33_140_G"))
+                return false;
+            int gold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            foreach (var shop in state.ShopMinions ?? new List<MinionData>())
+            {
+                if (shop == null || !shop.IsSpell) continue;
+                int cost = GameRuleEvaluator.GetPurchaseCost(
+                    state, shop, state.HeroCardId, rules);
+                if (gold >= cost) continue;
+                if (gold + 1 < cost) continue;
+                if (shop.CardId == "BG28_810"
+                    || (shop.CardName != null
+                        && (shop.CardName.Contains("铸币")
+                            || shop.CardName.Contains("金币")
+                            || shop.CardName.Contains("币"))))
+                    return true;
+            }
+            return false;
+        }
+
+        private bool IsVisualProtectedSellMinion(
+            GameState state, int index, MinionData m)
+        {
+            if (state == null || m == null) return true;
+            if (m.Golden || IsVisualKnownEngine(m.CardId)) return true;
+            if (OpponentTechAdvisor.IsSituationalTechCard(m.CardId)
+                && OpponentTechAdvisor.IsTechCardWorthKeeping(
+                    m.CardId, state.Opponents))
+                return true;
+            if (m.Tier >= 4 && (m.DivineShield || m.Poisonous || m.Venomous || m.Reborn))
+                return true;
+            if (m.Tier >= 3 && (m.DivineShield || m.Poisonous || m.Venomous))
+                return true;
+            if (m.Taunt)
+            {
+                int tauntCount = state.BoardMinions.Count(
+                    other => other != null && other.Taunt);
+                if (tauntCount <= 1) return true;
+            }
+            return IsUniqueTribeVisual(state, index);
+        }
+
+        private bool IsVisualDeadWeight(
+            GameState state, int index, MinionData sold)
+        {
+            if (state == null || state.BoardMinions == null
+                || state.BoardMinions.Count < 3 || sold == null)
+                return false;
+            double soldPower = VisualPower(sold);
+            double total = 0;
+            foreach (var m in state.BoardMinions)
+                if (m != null) total += VisualPower(m);
+            double avg = total / state.BoardMinions.Count;
+            if (soldPower <= 0 || avg <= 0) return false;
+            return soldPower <= avg * 0.6
+                && sold.Tier <= Math.Max(1, state.TavernTier - 1);
+        }
+
+        private bool IsVisualHandReplacementBetter(
+            GameState state, MinionData sold, MinionData hand)
+        {
+            if (state == null || sold == null || hand == null) return false;
+            if (hand.Golden) return true;
+            double soldPower = VisualPower(sold);
+            double handPower = VisualPower(hand);
+            return handPower >= soldPower * 1.15;
+        }
+
+        private bool HasVisualShopTargetAfterSell(
+            GameState state,
+            VisualPlan plan,
+            List<ShopCardScore> cardScores,
+            MinionData sold,
+            int gold)
+        {
+            if (state == null || plan == null || state.ShopMinions == null
+                || sold == null)
+                return false;
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+
+            foreach (var marker in plan.ShopMarkers)
+            {
+                if (marker == null
+                    || (marker.Level != DecisionLevel.Critical
+                        && marker.Level != DecisionLevel.Major))
+                    continue;
+                var shop = ResolveShopMarkerCard(state, marker);
+                if (shop == null) continue;
+                int cost = GameRuleEvaluator.GetPurchaseCost(
+                    state, shop, state.HeroCardId, rules);
+                if (gold >= cost) continue;
+                if (gold + 1 < cost) continue;
+                if (IsVisualShopTargetBetter(state, marker, shop, sold, cardScores))
+                    return true;
+            }
+            return false;
+        }
+
+        private bool IsVisualShopTargetBetter(
+            GameState state,
+            ShopMarker marker,
+            MinionData shop,
+            MinionData sold,
+            List<ShopCardScore> cardScores)
+        {
+            if (state == null || marker == null || shop == null || sold == null)
+                return false;
+            if (marker.IsTriple) return true;
+            var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
+            if (TripleRuleEvaluator.CompletesGolden(state, shop.CardId, rules))
+                return true;
+
+            if (OpponentTechAdvisor.IsSituationalTechCard(shop.CardId)
+                && OpponentTechAdvisor.IsTechCardWorthKeeping(
+                    shop.CardId, state.Opponents))
+                return true;
+
+            double soldPower = VisualPower(sold);
+            double shopPower = VisualPower(shop);
+            var score = FindShopScore(cardScores, marker);
+            bool resourceOrCore = !shop.IsSpell && score != null
+                && (score.Value.IsCoreCombo
+                    || score.Value.EconomyValue >= 0.35f
+                    || IsVisualResourceRole(score.Value.PrimaryRole));
+            if (resourceOrCore)
+            {
+                if (shopPower >= soldPower * 1.05)
+                    return true;
+                double boardAvg = state.BoardMinions != null
+                    && state.BoardMinions.Count > 0
+                        ? state.BoardMinions
+                            .Where(minion => minion != null)
+                            .Sum(VisualPower)
+                            / state.BoardMinions.Count
+                        : 0;
+                return soldPower <= boardAvg * 0.65;
+            }
+            double threshold = shop.Tier >= sold.Tier ? 1.20 : 1.50;
+            return shopPower >= soldPower * threshold;
+        }
+
+        private MinionData ResolveShopMarkerCard(
+            GameState state, ShopMarker marker)
+        {
+            if (state == null || marker == null) return null;
+            if (marker.Index >= 0 && marker.Index < state.ShopMinions.Count)
+                return state.ShopMinions[marker.Index];
+            if (marker.EntityId > 0)
+                return state.ShopMinions.FirstOrDefault(
+                    card => card != null && card.EntityId == marker.EntityId);
+            return null;
+        }
+
+        private static ShopCardScore? FindShopScore(
+            List<ShopCardScore> cardScores, ShopMarker marker)
+        {
+            if (cardScores == null || marker == null) return null;
+            foreach (var score in cardScores)
+            {
+                if (score.Index == marker.Index
+                    || (marker.EntityId > 0 && score.EntityId == marker.EntityId))
+                    return score;
+            }
+            return null;
+        }
+
+        private static bool IsVisualResourceRole(CardClassifier.CardRole role)
+        {
+            return role == CardClassifier.CardRole.Economy
+                || role == CardClassifier.CardRole.ValueGenerator
+                || role == CardClassifier.CardRole.SpellSource
+                || role == CardClassifier.CardRole.SpellCopier;
+        }
+
+        private bool IsUniqueTribeVisual(GameState state, int index)
+        {
+            if (state == null || state.BoardMinions == null
+                || index < 0 || index >= state.BoardMinions.Count)
+                return false;
+            var target = state.BoardMinions[index];
+            if (target == null || string.IsNullOrEmpty(target.Tribe)) return false;
+            foreach (var tribe in MinionData.GetTribesArray(target.Tribe))
+            {
+                int count = state.BoardMinions.Count(
+                    other => other != null && other != target
+                        && !string.IsNullOrEmpty(other.Tribe)
+                        && MinionData.TribeMatches(other.Tribe, tribe));
+                if (count == 0) return true;
+            }
+            return false;
+        }
+
+        private static double VisualPower(MinionData m)
+        {
+            if (m == null) return 0;
+            return m.Attack * 0.6 + m.Health * 0.4 + m.Tier * 2.0;
+        }
+
+        private static bool IsVisualKnownEngine(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return false;
+            return VisualKnownEngineCards.Contains(cardId);
+        }
+
+        private static readonly HashSet<string> VisualKnownEngineCards =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "BG_LOE_077",
+                "BG26_ICC_901",
+                "BG35_883",
+                "BG33_825",
+                "BGS_018",
+                "BG_DAL_775",
+                "BG35_155",
+            };
+
         public VisualPlan CreateVisualPlan(
             GameState state,
             GameAction bestAction,
@@ -69,6 +472,7 @@ namespace BobCoach.Engine
                 };
             }
 
+            int maxRecos = Math.Max(2, state.ShopMinions.Count - 2);
             // ── 商店卡牌标记: 用途分类+质量评级+数量限制 ──
             if (cardScores != null && cardScores.Count > 0)
             {
@@ -78,13 +482,19 @@ namespace BobCoach.Engine
                 double range = maxS - minS;
                 if (range < 0.001) range = 1;
 
-                // 推荐数量限制: 面板槽位数-3, 至少1张
-                int maxRecos = Math.Max(2, state.ShopMinions.Count - 2);  // 至少推荐2张
                 // 米尔豪斯(买怪2费)等经济英雄 → 可以多推荐1张
                 if (_heroPower != null && !string.IsNullOrEmpty(state.HeroCardId))
                 {
-                    var hs = _heroPower.GetStrategy(state.HeroCardId);
+                    var hs = _heroPower.GetStrategyForPower(
+                        state.HeroCardId, state.HeroPowerCardId);
                     if (hs.SpecialRule == "MILLHOUSE") maxRecos = Math.Min(maxRecos + 1, state.ShopMinions.Count);
+                }
+                if (HeroPowerRuleCatalog.IsChromieHero(state.HeroCardId))
+                {
+                    int spellShopCount = state.ShopMinions.Count(
+                        m => m != null && m.IsSpell);
+                    if (spellShopCount >= 3)
+                        maxRecos = Math.Min(maxRecos + 2, state.ShopMinions.Count);
                 }
 
                 // 降低阈值确保有足够推荐: 后期放宽, 高本好牌不因归一化被埋没
@@ -175,24 +585,16 @@ namespace BobCoach.Engine
                 }
             }
 
+            PromoteBestShopAction(state, bestAction, cardScores, plan, maxRecos);
+
             // ── 卖牌标记: 仅在有明确升级场景时显示 (V1.1core: 匹配率从1.5%提升) ──
             if (bestAction != null && bestAction.Type == ActionType.SellMinion
                 && bestAction.TargetIndex >= 0
                 && bestAction.TargetIndex < state.BoardMinions.Count)
             {
                 var targetMinion = state.BoardMinions[bestAction.TargetIndex];
-                bool boardFull = state.BoardMinions.Count >= state.MaxBoardSlots;
-                bool handHasMinionWaiting = state.HandMinions != null
-                    && state.HandMinions.Any(hm => hm != null && !hm.IsSpell);
-                bool shouldSell = false;
-
-                // 条件1: 板面满 + 手牌有随从等待进场 (必须换牌)
-                if (boardFull && handHasMinionWaiting)
-                {
-                    shouldSell = true;
-                }
-
-                if (shouldSell)
+                if (IsSellWorthwhileForVisual(
+                    state, plan, cardScores, targetMinion, bestAction.TargetIndex))
                     plan.SellMarkers.Add(new SellMarker { BoardIndex = bestAction.TargetIndex });
             }
 
@@ -218,7 +620,9 @@ namespace BobCoach.Engine
             EvaluateHandCards(state, bestAction, plan);
 
             // 兜底：无标记但手上有可提升战力的卡→提示打出
-            if (plan.HandMarker == null && state.HandMinions.Count > 0 && state.BoardMinions.Count > 0)
+            if (plan.HandMarker == null && state.HandMinions.Count > 0
+                && state.BoardMinions.Count > 0
+                && state.BoardMinions.Count < state.MaxBoardSlots)
             {
                 // 找板面最弱随从的战力 (attack+health, 简单评估)
                 int weakestPower = int.MaxValue;
@@ -232,6 +636,8 @@ namespace BobCoach.Engine
                 {
                     var hm = state.HandMinions[i];
                     if (hm.IsFrozen || hm.IsSpell) continue;
+                    if (Engine.HandCombatCardPolicy.ShouldKeepInHand(hm.CardId)) continue;
+                    if (state.Turn == 1 && IsNextTurnGoldBattlecryCard(hm.CardId)) continue;
                     int handPwr = hm.Attack + hm.Health + (hm.Golden ? 5 : 0)
                         + (hm.Taunt ? 3 : 0) + (hm.DivineShield ? 5 : 0);
                     // 手牌战力必须 > 板面最弱的1.1倍才推荐打出 (以强换弱)
@@ -245,16 +651,61 @@ namespace BobCoach.Engine
             }
 
             // ── 目标提示: 任意手牌推荐卡都需要目标提示(法术/战吼/磁力等) ──
+            MinionData bestHandCard = null;
+            if (bestAction != null
+                && (bestAction.Type == ActionType.PlayMinion
+                    || bestAction.Type == ActionType.UseSpell)
+                && bestAction.TargetIndex >= 0
+                && bestAction.TargetIndex < state.HandMinions.Count)
+            {
+                bestHandCard = state.HandMinions[bestAction.TargetIndex];
+            }
+            bool isMethodicalMadness = bestHandCard != null
+                && bestHandCard.CardId == "BG36_880";
+
             bool handIsTargeted = plan.HandMarker != null &&
                 plan.HandMarker.Index < state.HandMinions.Count &&
                 IsTargetedCard(state.HandMinions[plan.HandMarker.Index]);
             bool isMagnetic = handIsTargeted &&
                 CardNameService.GetName(state.HandMinions[plan.HandMarker.Index].CardId).Contains("磁力");
             bool heroTargeted = bestAction != null && bestAction.Type == ActionType.UseHeroPower
-                && state.BoardMinions.Count > 0;
+                && bestAction.RequiresTarget;
             if (handIsTargeted || heroTargeted)
             {
-                if (isMagnetic)
+                if (isMethodicalMadness)
+                {
+                    int tgtIdx = -1;
+                    double tgtScore = double.MinValue;
+                    for (int bi = 0; bi < state.BoardMinions.Count; bi++)
+                    {
+                        var bm = state.BoardMinions[bi];
+                        if (bm == null || string.IsNullOrEmpty(bm.Tribe)
+                            || !MinionData.TribeMatches(bm.Tribe, "恶魔"))
+                            continue;
+                        double sc = bm.Attack * 1.5 + bm.Health * 0.5
+                            + bm.Tier * 3.0;
+                        if (!string.IsNullOrEmpty(plan.Status.CompDir)
+                            && MinionData.TribeMatches(
+                                bm.Tribe, plan.Status.CompDir))
+                            sc *= 1.5;
+                        if (bm.Golden) sc -= 2.0;
+                        if (sc > tgtScore)
+                        {
+                            tgtScore = sc;
+                            tgtIdx = bi;
+                        }
+                    }
+                    if (tgtIdx >= 0)
+                    {
+                        plan.TargetHints.Add(new TargetHint
+                        {
+                            BoardIndex = tgtIdx,
+                            Reason = "目标恶魔",
+                            Level = DecisionLevel.Major,
+                        });
+                    }
+                }
+                else if (isMagnetic)
                 {
                     // 磁力: 所有场上非金机械都是合法目标
                     for (int bi = 0; bi < state.BoardMinions.Count; bi++)
@@ -310,39 +761,75 @@ namespace BobCoach.Engine
                             else parts.Add("买");
                             break;
                         case ActionType.Upgrade: parts.Add("升本→" + (state.TavernTier + 1) + "本"); break;
-                        case ActionType.Refresh: break; // 不显示默认文字
-                        case ActionType.FreezeShop: break; // 不显示默认文字
-                        case ActionType.BuySpell: parts.Add("法术"); break;
+                        // 2026-08-19 实测反馈: 刷新后面不要跟随从名(刷新后商店内容会变,
+                        // 指向当前商店随从无意义) → 显示"刷新酒馆"
+                        case ActionType.Refresh: parts.Add("刷新酒馆"); break;
+                        case ActionType.FreezeShop: parts.Add("冻结"); break;
+                        case ActionType.BuySpell:
+                            if (bestAction.TargetIndex < state.ShopMinions.Count)
+                            {
+                                var spell = state.ShopMinions[bestAction.TargetIndex];
+                                string spellName = !string.IsNullOrEmpty(spell.CardName)
+                                    ? spell.CardName
+                                    : CardNameService.GetName(spell.CardId);
+                                parts.Add("买→" + spellName);
+                            }
+                            else parts.Add("买法术");
+                            break;
                         case ActionType.SellMinion:
                             if (bestAction.TargetIndex >= 0 && bestAction.TargetIndex < state.BoardMinions.Count)
                                 parts.Add("卖→" + CardNameService.GetName(
                                     state.BoardMinions[bestAction.TargetIndex].CardId));
                             else parts.Add("卖");
                             break;
+                        // 2026-08-19 A2: 发动机制提示——发动类动作无文字提示,
+                        // UI 只有高亮没有说明, 玩家不知道要做什么(用户实测反馈)
+                        case ActionType.Activate:
+                            if (bestAction.TargetIndex >= 0 && bestAction.TargetIndex < state.BoardMinions.Count)
+                                parts.Add("发动→" + CardNameService.GetName(
+                                    state.BoardMinions[bestAction.TargetIndex].CardId));
+                            else parts.Add("发动");
+                            break;
                     }
                 }
+                bool handActionAdded = false;
                 if (plan.HandMarker != null && plan.HandMarker.Index < state.HandMinions.Count)
                 {
                     var hName = CardNameService.GetName(
                         state.HandMinions[plan.HandMarker.Index].CardId);
+                    bool handIsSpell = state.HandMinions[plan.HandMarker.Index].IsSpell;
+                    string handPrefix = handIsSpell ? "使用→" : "打→";
+                    if (bestAction != null
+                        && bestAction.TargetIndex == plan.HandMarker.Index
+                        && bestAction.Type == ActionType.UseSpell)
+                        handPrefix = "使用→";
                     if (parts.Count == 0 || !parts[parts.Count - 1].EndsWith(hName))
-                        parts.Add("打→" + hName);
+                        parts.Add(handPrefix + hName);
+                    if (bestAction != null
+                        && bestAction.TargetIndex == plan.HandMarker.Index)
+                        handActionAdded = true;
                 }
                 // 第一步: 英雄技能
                 if (bestAction != null && bestAction.Type == ActionType.UseHeroPower)
                 {
-                    if (plan.TargetHints.Count > 0 && plan.TargetHints[0].BoardIndex < state.BoardMinions.Count)
+                    if (bestAction.RequiresTarget
+                        && plan.TargetHints.Count > 0
+                        && plan.TargetHints[0].BoardIndex < state.BoardMinions.Count)
                         parts.Add("技→" + CardNameService.GetName(
                             state.BoardMinions[plan.TargetHints[0].BoardIndex].CardId));
                     else parts.Add("技");
                 }
                 // 第二步(二步前瞻): 买→技 / 买→买等, 带目标对象
-                if (secondStep != null)
+                // 2026-08-19 实测反馈: 第一步为"刷新酒馆"时抑制二步随从指向——
+                // 刷新后商店内容变化, 指向当前商店的随从/法术可能不存在
+                if (secondStep != null
+                    && !(bestAction != null && bestAction.Type == ActionType.Refresh))
                 {
                     switch (secondStep.Type)
                     {
                         case ActionType.UseHeroPower:
-                            if (secondStepState != null && secondStep.TargetIndex >= 0
+                            if (secondStep.RequiresTarget
+                                && secondStepState != null && secondStep.TargetIndex >= 0
                                 && secondStep.TargetIndex < secondStepState.BoardMinions.Count)
                                 parts.Add("技→" + CardNameService.GetName(
                                     secondStepState.BoardMinions[secondStep.TargetIndex].CardId));
@@ -357,6 +844,19 @@ namespace BobCoach.Engine
                             else
                                 parts.Add("再买");
                             break;
+                        case ActionType.BuySpell:
+                            if (secondStepState != null && secondStep.TargetIndex >= 0
+                                && secondStep.TargetIndex < secondStepState.ShopMinions.Count)
+                            {
+                                var spell = secondStepState.ShopMinions[secondStep.TargetIndex];
+                                string spellName = !string.IsNullOrEmpty(spell.CardName)
+                                    ? spell.CardName
+                                    : CardNameService.GetName(spell.CardId);
+                                parts.Add("买→" + spellName);
+                            }
+                            else
+                                parts.Add("再买法术");
+                            break;
                         case ActionType.SellMinion:
                             if (secondStepState != null && secondStep.TargetIndex >= 0
                                 && secondStep.TargetIndex < secondStepState.BoardMinions.Count)
@@ -369,6 +869,67 @@ namespace BobCoach.Engine
                             parts.Add("刷新"); break;
                         case ActionType.Upgrade:
                             parts.Add("升"); break;
+                        // 2026-08-19 A2: 二步发动提示
+                        case ActionType.Activate:
+                            if (secondStepState != null && secondStep.TargetIndex >= 0
+                                && secondStep.TargetIndex < secondStepState.BoardMinions.Count)
+                                parts.Add("发动→" + CardNameService.GetName(
+                                    secondStepState.BoardMinions[secondStep.TargetIndex].CardId));
+                            else
+                                parts.Add("发动");
+                            break;
+                    }
+                }
+                if (bestAction != null
+                    && (bestAction.Type == ActionType.PlayMinion || bestAction.Type == ActionType.UseSpell))
+                {
+                    string handName = bestAction.TargetIndex >= 0
+                        && bestAction.TargetIndex < state.HandMinions.Count
+                        ? CardNameService.GetName(state.HandMinions[bestAction.TargetIndex].CardId)
+                        : "";
+                    if (!handActionAdded)
+                    {
+                        string prefix = bestAction.Type == ActionType.UseSpell
+                            ? "使用→" : "打出→";
+                        string suffix = "";
+                        if (bestAction.Type == ActionType.UseSpell
+                            && bestAction.TargetIndex >= 0
+                            && bestAction.TargetIndex < state.HandMinions.Count
+                            && IsTargetedCard(state.HandMinions[bestAction.TargetIndex])
+                            && plan.TargetHints.Count > 0
+                            && plan.TargetHints[0].BoardIndex >= 0
+                            && plan.TargetHints[0].BoardIndex < state.BoardMinions.Count)
+                        {
+                            suffix = "→" + CardNameService.GetName(
+                                state.BoardMinions[plan.TargetHints[0].BoardIndex].CardId);
+                        }
+                        else if (bestAction.Type == ActionType.UseSpell
+                            && IsTargetedCard(state.HandMinions[bestAction.TargetIndex]))
+                        {
+                            // 2026-08-19 实测修复(A3): 指向性法术但无可用目标——
+                            // 不显示误导的"直接使用", 标注缺目标(该法术当前不可用)
+                            suffix = "→缺目标";
+                        }
+                        else if (bestAction.Type == ActionType.UseSpell)
+                        {
+                            suffix = "→直接使用";
+                        }
+                        parts.Add(prefix + handName + suffix);
+                    }
+                    else if (bestAction.Type == ActionType.UseSpell
+                        && plan.TargetHints.Count > 0
+                        && plan.TargetHints[0].BoardIndex >= 0
+                        && plan.TargetHints[0].BoardIndex < state.BoardMinions.Count
+                        && parts.Count > 0)
+                    {
+                        string target = CardNameService.GetName(
+                            state.BoardMinions[plan.TargetHints[0].BoardIndex].CardId);
+                        parts[parts.Count - 1] += "→" + target;
+                    }
+                    else if (bestAction.Type == ActionType.UseSpell
+                        && parts.Count > 0)
+                    {
+                        parts[parts.Count - 1] += "→直接使用";
                     }
                 }
                 if (parts.Count > 0)
@@ -385,12 +946,52 @@ namespace BobCoach.Engine
 
             // ── 冻结提示: 只保留可由当前局面确认的三连缺钱条件 ──
             // 禁止以"高本好牌/高星级/好牌缺钱"为由冻结(规格明令)。T1-T3 不显示冻结提示。
-            if (!state.FrozenShop && state.ShopMinions.Count > 0 && state.Turn > 3)
+            int liveGoldForFreeze = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+            bool eudoraEarly = HeroPowerRuleCatalog.IsEudoraHero(state.HeroCardId)
+                && state.Turn <= 6 && liveGoldForFreeze < 3;
+            if (!state.FrozenShop && state.ShopMinions.Count > 0
+                && (state.Turn > 3 || eudoraEarly
+                    || (state.FreeRefreshCount > 0 && liveGoldForFreeze < 3
+                        && cardScores != null && cardScores.Any(cs =>
+                            cs.IsTriple || cs.IsCoreCombo
+                            || cs.EconomyValue >= 0.35f
+                            || (!cs.IsSpell && cs.Tier >= 2)))))
             {
                 int tripleCnt = cardScores != null ? cardScores.Count(cs => cs.IsTriple) : 0;
-                bool shortOnGold = state.Gold < 3;
+                bool shortOnGold = liveGoldForFreeze < 3;
+                bool preserveFreeRefresh = state.FreeRefreshCount > 0 && shortOnGold
+                    && cardScores != null && cardScores.Any(cs =>
+                        cs.IsTriple || cs.IsCoreCombo
+                        || cs.EconomyValue >= 0.35f
+                        || (!cs.IsSpell && cs.Tier >= 2));
 
-                if (tripleCnt >= 1 && shortOnGold)
+                if (eudoraEarly)
+                {
+                    bool hasWorthFreeze = tripleCnt >= 1
+                        || (cardScores != null && cardScores.Any(cs =>
+                            cs.IsTriple || cs.IsCoreCombo
+                            || cs.EconomyValue >= 0.35f
+                            || (!cs.IsSpell && cs.Tier >= 2)));
+                    if (hasWorthFreeze)
+                    {
+                        plan.FreezeHint = new FreezeHint
+                        {
+                            Active = true,
+                            Urgent = false,
+                            Reason = "留1金挖宝",
+                        };
+                    }
+                }
+                else if (preserveFreeRefresh)
+                {
+                    plan.FreezeHint = new FreezeHint
+                    {
+                        Active = true,
+                        Urgent = false,
+                        Reason = "留免费刷新",
+                    };
+                }
+                else if (tripleCnt >= 1 && shortOnGold)
                 {
                     plan.FreezeHint = new FreezeHint
                     {
@@ -441,6 +1042,85 @@ namespace BobCoach.Engine
             else { plan.Status.PickLine = ""; }
 
             return plan;
+        }
+
+        private static void PromoteBestShopAction(
+            GameState state,
+            GameAction bestAction,
+            List<ShopCardScore> cardScores,
+            VisualPlan plan,
+            int maxRecos)
+        {
+            if (state == null || plan == null || bestAction == null
+                || state.ShopMinions == null
+                || bestAction.TargetIndex < 0
+                || bestAction.TargetIndex >= state.ShopMinions.Count)
+                return;
+            if (bestAction.Type != ActionType.BuyMinion
+                && bestAction.Type != ActionType.BuySpell)
+                return;
+
+            var shop = state.ShopMinions[bestAction.TargetIndex];
+            if (shop == null) return;
+
+            ShopCardScore selected = default(ShopCardScore);
+            bool found = false;
+            if (cardScores != null)
+            {
+                foreach (var score in cardScores)
+                {
+                    if (score.Index != bestAction.TargetIndex
+                        && (shop.EntityId <= 0 || score.EntityId != shop.EntityId))
+                        continue;
+                    selected = score;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                selected = new ShopCardScore
+                {
+                    Index = bestAction.TargetIndex,
+                    ShopPosition = shop.Position,
+                    EntityId = shop.EntityId,
+                    Score = 1.0,
+                    CardName = shop.CardName,
+                    Tribe = shop.Tribe,
+                    Tier = shop.Tier,
+                    IsSpell = shop.IsSpell,
+                };
+            }
+
+            var existing = plan.ShopMarkers.FirstOrDefault(marker =>
+                marker != null
+                && (marker.Index == selected.Index
+                    || (selected.EntityId > 0 && marker.EntityId == selected.EntityId)));
+            if (existing != null)
+                plan.ShopMarkers.Remove(existing);
+
+            plan.ShopMarkers.Insert(0, new ShopMarker
+            {
+                Index = selected.Index,
+                ShopPosition = selected.ShopPosition,
+                EntityId = selected.EntityId,
+                Level = DecisionLevel.Major,
+                Score = existing != null ? existing.Score : 0.85,
+                CardName = selected.CardName,
+                Tribe = selected.Tribe,
+                Tier = selected.Tier,
+                Reason = selected.Reason ?? "推荐动作",
+                IsSpell = selected.IsSpell,
+                IsTriple = selected.IsTriple,
+                Purpose = ClassifyCardPurpose(selected),
+                Quality = existing != null
+                    ? existing.Quality : QualityTier.A,
+                PickRate = selected.PickRate,
+                Pulse = true,
+            });
+
+            while (plan.ShopMarkers.Count > maxRecos)
+                plan.ShopMarkers.RemoveAt(plan.ShopMarkers.Count - 1);
         }
 
         private static CardPurpose ClassifyCardPurpose(ShopCardScore score)
@@ -499,6 +1179,11 @@ namespace BobCoach.Engine
             {
                 var hm = state.HandMinions[i];
                 if (hm.IsFrozen) continue;
+                if (Engine.HandCombatCardPolicy.ShouldKeepInHand(hm.CardId))
+                    continue;
+                // 下回合铸币战吼（南海卖艺者等）T1只拿不直接打，T2打出让T3有6币双买。
+                if (state.Turn == 1 && IsNextTurnGoldBattlecryCard(hm.CardId))
+                    continue;
                 double pri = 0;
                 string reason = "";
 
@@ -521,7 +1206,7 @@ namespace BobCoach.Engine
                 { pri = 50; reason = "金卡"; }
                 else if (!hm.IsSpell && IsBattlecryCard(hm, _fe) && !boardFull)
                 { pri = 40; reason = "战吼"; }
-                else if (isPair && !hm.IsSpell)
+                else if (isPair && !hm.IsSpell && !boardFull)
                 { pri = 35; reason = "对子(保留)"; }
                 else if (!matchTribe && !hm.IsSpell && !hm.Golden && !boardFull && hm.Tier >= 3)
                 { pri = 20; reason = "过渡"; }
@@ -547,6 +1232,14 @@ namespace BobCoach.Engine
             }
         }
 
+        private static bool IsNextTurnGoldBattlecryCard(string cardId)
+        {
+            return cardId == "BG26_135"
+                || cardId == "BG26_135_G"
+                || cardId == "BG34_Giant_001"
+                || cardId == "BG34_Giant_001_G";
+        }
+
         private StatusInfo BuildStatus(GameState state, GameAction bestAction, LevelUpSuggestion? levelResult, CompGuidance guidance = null)
         {
             float hpRatio = state.MaxHealth > 0 ? (float)state.Health / state.MaxHealth : 1f;
@@ -557,7 +1250,8 @@ namespace BobCoach.Engine
             int effectiveUpCost = upCost;
             if (_heroPower != null)
             {
-                var hs = _heroPower.GetStrategy(state.HeroCardId);
+                var hs = _heroPower.GetStrategyForPower(
+                    state.HeroCardId, state.HeroPowerCardId);
                 if (hs.SpecialRule == "OMU") effectiveUpCost = Math.Max(0, upCost - 2);
             }
             int maxTavernTier = state.EffectiveRules != null
@@ -655,7 +1349,7 @@ namespace BobCoach.Engine
             if (string.IsNullOrEmpty(compDir) && state.Turn <= 5
                 && !string.IsNullOrEmpty(state.HeroCardId) && _heroPower != null)
             {
-                string heroDir = GetHeroAffinityDirection(state.HeroCardId);
+                string heroDir = GetHeroAffinityDirection(state);
                 if (!string.IsNullOrEmpty(heroDir))
                     compDir = TribeCn(heroDir) + "?";
             }
@@ -680,13 +1374,20 @@ namespace BobCoach.Engine
             }
 
             // 检测绝望战力鸿沟（需要tech pivot）
+            // 2026-08-19 实测修复(B7): ①oppAvg 原为 oppStats/oppCount*7(对手存活少时
+            // 放大2-3倍, 高估对手战力——米罗克9.8k圣盾被误判"战力不足"的根因);
+            // 改为对手平均战力(去掉*7); ②myStats 加圣盾/烈毒交换价值
             bool isDesperate = false;
             if (state.Turn >= 8 && state.Health > 15)
             {
                 float myStats = 0f;
                 if (state.BoardMinions != null)
                     foreach (var m in state.BoardMinions)
+                    {
                         myStats += m.Attack * 0.7f + m.Health * 0.3f;
+                        if (m.DivineShield) myStats += 1.5f;
+                        if (m.Venomous) myStats += 1.5f;
+                    }
                 float oppStats = 0f; int oppCount = 0;
                 if (state.Opponents != null)
                     foreach (var o in state.Opponents)
@@ -695,7 +1396,7 @@ namespace BobCoach.Engine
                         foreach (var m in o.BoardMinions)
                         { oppStats += m.Attack * 0.7f + m.Health * 0.3f; oppCount++; }
                     }
-                float oppAvg = oppCount > 0 ? oppStats / oppCount * 7f : 0f;
+                float oppAvg = oppCount > 0 ? oppStats / oppCount : 0f;
                 if (oppAvg > 0 && myStats < oppAvg * 0.15f)
                     isDesperate = true;
             }
@@ -746,10 +1447,11 @@ namespace BobCoach.Engine
             return TribeCnName.TryGetValue(code, out cn) ? cn : code;
         }
 
-        private string GetHeroAffinityDirection(string heroCardId)
+        private string GetHeroAffinityDirection(GameState state)
         {
             if (_heroPower == null) return "";
-            var strat = _heroPower.GetStrategy(heroCardId);
+            var strat = _heroPower.GetStrategyForPower(
+                state.HeroCardId, state.HeroPowerCardId);
             if (strat.TribeAffinity == null || strat.TribeAffinity.Count == 0) return "";
 
             string bestTribe = "";
@@ -767,6 +1469,16 @@ namespace BobCoach.Engine
 
         // ── Combo 检测辅助方法 ──
 
+        /// <summary>2026-08-19 法术指向性判定(按卡面文本): 需要随从目标的法术才标指向性。</summary>
+        private static bool SpellNeedsTarget(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            if (text.Contains("使一个") || text.Contains("对一个") || text.Contains("选择一个")
+                || text.Contains("使目标") || text.Contains("对一个随从") || text.Contains("为你的一个"))
+                return true;
+            return false;
+        }
+
         /// <summary>已知 combo 法术卡映射：法术CardId → 所需组件的CardId</summary>
         private static readonly Dictionary<string, string> ComboMap = new Dictionary<string, string>
         {
@@ -777,8 +1489,10 @@ namespace BobCoach.Engine
         private static bool IsTargetedCard(MinionData card)
         {
             if (card == null) return false;
-            // 法术几乎都是指向性或自身效果, 需要目标选择
-            if (card.IsSpell) return true;
+            // 2026-08-19 实测修复(A3/B15): 法术不能一律视为指向性——
+            // 慎重投资(下回合2币)/铸币类/全局/随机类无需目标, 误标"指向随从"误导;
+            // 香蕉果盘(使一个随从+2/+2)必须带目标, 无目标时标"缺目标"而非"直接使用"
+            if (card.IsSpell) return SpellNeedsTarget(card.CardText ?? "");
             var name = card.CardName ?? "";
             var cardId = card.CardId ?? "";
             // 磁力: 经典指向性机制

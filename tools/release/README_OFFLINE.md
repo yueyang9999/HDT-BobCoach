@@ -1,14 +1,14 @@
-# Bob教练 HDT 插件 1.1.0 候选包
+﻿# Bob教练 HDT 插件 1.2.0 候选包
 
 {{RELEASE_NOTICE}}
-> `RELEASE CANDIDATE v1.1.0 / NOT PUBLISHED`
+> `RELEASE CANDIDATE v1.2.0 / NOT PUBLISHED`
 >
-> 本包是 GitHub `v1.1.0` 的未发布候选离线安装包。Windows 11 24H2 最终实机 smoke 尚未完成；任何未来发布仍需项目所有者单独授权。请仅从项目 GitHub Releases 下载 ZIP 和同名 `.sha256` 文件。
+> 本包是 GitHub `v1.2.0` 的未发布候选离线安装包。Windows 11 24H2 最终实机 smoke 尚未完成；任何未来发布仍需项目所有者单独授权。请仅从项目 GitHub Releases 下载 ZIP 和同名 `.sha256` 文件。
 {{/RELEASE_NOTICE}}
 
-Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.55.0.0 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
+Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教学插件。本包基于 HDT 1.57.1.0 和 .NET Framework 4.7.2 构建，不需要Node.js、Visual Studio 或管理员权限。安装过程可以离线完成；炉石登录和真实酒馆战棋对局需要联网，插件启动不依赖 BobCoach 自有远程服务。
 
-当前候选尚未完成 Windows 11 24H2 x64 + HDT 1.55.0.0 游戏内 smoke。Windows 10 22H2 x64 是目标兼容环境，当前尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
+当前候选尚未完成 Windows 11 24H2 x64 + HDT 1.57.1.0 游戏内 smoke。Windows 10 22H2 x64 是目标兼容环境，当前尚未完成专用实机验证。暂不支持 32 位 Windows、Windows on ARM 和未知旧版 HDT。
 
 ## 安装前
 
@@ -22,13 +22,13 @@ Bob教练是 Windows x64 上的 Hearthstone Deck Tracker（HDT）酒馆战棋教
 4. 如果 ZIP 或 DLL 的“属性”窗口显示“此文件来自其他计算机，可能被阻止”，先对原始 ZIP 选择“解除锁定”，再重新解压。也可以在 ZIP 所在目录运行：
 
 ```powershell
-Unblock-File -LiteralPath .\BobCoach-1.1.0-win-x64.zip
+Unblock-File -LiteralPath .\BobCoach-1.2.0-win-x64.zip
 ```
 
 可在 PowerShell 中核对下载 ZIP 的 SHA-256：
 
 ```powershell
-Get-FileHash .\BobCoach-1.1.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\BobCoach-1.2.0-win-x64.zip -Algorithm SHA256
 ```
 
 结果应与随 ZIP 提供的同名 `.zip.sha256` 文件一致。
@@ -58,7 +58,7 @@ Get-FileHash .\BobCoach-1.1.0-win-x64.zip -Algorithm SHA256
 
 ## 安装后确认
 
-插件页面应显示 `BobCoach 1.1.0.0`，开关为 `On`。Bob Coach 只从上述 AppData 插件目录加载 DLL；同一个版本不要复制到多个 HDT 目录。手动覆盖升级不会自动创建旧 DLL 备份，如需自动备份和回退，请使用后文的可选高级安装。
+插件页面应显示 `BobCoach 1.2.0.0`，开关为 `On`。Bob Coach 只从上述 AppData 插件目录加载 DLL；同一个版本不要复制到多个 HDT 目录。手动覆盖升级不会自动创建旧 DLL 备份，如需自动备份和回退，请使用后文的可选高级安装。
 
 ## 联网真实对局验证
 
@@ -164,7 +164,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\UNINSTALL.ps1 -RemoveUserD
 ## 当前已知限制
 
 {{PREVIEW_LIMIT}}
-- 历史 preview 构建路径已退役，不属于当前 1.1.0 候选流程。
+- 历史 preview 构建路径已退役，不属于当前 1.2.0 候选流程。
 {{/PREVIEW_LIMIT}}
 - 自动验证覆盖包完整性、安装、升级、卸载、回退和隔离 HDT 发现；其他普通用户的显卡、缩放、HDT 皮肤及真实对局组合仍需继续收集结果。
 - 炉石及真实酒馆战棋对局必须联网，登录只能由用户本人完成。

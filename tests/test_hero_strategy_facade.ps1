@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $candidates = @()
@@ -24,7 +24,7 @@ if (!$hdtDir) {
         $exe = Join-Path $candidate "HearthstoneDeckTracker.exe"
         if ((Test-Path (Join-Path $candidate "HearthDb.dll")) -and (Test-Path $exe)) {
             try {
-        if ([Reflection.AssemblyName]::GetAssemblyName($exe).Version.ToString() -eq "1.55.0.0") {
+        if ([Reflection.AssemblyName]::GetAssemblyName($exe).Version.ToString() -eq "1.57.1.0") {
                     $candidate
                 }
             } catch { }

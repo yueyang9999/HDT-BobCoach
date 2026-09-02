@@ -13,6 +13,7 @@ namespace BobCoach.Engine
     {
         private readonly PowerLogParser _parser = new PowerLogParser();
         private readonly List<PLEvent> _events = new List<PLEvent>();
+        private int _localControllerId = -1;
         private string _logPath;
         private long _lastPosition;
         private const int LateStartDarkGiftBackfillBytes = 64 * 1024 * 1024;
@@ -33,6 +34,11 @@ namespace BobCoach.Engine
         public List<PLEvent> Events => _events;
         public int EventCount => _events.Count;
         public PowerLogParser Parser => _parser;
+        public int LocalControllerId
+        {
+            get { return _localControllerId; }
+            set { _localControllerId = value; }
+        }
         /// <summary>T3: 路径A(Power.log ChoiceList/EntityChoices)是否正在处理选择 — 活跃时发现门控静默 zone6 启发式</summary>
         public bool IsChoiceListActive => _parser.IsChoiceListActive();
         public LogConfigStatus ConfigStatus { get; private set; }
@@ -63,6 +69,9 @@ namespace BobCoach.Engine
         public event Action<PowerLogDarkGiftPressable> DarkGiftPressableChanged;
 
         public event Action<PLEvent> TeammateGoldTransferObserved;
+
+        /// <summary>Power.log 解析出的原始紧凑事件流，用于全局回放记录器。</summary>
+        public event Action<PLEvent> PowerLogEventDetected;
 
         /// <summary>关键状态变化 (ZONE/金币/技能), 驱动UI实时刷新</summary>
         public event Action StateChanged;
@@ -539,7 +548,7 @@ namespace BobCoach.Engine
                     tripleCount = tripleCount, boardPowerPeak = boardPowerPeak,
                     timestamp = DateTime.UtcNow,
                     totalEvents = _events.Count,
-                    events = _events.Select(e => new
+                    events = _events.Where(IsReplayRelevantEvent).Select(e => new
                     {
                         type = e.Type.ToString(),
                         ts = e.Timestamp.ToString("HH:mm:ss.fff"),
@@ -557,6 +566,29 @@ namespace BobCoach.Engine
                 return path;
             }
             catch (Exception ex) { Log("ExportReplay error: " + ex.Message); return null; }
+        }
+
+        private static bool IsReplayRelevantEvent(PLEvent e)
+        {
+            if (e == null) return false;
+            switch (e.Type)
+            {
+                case PLEventType.Attack:
+                case PLEventType.Damage:
+                case PLEventType.MinionDeath:
+                case PLEventType.PhaseChange:
+                case PLEventType.TurnStart:
+                case PLEventType.GoldChange:
+                case PLEventType.HeroPowerUsed:
+                case PLEventType.ZoneChange:
+                case PLEventType.Triple:
+                case PLEventType.PlayerAction:
+                case PLEventType.TrinketOffered:
+                case PLEventType.TrinketSelected:
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         public void Dispose() { StopWatching(); }
@@ -602,6 +634,7 @@ namespace BobCoach.Engine
                                 if (line.IndexOf("ChoiceList=", StringComparison.Ordinal) >= 0) _censusChoiceList++;
                                 var events = _parser.ParseLine(line);
                                 lock (_events) { _events.AddRange(events); }
+                                RaisePowerLogEvents(events);
                             }
                             _lastPosition = fs.Position;
                         }
@@ -617,6 +650,19 @@ namespace BobCoach.Engine
             lock (_lifecycleSync)
             {
                 return _running && _startGeneration == generation;
+            }
+        }
+
+        private void RaisePowerLogEvents(List<PLEvent> events)
+        {
+            if (events == null || events.Count == 0 || PowerLogEventDetected == null) return;
+            foreach (var evt in events)
+            {
+                try { PowerLogEventDetected?.Invoke(evt); } catch { }
+            }
+            foreach (var evt in events)
+            {
+                evt.RawLine = null;
             }
         }
 

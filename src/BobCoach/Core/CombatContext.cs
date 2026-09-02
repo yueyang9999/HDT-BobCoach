@@ -115,7 +115,7 @@ namespace BobCoach.Engine
         {
             AttackerSide = atkUnits;
             DefenderSide = defUnits;
-            Rng = rng ?? new Random();
+            Rng = rng ?? new DeterministicRng(StableSeeds.Mix(0x434F4D54, 0x46414C4C));
             EventQueue = new CombatEventQueue();
             DeathCount = 0;
             AttackerHand = attackerHand ?? new List<MinionData>();

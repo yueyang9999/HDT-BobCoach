@@ -5,7 +5,8 @@ $buildScript = Join-Path $repoRoot "tools\build\build_release.ps1"
 $packageScript = Join-Path $repoRoot "tools\release\build_offline_package.ps1"
 $hdtDirectory = $env:BOBCOACH_HDT_DIR
 $testRoot = Join-Path $env:TEMP ("bobcoach-deterministic-build-package-" + [Guid]::NewGuid().ToString("N"))
-$packageName = "BobCoach-1.1.0-win-x64"
+$releaseIdentity = Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "release_identity.json") | ConvertFrom-Json
+$packageName = "BobCoach-$($releaseIdentity.packageVersion)-$($releaseIdentity.runtimeIdentifier)"
 $zipName = "$packageName.zip"
 $packageFiles = @(
     "BobCoach.dll",

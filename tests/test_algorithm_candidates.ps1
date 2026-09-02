@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $candidates = @()
@@ -16,7 +16,8 @@ $sources = @(@(
     (Join-Path $root "src\BobCoach\Core\Decision\Contracts.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\ActionDescriptor.cs"),
     (Join-Path $root "src\BobCoach\Core\Decision\CandidateGenerator.cs"),
-    (Join-Path $root "src\BobCoach\Core\Decision\HardConstraintFilter.cs")
+    (Join-Path $root "src\BobCoach\Core\Decision\HardConstraintFilter.cs"),
+    (Join-Path $root "src\BobCoach\Core\ShadowScoreSerializer.cs")
 ) | Where-Object { Test-Path -LiteralPath $_ })
 $sources += (Join-Path $PSScriptRoot "AlgorithmCandidateBehavior.cs")
 

@@ -21,7 +21,7 @@ Task 3 records every direct return in `DecisionEngine.GetBestAction` before a ru
 | `Core/DecisionEngine.cs:391` | early spell `BG28_571` with health above 20 | Strategy heuristic | ActionFeatureExtractor | `ALG-EARLY-SPELL-571` | feature differential preserves legacy action |
 | `Core/DecisionEngine.cs:397` | early spell `BG28_800` leaves three gold | Strategy heuristic | ActionFeatureExtractor | `ALG-EARLY-SPELL-800` | feature differential preserves legacy action |
 | `Core/DecisionEngine.cs:403` | early spell `BG28_518` has board and leaves three gold | Strategy heuristic | ActionFeatureExtractor | `ALG-EARLY-SPELL-518` | feature differential preserves legacy action |
-| `Core/DecisionEngine.cs:409` | early spell `BG28_810` leaves two gold | Strategy heuristic | ActionFeatureExtractor | `ALG-EARLY-SPELL-810` | feature differential preserves legacy action |
+| `Core/DecisionEngine.cs:409` | early spell `BG28_810` affordable with exact one gold or leaves two gold | Strategy heuristic | ActionFeatureExtractor | `ALG-EARLY-SPELL-810` | feature differential preserves legacy action |
 | `Core/DecisionEngine.cs:433` | R-time high-tier power gate selects upgrade | Strategy heuristic | ActionFeatureExtractor | `ALG-RTIME-HIGH-TIER` | feature differential preserves legacy action |
 | `Core/DecisionEngine.cs:441` | R-time low-tier standard window selects upgrade | Strategy heuristic | ActionFeatureExtractor | `ALG-RTIME-LOW-TIER` | feature differential preserves legacy action |
 | `Core/DecisionEngine.cs:450` | R3 full board and no higher-tier shop card selects upgrade | Strategy heuristic | ActionFeatureExtractor | `ALG-R3-FULL-BOARD` | feature differential preserves legacy action |

@@ -49,6 +49,8 @@ namespace BobCoach
 
         // 英雄技能引擎引用 — 用于正确判断Passive/Active
         private HeroPowerEngine _heroPowerEngine;
+        private readonly Engine.EarlyTurnRecruitGate _earlyTurnRecruitGate =
+            new Engine.EarlyTurnRecruitGate();
         private ITrinketFactSource _trinketFactSource;
         private static readonly Lazy<Season14MinionRegistry> Season14MinionLookup =
             new Lazy<Season14MinionRegistry>(() =>
@@ -133,6 +135,8 @@ namespace BobCoach
         private HashSet<int> _prevShopIdsForGold = null;   // stale-buy 购买证据: 上帧商店实体ID
         private Dictionary<int, Engine.MinionData> _prevShopCardsForGold = null;
         private string _prevHeroCardId = null;
+        private HashSet<int> _recentlyBoughtEntityIds = new HashSet<int>();
+        private int _recentlyBoughtTurn = -1;
         // v2 饰品状态机精简: 移除TTL超时/抑制, 依赖Power.log ChoiceList事件(PowerLogWatcher)控制显隐
         // 实体扫描仅填充选项内容(名称/描述/种族)
         private int _lastTrinketOfferCount = 0;
@@ -264,6 +268,7 @@ namespace BobCoach
             _prevHandCount = -1;
             _prevGoldenCount = 0;
             _goldTracker.Reset();
+            _earlyTurnRecruitGate.Reset();
             _purchaseRewardTracker.Reset();
             _upgradePrizeTracker.Reset();
             _turnStartCardGrantTracker.Reset();
@@ -276,6 +281,8 @@ namespace BobCoach
             _prevHandIdsForGold = null;
             _prevShopIdsForGold = null;
             _prevShopCardsForGold = null;
+            _recentlyBoughtEntityIds.Clear();
+            _recentlyBoughtTurn = -1;
             _cachedDiscoverOptions = null; _lastDiscoverExtractTime = DateTime.MinValue;
             _zone6FirstSeen.Clear();
             _lastTrinketOfferCount = 0;
@@ -408,7 +415,9 @@ namespace BobCoach
                 state.Armor = GetTag(playerHero, GameTag.ARMOR);
 
                 // 战斗伤害校准: 商店阶段检测血量变化→记录实际战斗伤害
-                bool isCombat = game.IsBattlegroundsCombatPhase;
+                bool hdtCombat = game.IsBattlegroundsCombatPhase;
+                bool hasRecruitShopEvidence = HasRecruitShopEvidence(entities);
+                bool isCombat = hdtCombat && !hasRecruitShopEvidence;
                 if (!isCombat && _prevHealthForCombat >= 0)
                 {
                     int prevTotal = _prevHealthForCombat + Math.Max(0, _prevArmorForCombat);
@@ -424,7 +433,9 @@ namespace BobCoach
                     _prevHealthForCombat = state.Health;
                     _prevArmorForCombat = state.Armor;
                 }
-                state.HeroCardId = playerHero.CardId ?? "";
+                string rawHeroCardId = playerHero.CardId ?? "";
+                state.HeroCardId = Engine.BattlegroundsHeroIdentity.NormalizeHeroCardId(
+                    rawHeroCardId);
 
                 // 畸变检测: 保留主畸变与动态全局效果，不能按实体顺序只取第一个。
                 var observedAnomalyIds = entities
@@ -460,7 +471,7 @@ namespace BobCoach
                 state.AnomalyId = state.AnomalyContext.PrimaryAnomalyId;
                 state.EffectiveRules = AnomalyRuleResolver.Resolve(state.AnomalyContext, _anomalyReg);
                 state.TavernUpgradeCost = GetTavernUpgradeCost(entities);
-                state.HeroName = GetCardName(playerHero.CardId);
+                state.HeroName = GetCardName(state.HeroCardId);
                 var hpEntities = SelectHeroPowerEntities(entities, state.HeroCardId);
                 var hpEntity = SelectPrimaryHeroPowerEntity(
                     hpEntities, state.HeroCardId, state.EffectiveRules);
@@ -477,7 +488,11 @@ namespace BobCoach
                     hpObservations.Add(new HeroPowerObservation
                     {
                         CardId = entity.CardId,
+                        BaseHeroCardId = strategy != null
+                            ? (strategy.HeroCardId ?? "")
+                            : "",
                         EntityId = entity.Id,
+                        ScriptData1 = GetTag(entity, GameTag.TAG_SCRIPT_DATA_NUM_1),
                         Cost = GetTag(entity, GameTag.COST),
                         Exhausted = entity.HasTag(GameTag.EXHAUSTED),
                         IsActive = strategy != null && (strategy.PowerType == HeroPowerType.Active
@@ -494,9 +509,12 @@ namespace BobCoach
                 state.HeroPowers = HeroPowerStateResolver.Resolve(
                     hpObservations, hpEntity != null ? hpEntity.CardId : "",
                     state.EffectiveRules, turn, state.TavernTier).ToList();
+                _earlyTurnRecruitGate.Observe(state.HeroCardId, state.HeroPowers);
                 var primaryPower = state.HeroPowers.FirstOrDefault(power => power.IsPrimary);
                 state.HeroPowerCost = primaryPower != null ? primaryPower.Cost : 1;
                 state.HeroPowerCardId = primaryPower != null ? primaryPower.CardId : "";
+                state.HeroPowerDigsRemaining = primaryPower != null
+                    ? primaryPower.ScriptData1 : -1;
                 state.HeroPowerType = primaryPower != null && primaryPower.IsActive
                     ? "Active" : "Passive";
                 state.HeroPowerExhausted = primaryPower != null && primaryPower.Exhausted;
@@ -522,9 +540,13 @@ namespace BobCoach
                 // 战棋满币: T1=3, T2=4, ... T8起=10。原 3+Max(0,turn-2) 从T2起每回合少算1金
                 // (T2算3应为4), 是 gold 提前归零、铸币0仍推荐的根因(0611 06111155 诊断)。
                 state.MaxGold = Math.Min(10, 2 + turn);
-                state.Phase = game.IsBattlegroundsCombatPhase ? "combat" : "shop";
+                state.Phase = isCombat ? "combat" : "shop";
                 state.PassiveChoiceActive = PassiveChoiceActive;
-                state.NormalRecruitAvailable = !PassiveChoiceActive && state.Phase == "shop";
+                bool afkSkipsEarlyTurns = _earlyTurnRecruitGate.BlocksEarlyRecruit(
+                    turn, state.HeroCardId, state.HeroPowerCardId, state.HeroPowers);
+                state.NormalRecruitAvailable = !PassiveChoiceActive
+                    && state.Phase == "shop"
+                    && !afkSkipsEarlyTurns;
                 _upgradePrizeTracker.Advance(
                     state.Turn, state.TavernTier, state.Phase == "shop",
                     state.EffectiveRules.UpgradePrize);
@@ -813,6 +835,13 @@ namespace BobCoach
             var fixedSecondaryIds = new HashSet<string>(
                 (rules ?? EffectiveGameRules.Default).SecondaryHeroPowers
                     .Select(rule => rule.CardId), StringComparer.Ordinal);
+            bool hasFinleySeed = candidates.Any(candidate =>
+                Engine.HeroPowerRuleCatalog.IsFinleySeedPower(candidate.CardId));
+            bool hasFinleyReplacement = hasFinleySeed && candidates.Any(candidate =>
+                !Engine.HeroPowerRuleCatalog.IsFinleySeedPower(candidate.CardId)
+                && !fixedSecondaryIds.Contains(candidate.CardId)
+                && !string.IsNullOrEmpty(candidate.CardId)
+                && candidate.CardId.EndsWith("p", StringComparison.Ordinal));
             Entity best = null;
             int bestScore = int.MinValue;
             foreach (var e in candidates)
@@ -821,6 +850,8 @@ namespace BobCoach
                 int score = 0;
                 int ctrl = GetTag(e, GameTag.CONTROLLER);
                 if (_localPlayerCtrl > 0 && ctrl == _localPlayerCtrl) score += 1000;
+                score += Engine.HeroPowerRuleCatalog.GetPrimaryHeroPowerPreference(
+                    heroCardId, e.CardId, hasFinleyReplacement);
                 if (!string.IsNullOrEmpty(heroCardId) && !string.IsNullOrEmpty(e.CardId)
                     && e.CardId == heroCardId + "p") score += 10000;
                 else if (!string.IsNullOrEmpty(heroCardId) && !string.IsNullOrEmpty(e.CardId)
@@ -857,6 +888,8 @@ namespace BobCoach
         private bool IsHeroPowerEntity(Entity e, string heroCardId)
         {
             if (e == null || string.IsNullOrEmpty(e.CardId)) return false;
+            if (Engine.HeroPowerRuleCatalog.IsUtilityPowerCardId(e.CardId))
+                return false;
             if (e.GetTag(GameTag.CARDTYPE) == 10) return true; // CARDTYPE_HERO_POWER
             if (e.CardId.Contains("_HP_") || e.CardId.Contains("HeroPower") || e.CardId.Contains("BACON_HERO_POWER")) return true;
             if (!string.IsNullOrEmpty(heroCardId)
@@ -876,6 +909,10 @@ namespace BobCoach
                 {
                     string text = c.Text ?? "";
                     if (text.Contains("Discover") || text.Contains("发现")) return true;
+                    if (c.Mechanics != null
+                        && (c.Mechanics.Contains("DISCOVER")
+                            || c.Mechanics.Contains("Discover")))
+                        return true;
                 }
             }
             catch { }
@@ -999,6 +1036,18 @@ namespace BobCoach
                     }
                 }
             }
+            if (state.Turn != _recentlyBoughtTurn)
+            {
+                _recentlyBoughtEntityIds.Clear();
+                _recentlyBoughtTurn = state.Turn;
+            }
+            foreach (var purchase in observedPurchases)
+            {
+                if (purchase != null && purchase.EntityId > 0)
+                    _recentlyBoughtEntityIds.Add(purchase.EntityId);
+            }
+            state.RecentlyBoughtEntityIds =
+                new HashSet<int>(_recentlyBoughtEntityIds);
             _prevHandIdsForGold = new HashSet<int>(curHandIds);
             _prevShopIdsForGold = new HashSet<int>(curShopIds);
             _prevShopCardsForGold = state.ShopMinions
@@ -1009,6 +1058,9 @@ namespace BobCoach
             // HDT RESOURCES 标签 (-1=不可用), 仅供 GoldTracker 回合切换时校准基准
             int hdtTag = -1;
             try { hdtTag = Core.Game.PlayerEntity?.GetTag(GameTag.RESOURCES) ?? -1; } catch { }
+            int baseMaxGold = Math.Min(10, 2 + turn);
+            if (hdtTag >= baseMaxGold && hdtTag <= 20)
+                state.MaxGold = Math.Max(state.MaxGold, hdtTag);
 
             int tracked = _goldTracker.Advance(
                 turn, curShop, curShopIds, curBoard, curHand, state.TavernTier,
@@ -1148,13 +1200,41 @@ namespace BobCoach
                 if (!IsBaconCard(e.CardId)) continue;
 
                 var card = EntityToMinion(e);
-                if (card != null) result.Add(card);
+                if (card == null) continue;
+                card.Cost = card.IsSpell ? 0 : card.Cost;
+                result.Add(card);
             }
             result.Sort((a, b) => a.Position.CompareTo(b.Position)); // ZonePosition升序: 左→右对应索引0→N-1
             return result;
         }
 
         private static int _shopDiagCount = 0;
+
+        private bool HasRecruitShopEvidence(List<Entity> entities)
+        {
+            if (entities == null) return false;
+            foreach (var entity in entities)
+            {
+                if (entity == null || string.IsNullOrEmpty(entity.CardId)
+                    || !IsBaconCard(entity.CardId))
+                    continue;
+                if (entity.IsInPlay
+                    && GetTag(entity, GameTag.CONTROLLER) == _localPlayerCtrl)
+                    continue;
+                if (entity.IsInHand || entity.IsInGraveyard) continue;
+                if (IsHeroOrPower(entity)) continue;
+                if (entity.IsBattlegroundsTrinket) continue;
+                if (_opponentIds.Contains(entity.Id)) continue;
+
+                ResolvedShopItemFact purchaseFact;
+                if (!TryResolveShopItem(entity, out purchaseFact)) continue;
+                int zone = GetTag(entity, GameTag.ZONE);
+                if (zone != 1 && zone != 5) continue;
+                return true;
+            }
+            return false;
+        }
+
         private List<Engine.MinionData> ExtractShopMinions(List<Entity> entities, int turn)
         {
             var result = new List<Engine.MinionData>();
@@ -1232,6 +1312,7 @@ namespace BobCoach
                     IsSpell = isSpell,
 				GrantsStats = isSpell && TrinketEffectRegistry.IsStatGrantingTavernSpell(e.CardId),
                     Cost = cost,
+                CardText = ResolveCardText(e.CardId),
                     IsFrozen = e.HasTag(GameTag.UNTOUCHABLE),
                 });
             }
@@ -1335,10 +1416,22 @@ namespace BobCoach
                 Cost = cost,
                 IsFrozen = e.HasTag(GameTag.UNTOUCHABLE) || e.HasTag(GameTag.CANT_BE_TARGETED_BY_ABILITIES)
                     || e.HasTag(GameTag.DORMANT) || e.HasTag(GameTag.CANT_PLAY)
-                    || e.HasTag(GameTag.LITERALLY_UNPLAYABLE)  // 托里姆禁锢卡等
-                    || (isSpell && e.Attack <= 0 && e.Health <= 0),
+                    || e.HasTag(GameTag.LITERALLY_UNPLAYABLE),
             };
         }
+        private string ResolveCardText(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return "";
+            Season14MechanicCardFact fact;
+            if (Season14MinionLookup.Value.TryGet(cardId, out fact)
+                && !string.IsNullOrEmpty(fact.TextZhCn))
+                return fact.TextZhCn + " " + fact.TextEnUs;
+            if (Season14TavernSpellLookup.Value.TryGet(cardId, out fact)
+                && !string.IsNullOrEmpty(fact.TextZhCn))
+                return fact.TextZhCn + " " + fact.TextEnUs;
+            return "";
+        }
+
 
         // ── 英雄选项 ──
 
@@ -1370,6 +1463,7 @@ namespace BobCoach
         private int _prevOfferCount = 0;
         private int _trinketLesserTurn = 6;
         private int _trinketGreaterTurn = 9;
+        internal TrinketChoiceContext CurrentTrinketChoiceContext { get; set; }
         private int _lastTrinketOfferTurn = -1;     // 最近一次检测到饰品offer的回合
         private int _trinketOfferFirstTurn = -1;    // 当前饰品轮次首次出现的回合(用于跨回合抑制)
         private HashSet<string> _completedTrinketIds = null; // 已完成饰品轮的CardId集合(用于过滤残留实体)
@@ -1426,6 +1520,10 @@ namespace BobCoach
 
             var result = new List<Engine.TrinketOption>();
             bool scheduledTrinketChoiceTurn = turn == _trinketLesserTurn || turn == _trinketGreaterTurn;
+            bool mysteryCubeActivation = _equippedTrinketIds != null
+                && _equippedTrinketIds.Contains("BG30_MagicItem_703")
+                && CurrentTrinketChoiceContext
+                    == TrinketChoiceContext.MysteryCubeActivation;
             int ownedRealTrinketCount = entities.Count(e =>
                 e.IsBattlegroundsTrinket && HasLocalTrinketFact(e.CardId)
                 && (e.IsInHand || e.IsInPlay));
@@ -1468,7 +1566,8 @@ namespace BobCoach
                 // 不再break: 收集所有BACON_TRINKET实体用于新轮次检测(小饰品残留可能遮挡大饰品实体)
             }
 
-            if (scheduledTrinketChoiceTurn && result.Count >= 2)
+            if (scheduledTrinketChoiceTurn && result.Count >= 2
+                && !mysteryCubeActivation)
             {
                 bool expectLesser = turn == _trinketLesserTurn;
                 bool expectGreater = turn == _trinketGreaterTurn;
@@ -1622,7 +1721,9 @@ namespace BobCoach
 
         private bool HasReplenishingShopEffect(Engine.GameState state)
         {
-            if (_equippedTrinketIds != null && _equippedTrinketIds.Contains("BG30_MagicItem_841"))
+            if (_equippedTrinketIds != null
+                && (_equippedTrinketIds.Contains("BG30_MagicItem_841")
+                    || _equippedTrinketIds.Contains("BG30_MagicItem_991")))
                 return true;
             if (_timewarpedNewRecruitActive)
                 return true;
@@ -1742,7 +1843,7 @@ namespace BobCoach
                     || e.CardId.Contains("Timewarp") || e.CardId.Contains("timewarp"))
                     continue;
                 // 常见token/衍生名黑名单
-                if (resolvedName == "甲虫" || resolvedName == "新生幼苗" || resolvedName == "触手"
+                if (resolvedName == "甲虫" || resolvedName == "触手"
                     || resolvedName == "机械幼龙" || resolvedName == "微型机器人"
                     || resolvedName == "小鬼" || resolvedName == "白银之手新兵")
                     continue;
@@ -1757,6 +1858,7 @@ namespace BobCoach
                     Tier = tier,
                     Attack = e.Attack,
                     Health = e.Health,
+                    Tribes = GetTribes(e),
                 });
             }
             // 标准发现: 2-3候选直接返回; >3时取前3(噪声环境常见); <2时返回空
@@ -1844,6 +1946,7 @@ namespace BobCoach
                     Tier = dTier,
                     Attack = e.Attack,
                     Health = e.Health,
+                    Tribes = GetTribes(e),
                 });
             }
             // 发现面板: 3选1(常规)或2选1(部分英雄技能)
@@ -2043,6 +2146,27 @@ namespace BobCoach
                                 result.Add(raceName);
                         }
                     }
+                }
+
+                // P14 2026-08(用户实测: 亡灵卡种族提取为空 → CompLock 不硬锁 → 推荐异族卡):
+                // HearthDb 兜底——CARDRACE 标签与 Season14 registry 均失败时,
+                // 从 HearthDb 卡牌数据库取种族(UNDEAD 等), 保证 CompLock/阵容检测可用。
+                if (result.Count == 0 && e != null
+                    && !string.IsNullOrEmpty(e.CardId))
+                {
+                    try
+                    {
+                        HearthDb.Card hdCard;
+                        if (HearthDb.Cards.All.TryGetValue(e.CardId, out hdCard)
+                            && hdCard != null && (int)hdCard.Race > 0)
+                        {
+                            var hdRace = MapHearthDbRace((int)hdCard.Race);
+                            if (!string.IsNullOrEmpty(hdRace)
+                                && !result.Contains(hdRace))
+                                result.Add(hdRace);
+                        }
+                    }
+                    catch { }
                 }
             }
             return result;

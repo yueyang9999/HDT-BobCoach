@@ -26,7 +26,10 @@
 - [发布流程](maintainer/RELEASE.md)
 - [快速更新验证流程](maintainer/UPDATE_VALIDATION.md)
 - [决策事件采集与离线聚合](maintainer/DECISION_EVENT_COLLECTION.md)
+- [用户反馈问题清单](maintainer/USER_FEEDBACK_ISSUES.md)
 - [迁移工具说明](../tools/migrate/README.md)
+- [回放策略分析 SOP](maintainer/SOP_REPLAY_STRATEGY_ANALYSIS.md)：固化标准操作程序（回放提取→策略分析→知识库积累→算法验证）
+- [酒馆规则审查与完善方向](maintainer/BG_RULES_AUDIT.md)：第一性原理分析 + 已验证规则 + 数据规律 + 查漏补缺清单
 
 ## 贡献者
 

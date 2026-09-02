@@ -8,7 +8,7 @@
 
 Bob Coach is a coaching plugin for Hearthstone Deck Tracker (HDT) focused on Hearthstone Battlegrounds. It reads match state already known to HDT on the local computer and assists with card choices, compositions, positioning, and combat decisions.
 
-The current `1.1.0` release candidate is not published. Its package name is [`BobCoach-1.1.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip); official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
+The current `1.2.0` release candidate is not published. Its package name is [`BobCoach-1.2.0-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.0/BobCoach-1.2.0-win-x64.zip); official installers are provided only through this repository's [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases). Do not treat source archives, CI artifacts, or third-party attachments as official installers.
 
 ## Download and Install
 
@@ -16,10 +16,10 @@ Windows 10 and Windows 11 use the same 64-bit installer package:
 
 | Your system | Current package | Validation status |
 | --- | --- | --- |
-| Windows 11 24H2 x64 | [`BobCoach-1.1.0-win-x64.zip` candidate](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip) | Not published; final physical smoke validation has not been completed |
-| Windows 10 22H2 x64 | [The same 64-bit candidate](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip) | Target environment; dedicated physical validation has not been completed |
+| Windows 11 24H2 x64 | [`BobCoach-1.2.0-win-x64.zip` candidate](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.0/BobCoach-1.2.0-win-x64.zip) | Not published; final physical smoke validation has not been completed |
+| Windows 10 22H2 x64 | [The same 64-bit candidate](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.0/BobCoach-1.2.0-win-x64.zip) | Target environment; dedicated physical validation has not been completed |
 
-Download [`BobCoach-1.1.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.1.0/BobCoach-1.1.0-win-x64.zip.sha256) beside the ZIP to verify package integrity.
+Download [`BobCoach-1.2.0-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.0/BobCoach-1.2.0-win-x64.zip.sha256) beside the ZIP to verify package integrity.
 
 **Do not download** the GitHub-generated `Source code (zip)` or `Source code (tar.gz)` entries at the bottom of the Release page. They are source snapshots, not Bob Coach installer packages.
 
@@ -27,9 +27,9 @@ First-time users should follow the illustrated [Chinese installation guide](docs
 
 ## System Requirements
 
-- 1.1.0 release candidate: not published; dedicated physical validation has not been completed on Windows 11 24H2 x64
+- 1.2.0 release candidate: not published; dedicated physical validation has not been completed on Windows 11 24H2 x64
 - Target compatibility: Windows 10 22H2 x64 (technically compatible, but not yet verified on dedicated physical hardware)
-- Hearthstone Deck Tracker `1.55.0.0` x64
+- Hearthstone Deck Tracker `1.57.1.0` x64
 - The .NET Framework 4.8/4.8.1 runtime supplied by Windows
 - Standard Windows user permissions
 
@@ -39,7 +39,7 @@ After installation, the plugin does not require Node.js, administrator privilege
 
 1. Fully exit HDT and extract the complete ZIP.
 2. Press `Win + R` and open `%AppData%\HearthstoneDeckTracker\Plugins`.
-3. Fully extract `BobCoach-1.1.0-win-x64.zip`. Copy both `BobCoach.dll` and `BobCoach.dll.sha256` into the root of that directory. The plugin refuses to start if the checksum file is missing or does not match the DLL.
+3. Fully extract `BobCoach-1.2.0-win-x64.zip`. Copy both `BobCoach.dll` and `BobCoach.dll.sha256` into the root of that directory. The plugin refuses to start if the checksum file is missing or does not match the DLL.
 4. Start HDT, then enable BobCoach under `Options > Tracker > Plugins`.
 
 `INSTALL.ps1` remains an optional advanced installation method for package verification, automatic backup, and rollback. See [UPGRADE](docs/user/UPGRADE.md), [ROLLBACK](docs/user/ROLLBACK.md), and [UNINSTALL](docs/user/UNINSTALL.md) for the corresponding procedures.
@@ -56,7 +56,7 @@ GitHub repository code, documentation, rule snapshots, issues, pull requests, mi
 
 ## Build and Test
 
-The repository does not contain HDT binaries. Building requires the .NET Framework 4.7.2 Developer Pack and a local HDT `1.55.0.0` directory:
+The repository does not contain HDT binaries. Building requires the .NET Framework 4.7.2 Developer Pack and a local HDT `1.57.1.0` directory:
 
 ```powershell
 $env:BOBCOACH_HDT_DIR = 'C:\path\to\HDT'

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -326,20 +326,56 @@ namespace BobCoach
             var canvas = Core.OverlayCanvas;
             if (canvas == null || candidateCount < 2 || index < 0 || index >= candidateCount)
                 return;
+            ClearTimewarpPurchaseHint();
+            AddTimewarpPurchaseMarker(index, candidateCount, cardName,
+                purchaseCost, timeCoinCount, true);
+        }
 
+        internal void ShowTimewarpPurchaseRatings(
+            int[] indices, int[] costs, string[] names,
+            int candidateCount, int timeCoinCount)
+        {
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null || candidateCount < 2 || indices == null
+                || costs == null || names == null || indices.Length == 0
+                || indices.Length != costs.Length || indices.Length != names.Length)
+                return;
+            ClearTimewarpPurchaseHint();
+            for (int i = 0; i < indices.Length; i++)
+            {
+                if (indices[i] < 0 || indices[i] >= candidateCount) continue;
+                AddTimewarpPurchaseMarker(indices[i], candidateCount,
+                    names[i] ?? "", costs[i], timeCoinCount, i == 0);
+            }
+        }
+
+        private void AddTimewarpPurchaseMarker(
+            int index, int candidateCount, string cardName,
+            int purchaseCost, int timeCoinCount, bool preferred)
+        {
+            var canvas = Core.OverlayCanvas;
+            if (canvas == null || candidateCount < 2 || index < 0 || index >= candidateCount)
+                return;
             string signature = string.Format("{0}|{1}|{2}|{3}|{4}",
-                index, candidateCount, cardName ?? "", purchaseCost, timeCoinCount);
+                index, candidateCount, cardName ?? "", purchaseCost, timeCoinCount,
+                preferred ? "P" : "S");
             bool markerPresent = _activeElements.Any(element =>
                 (element as FrameworkElement)?.Tag as string == "timewarp_purchase");
-            if (signature == _timewarpPurchaseSig && markerPresent) return;
-            ClearTimewarpPurchaseHint();
+            if (signature == _timewarpPurchaseSig && markerPresent)
+                return;
             _timewarpPurchaseSig = signature;
 
-            var cardRect = _calc.GetShopCardRect(index, candidateCount);
+            var cardRect = _calc.GetChoiceCardRect(index, candidateCount);
             double barWidth = cardRect.Width * 0.96;
             double barHeight = 22;
             double barLeft = cardRect.Left + (cardRect.Width - barWidth) / 2;
-            double barTop = cardRect.Top + cardRect.Height + 4;
+            // 时空酒馆顶部常被游戏标题/界面层遮挡；标签固定在候选卡底部内侧更可见。
+            bool placeAbove = false;
+            double barTop = cardRect.Top + cardRect.Height - barHeight - 6;
+            if (barTop < cardRect.Top + 4)
+                barTop = cardRect.Top + 4;
+            if (canvas.ActualHeight > 0 && barTop + barHeight > canvas.ActualHeight - 8)
+                barTop = Math.Max(0, canvas.ActualHeight - barHeight - 8);
             var accent = ParseBrush("#FFD700") ?? Brushes.Gold;
 
             var marker = new Border
@@ -354,7 +390,8 @@ namespace BobCoach
                 Tag = "timewarp_purchase",
                 Child = new TextBlock
                 {
-                    Text = string.Format("★首选  {0}/{1}时空币", purchaseCost, timeCoinCount),
+                    Text = string.Format("{0}  {1}/{2}时空币",
+                        preferred ? "★推荐" : "次选", purchaseCost, timeCoinCount),
                     FontSize = 13,
                     FontWeight = FontWeights.Bold,
                     Foreground = accent,
@@ -366,26 +403,29 @@ namespace BobCoach
             };
             Canvas.SetLeft(marker, barLeft);
             Canvas.SetTop(marker, barTop);
-            Panel.SetZIndex(marker, 1004);
+            Panel.SetZIndex(marker, 2100);
             canvas.Children.Add(marker);
             _activeElements.Add(marker);
 
-            var arrow = new System.Windows.Shapes.Polygon
+            if (placeAbove)
             {
-                Points = new PointCollection
+                var arrow = new System.Windows.Shapes.Polygon
                 {
-                    new Point(0, 0), new Point(10, 0), new Point(5, 6),
-                },
-                Fill = accent,
-                Opacity = 0.9,
-                IsHitTestVisible = false,
-                Tag = "timewarp_purchase",
-            };
-            Canvas.SetLeft(arrow, cardRect.Left + cardRect.Width / 2 - 5);
-            Canvas.SetTop(arrow, barTop + barHeight + 2);
-            Panel.SetZIndex(arrow, 1005);
-            canvas.Children.Add(arrow);
-            _activeElements.Add(arrow);
+                    Points = new PointCollection
+                    {
+                        new Point(0, 0), new Point(10, 0), new Point(5, 6),
+                    },
+                    Fill = accent,
+                    Opacity = 0.9,
+                    IsHitTestVisible = false,
+                    Tag = "timewarp_purchase",
+                };
+                Canvas.SetLeft(arrow, cardRect.Left + cardRect.Width / 2 - 5);
+                Canvas.SetTop(arrow, barTop + barHeight + 2);
+                Panel.SetZIndex(arrow, 2006);
+                canvas.Children.Add(arrow);
+                _activeElements.Add(arrow);
+            }
 
             RendererLog(string.Format(
                 "TimewarpPurchaseRating: idx={0}/{1} card={2} cost={3} coins={4} rect=({5:F0},{6:F0})",
@@ -488,7 +528,10 @@ namespace BobCoach
                     removed, markerPresent, sigPresent));
         }
 
-        internal void ShowDarkGiftCandidates(System.Collections.Generic.List<Engine.DiscoverCandidate> candidates, bool renderDuringCombat = false)
+        internal void ShowDarkGiftCandidates(
+            System.Collections.Generic.List<Engine.DiscoverCandidate> candidates,
+            bool renderDuringCombat = false,
+            System.Collections.Generic.List<Engine.TrinketHint> hints = null)
         {
             if (IsCombat() && !renderDuringCombat) return;
             var canvas = Core.OverlayCanvas;
@@ -527,12 +570,23 @@ namespace BobCoach
             for (int i = 0; i < candidates.Count; i++)
             {
                 var h = candidates[i];
+                var hint = hints == null ? null : hints.FirstOrDefault(
+                    hintItem => hintItem.Index == i);
+                bool isTopPick = hint != null && hint.IsTopPick;
                 var row = new TextBlock
                 {
-                    Text = string.Format("{0}. {1}", i + 1, h.CardName ?? h.CardId ?? "?"),
+                    Text = string.Format(
+                        "{0}. {1}",
+                        i + 1,
+                        h.CardName ?? h.CardId ?? "?"),
                     FontSize = 15,
-                    Foreground = ParseBrush("#CFCFCF"),
-                    Background = new SolidColorBrush(Color.FromArgb(185, 10, 10, 10)),
+                    FontWeight = isTopPick ? FontWeights.Bold : FontWeights.Normal,
+                    Foreground = isTopPick
+                        ? (ParseBrush("#FFD700") ?? Brushes.Gold)
+                        : ParseBrush("#CFCFCF"),
+                    Background = isTopPick
+                        ? new SolidColorBrush(Color.FromArgb(220, 35, 30, 10))
+                        : new SolidColorBrush(Color.FromArgb(185, 10, 10, 10)),
                     Padding = new Thickness(10, 2, 10, 2),
                     IsHitTestVisible = false,
                     TextWrapping = TextWrapping.Wrap,
@@ -806,6 +860,7 @@ namespace BobCoach
                     Background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10)),
                     Padding = new Thickness(4, 2, 4, 2),
                     IsHitTestVisible = false,
+                    Tag = "refresh_glow",
                     MaxWidth = _calc.ScaleX(200),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                 };
@@ -814,6 +869,11 @@ namespace BobCoach
                 Panel.SetZIndex(reasonLabel, 1002);
                 canvas.Children.Add(reasonLabel); _activeElements.Add(reasonLabel);
             }
+        }
+
+        public void ClearRefreshGlow()
+        {
+            ClearTaggedElements("refresh_glow");
         }
 
         /// <summary>冻结提示: 推荐冻结商店时显示, 位置在刷新按钮右侧, 蓝色调</summary>
@@ -860,6 +920,7 @@ namespace BobCoach
                     Background = new SolidColorBrush(Color.FromArgb(180, 10, 10, 10)),
                     Padding = new Thickness(4, 2, 4, 2),
                     IsHitTestVisible = false,
+                    Tag = "freeze_glow",
                     MaxWidth = _calc.ScaleX(200),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                 };
@@ -955,7 +1016,7 @@ namespace BobCoach
             }
 
             // 行3: 动作序列 (浅黄)
-            if (!string.IsNullOrEmpty(s.HintLine))
+            if (!string.IsNullOrEmpty(s.HintLine)) // R225: 动作链单行显示(见 BuildTurnActionChain)
             {
                 var row3 = new TextBlock
                 {
@@ -969,8 +1030,26 @@ namespace BobCoach
                 };
                 _statusStripContent.Children.Add(row3);
             }
+            // 行3.5: 阶段规划 (青色, 分点式长链路: ①本回合 ②下回合 ③阶段目标)
+            if (!string.IsNullOrEmpty(s.PlanLine))
+            {
+                var planRow = new TextBlock
+                {
+                    Text = s.PlanLine, FontSize = metrics.SecondaryFontSize, FontWeight = FontWeights.Medium,
+                    Foreground = ParseBrush("#80DEEA"),
+                    Background = new SolidColorBrush(Color.FromArgb(150, 10, 10, 10)),
+                    Padding = new Thickness(pad, 0, pad, 0), IsHitTestVisible = false,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = statusWideMaxWidth,
+                    LineHeight = metrics.EmphasisLineHeight,
+                };
+                _statusStripContent.Children.Add(planRow);
+            }
+            // R213 精简: 动态提示三选一(升级>战斗>饰品/发现), 同屏最多1条
+            int dynShown = 0;
             // 行4: 升级提示 (独立一行, 绿/金色, 不与动作序列重叠)
-            if (!string.IsNullOrEmpty(s.UpgradeLine))
+            if (!string.IsNullOrEmpty(s.UpgradeLine) && dynShown < 1)
+                dynShown++;
             {
                 var upgradeRow = new TextBlock
                 {
@@ -985,7 +1064,8 @@ namespace BobCoach
                 _statusStripContent.Children.Add(upgradeRow);
             }
             // 行5: 战斗预测 (橙色 — BobsBuddy胜率)
-            if (!string.IsNullOrEmpty(s.CombatLine))
+            if (!string.IsNullOrEmpty(s.CombatLine) && dynShown < 1)
+                dynShown++;
             {
                 var combatRow = new TextBlock
                 {
@@ -1000,7 +1080,8 @@ namespace BobCoach
                 _statusStripContent.Children.Add(combatRow);
             }
             // 行6: 饰品/发现 (金/天蓝)
-            if (!string.IsNullOrEmpty(s.PickLine))
+            if (!string.IsNullOrEmpty(s.PickLine) && dynShown < 1)
+                dynShown++;
             {
                 bool isTrinket = s.PickLine.StartsWith("饰品:");
                 string pickColor = isTrinket ? "#FFD700" : "#87CEEB";
@@ -1292,7 +1373,6 @@ namespace BobCoach
                 // 序号=推荐排名, 非游戏槽位
                 string line = string.Format("{0}. {1}", i + 1, h.Name ?? "?");
                 if (h.IsTopPick) line += " ★首选";
-                if (!string.IsNullOrEmpty(h.Reason)) line += "  [" + h.Reason + "]";
                 var row = new TextBlock
                 {
                     Text = line,
@@ -1412,6 +1492,10 @@ namespace BobCoach
             double panelTextWidth = _calc.ScaleX(360);
             double x = _calc.Config.ScaleX(_calc.Config.PanelOffsetX, _calc.ClientWidth);
             double y = _calc.Config.ScaleY(_calc.Config.PanelOffsetY, _calc.ClientHeight);
+            bool trinketPanelPresent = _activeElements.Any(el =>
+                (el as FrameworkElement)?.Tag as string == "trinket_panel");
+            if (trinketPanelPresent)
+                x += panelTextWidth * sc + _calc.ScaleX(16);
             if (statusBarLines >= 4) y += (statusBarLines - 3) * _calc.ScaleY(22); // 防覆盖状态栏
 
             RendererLog(string.Format("ShowDiscoverHints: {0} hints at ({1},{2})",
@@ -1438,7 +1522,6 @@ namespace BobCoach
                 // 序号=推荐排名
                 string line = string.Format("{0}. {1}", i + 1, h.Name ?? "?");
                 if (h.IsTopPick) line += " ★首选";
-                if (!string.IsNullOrEmpty(h.Reason)) line += "  [" + h.Reason + "]";
                 var row = new TextBlock
                 {
                     Text = line,
@@ -1825,6 +1908,11 @@ namespace BobCoach
                 }
             }
             return removed;
+        }
+
+        public void ClearFreezeGlow()
+        {
+            ClearTaggedElements("freeze_glow");
         }
 
         public void ClearNonPanel()

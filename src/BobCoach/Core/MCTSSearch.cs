@@ -31,6 +31,9 @@ namespace BobCoach.Engine
         // 搜索缓存: 避免对同一状态重复评估
         private Dictionary<string, float> _evalCache = new Dictionary<string, float>();
 
+        // 确定性随机源: 每次 Search 按状态重新播种, 保证同状态同结果
+        private DeterministicRng _rng = new DeterministicRng(0);
+
         public MCTSSearch(Simulator sim, ActionEnumerator enumerator, FeatureExtractor fe, ValueFunction vf)
         {
             _sim = sim;
@@ -59,6 +62,8 @@ namespace BobCoach.Engine
 
             var sw = Stopwatch.StartNew();
             _evalCache.Clear();
+            // 按状态播种: 同一状态 → 同一 rollout 序列（确定性）
+            _rng = new DeterministicRng(StableSeeds.FromGameState(state));
 
             var actions = _enumerator.Enumerate(
                 state, state.HeroCardId, includeTrinket);
@@ -90,20 +95,6 @@ namespace BobCoach.Engine
 
                 var (act1, state1, _, val1) = scored[i];
                 double totalValue = val1;
-
-                // 检查step1后是否有足够金币继续
-                if (state1.Gold < 1 || state1.BoardMinions.Count >= 7)
-                {
-                    // 无法进行第2步, 直接用第1步的估值
-                    if (totalValue > bestTotalValue)
-                    {
-                        bestTotalValue = totalValue;
-                        bestAction = act1;
-                        bestSecondAction = null;
-                    }
-                    nodesExplored++;
-                    continue;
-                }
 
                 // 枚举第2步动作
                 var actions2 = _enumerator.Enumerate(
@@ -191,7 +182,5 @@ namespace BobCoach.Engine
                 CompletedInBudget = sw.ElapsedMilliseconds <= TIME_BUDGET_MS
             };
         }
-
-        private static Random _rng = new Random();
     }
 }

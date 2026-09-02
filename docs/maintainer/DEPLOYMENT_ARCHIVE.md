@@ -21,7 +21,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\release\deploy_loc
 
 脚本默认行为：
 
-1. 校验 HDT 1.55.0.0 构建引用。
+1. 校验 HDT 1.56.1.0 构建引用。
 2. 校验目标为 HDT AppData `Plugins` 且链路无 reparse point。
 3. 校验 HDT 已退出。
 4. 从当前 HEAD 执行 Release x64 构建。

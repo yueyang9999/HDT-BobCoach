@@ -32,7 +32,9 @@ namespace BobCoach.Engine
     public class CombatSimulator
     {
         private const int MaxAttacks = 200;
-        private static readonly Random _rng = new Random();
+
+        // 确定性随机源: 每次模拟按双方板面/回合播种（同状态 → 同结果）
+        private DeterministicRng _rng = new DeterministicRng(0);
 
         public CombatSimulator()
         {
@@ -89,6 +91,11 @@ namespace BobCoach.Engine
 
             var atkUnits = BuildUnits(playerBoard);
             var defUnits = BuildUnits(opponentBoard);
+
+            // 按状态播种确定性随机源
+            _rng = new DeterministicRng(StableSeeds.FromCombat(
+                playerBoard, opponentBoard, playerTier, opponentTier, turn,
+                playerHeroCardId, opponentHeroCardId));
 
             // ── 构建战斗上下文(事件队列+辅助方法) ──
             var ctx = new CombatContext(atkUnits, defUnits, _rng, playerHand, opponentHand,

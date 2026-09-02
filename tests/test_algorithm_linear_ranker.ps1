@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $candidates = @()
@@ -19,7 +19,8 @@ if (!(Test-Path -LiteralPath $newtonsoft)) { throw "Newtonsoft.Json.dll not foun
 $outputDirectory = Join-Path $env:TEMP ("bobcoach_algorithm_linear_ranker_{0}" -f [Guid]::NewGuid().ToString("N"))
 $output = Join-Path $outputDirectory "AlgorithmLinearRankerBehavior.exe"
 $sources = @(
-    "Core\ActionEnumerator.cs", "Core\BobCoachDataPaths.cs", "Core\Season14RegistryJsonParser.cs",
+    "Core\ActionEnumerator.cs", "Core\HandCombatCardPolicy.cs", "Core\BobCoachDataPaths.cs", "Core\Season14RegistryJsonParser.cs",
+    "Core\HeroPowerRuleCatalog.cs",
     "Core\Season14CardRegistry.cs",
     "Core\SeasonMechanicProfile.cs", "Core\ActivateRegistry.cs", "Core\ActivateFactSource.cs",
     "Core\LockboxRegistry.cs", "Core\LockboxFactSource.cs", "Core\FishbaitRegistry.cs",

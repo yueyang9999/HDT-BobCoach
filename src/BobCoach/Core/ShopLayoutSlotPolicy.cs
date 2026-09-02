@@ -46,9 +46,15 @@ namespace BobCoach.Engine
             _refreshTierUpdatePending = true;
         }
 
-        public bool ObserveShopTier(int currentTavernTier, int visibleCount)
+        public bool ObserveShopTier(
+            int currentTavernTier,
+            int visibleCount,
+            int expectedSlotCount)
         {
-            if (!_refreshTierUpdatePending || visibleCount <= 0)
+            if (!_refreshTierUpdatePending
+                || visibleCount <= 0
+                || expectedSlotCount <= 0
+                || visibleCount < expectedSlotCount)
                 return false;
 
             LastRefreshTier = NormalizeTier(currentTavernTier);

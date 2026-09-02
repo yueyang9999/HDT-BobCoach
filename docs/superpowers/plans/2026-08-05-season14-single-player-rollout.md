@@ -210,6 +210,14 @@ node "E:\HDT-BobCoach-evidence\tools\select_season_data.js" set season14
   4. [ ] `unresolvedOfficialRows=10` 人工核对完成后，再进入官方更新追踪自动化。
   5. [ ] CI/CD、插件网络抓取、发布在用户确认后实施。
 
+## T22 用户反馈与设计缺口（2026-08-09，仅记录，未实现）
+
+- 寄生之魂开局暗赐选择只有 2 个候选，且无推荐侧重；当前是否受候选取样限制或缺少评分展示尚未确认。
+- 点击暗赐按钮后只看到“暗赐选择中”，未看到发现推荐面板；代码已有 `dark_gift_panel`，真实 UI 仍需 HDT 启动后验证。
+- 暗赐改变随从种族/类型的算法覆盖为 `unknown`；未找到评分或效果覆盖代码，缺数据时按仓库契约 fail closed。
+- 饰品提示展示方式需确认；用户建议未来结合文本理解、当前场面和饰品评分推荐。当前 `TrinketRecommendationsVisible = false`，此建议属于设计变更，未实现。
+- 以上条目本轮只记录，不进入实现；后续在对应设计/实现任务中单独推进。
+
 ## 执行约束
 
 - 证据、归档、生成产物统一写入 `E:\HDT-BobCoach-evidence\season14\`

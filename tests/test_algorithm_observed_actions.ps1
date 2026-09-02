@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $candidates = @()
@@ -39,20 +39,21 @@ $sources = @(
     "Core\AllHeroesOverrideRule.cs", "Core\SecondHeroPowerDiscoverRule.cs", "Core\TeammateGoldTransferRule.cs",
     "Core\StartResourceExpectation.cs", "Core\ScheduledGrant.cs", "Core\SecondaryHeroPowerRule.cs",
     "Core\TimewarpVisit.cs", "Core\TimewarpOfferRule.cs", "Core\TimewarpPoolMergeRule.cs",
-    "Core\HeroPowerState.cs", "Core\HeroIdentityExpectation.cs", "Core\SecondHeroPowerChoiceExpectation.cs",
+    "Core\HeroPowerState.cs", "Core\HeroPowerRuleCatalog.cs", "Core\HeroIdentityExpectation.cs", "Core\SecondHeroPowerChoiceExpectation.cs",
     "Core\SecondHeroPowerChoiceBatchObservation.cs", "Core\SecondHeroPowerChoiceSelection.cs",
     "Core\SecondHeroPowerEntityObservation.cs", "Core\ObservedTeammateGoldTransfer.cs",
     "Core\SimulatedTeammateGoldTransfer.cs", "Core\PurchaseRewardExpectation.cs", "Core\TavernUpgradeOccurrence.cs",
     "Core\PrizeDiscoverExpectation.cs", "Core\TurnStartCardGrantExpectation.cs", "Core\SharedTurnEventExpectation.cs",
     "Core\SharedTurnEventOutcome.cs", "Core\SharedCardVoteOccurrence.cs", "Core\SharedCardVoteSelection.cs",
     "Core\SharedCardGrantExpectation.cs", "Core\SharedCardGrantObservation.cs", "Core\GameRuleEvaluator.cs",
-    "Core\ActionEnumerator.cs", "Core\TripleRuleEvaluator.cs", "Core\TeammateGoldTransferEvaluator.cs",
+    "Core\ActionEnumerator.cs", "Core\HandCombatCardPolicy.cs", "Core\TripleRuleEvaluator.cs", "Core\TeammateGoldTransferEvaluator.cs",
     "Core\Season14RegistryJsonParser.cs", "Core\Season14CardRegistry.cs", "Core\SeasonMechanicProfile.cs",
     "Core\ActivateRegistry.cs", "Core\ActivateFactSource.cs", "Core\LockboxRegistry.cs",
     "Core\LockboxFactSource.cs", "Core\FishbaitRegistry.cs", "Core\FishbaitFactSource.cs",
     "Core\DarkGiftRegistry.cs", "Core\DarkGiftFactSource.cs", "Core\Season14RulesEvaluator.cs",
     "Core\SeasonDataSelector.cs",
     "Core\CombatEventQueue.cs", "Core\CombatContext.cs", "Core\CombatEffects.cs", "Core\CombatSimulator.cs",
+    "Core\DeterministicRng.cs",
     "Core\Decision\ActionDescriptor.cs", "Core\Decision\CandidateGenerator.cs",
     "Core\Decision\ObservedActionInference.cs"
 ) | ForEach-Object { Join-Path $root (Join-Path "src\BobCoach" $_) }

@@ -1,10 +1,13 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $evidenceRoot = "E:\HDT-BobCoach-evidence\season14"
 $registryDir = Join-Path $evidenceRoot "generated\registries"
 if (!(Test-Path (Join-Path $registryDir "dark_gift_registry.json"))) {
     throw "Season14 evidence registries not found: $registryDir"
+}
+if (!(Test-Path (Join-Path $registryDir "season14_meta_baseline.json"))) {
+    throw "Season14 meta baseline not found: $registryDir"
 }
 
 $candidates = @()
@@ -17,7 +20,23 @@ if (Test-Path $vswhere) {
 $csc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (!$csc) { throw "Roslyn csc.exe not found; install Visual Studio Build Tools or set BOBCOACH_CSC" }
 
+$hdtDir = $env:BOBCOACH_HDT_DIR
+if (!$hdtDir) {
+    $gameDir = "D:\software\game"
+    $hdtDir = @([System.IO.Directory]::GetDirectories($gameDir, "HDT*") | ForEach-Object {
+        $candidate = Join-Path $_ "HDT"
+        if (!(Test-Path (Join-Path $candidate "HearthDb.dll"))) { $candidate = $_ }
+        if ((Test-Path (Join-Path $candidate "HearthDb.dll"))) { $candidate }
+    } | Select-Object -First 1)
+}
+if (!$hdtDir -or !(Test-Path (Join-Path $hdtDir "HearthDb.dll"))) {
+    throw "HearthDb.dll not found; set BOBCOACH_HDT_DIR"
+}
+$netstandard = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\netstandard.dll"
+
 $output = Join-Path $env:TEMP "bobcoach_season14_registries_harness.exe"
+Copy-Item -LiteralPath (Join-Path $hdtDir "HearthDb.dll") `
+    -Destination (Split-Path -Parent $output) -Force
 $previousRoot = $env:BOB_COACH_DATA_ROOT
 $env:BOB_COACH_DATA_ROOT = $evidenceRoot
 
@@ -27,6 +46,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\SeasonDataSelector.cs"),
     (Join-Path $root "src\BobCoach\Core\SeasonMechanicProfile.cs"),
     (Join-Path $root "src\BobCoach\Core\CompGuideCatalog.cs"),
+    (Join-Path $root "src\BobCoach\Core\SeasonMetaBaseline.cs"),
     (Join-Path $root "src\BobCoach\Core\Season14CardRegistry.cs"),
     (Join-Path $root "src\BobCoach\Core\CardObjectDatabase.cs"),
     (Join-Path $root "src\BobCoach\Core\CardPurchaseFactSource.cs"),
@@ -36,6 +56,7 @@ $sources = @(
     (Join-Path $root "src\BobCoach\Core\Season14TavernSpellPurchaseFactSource.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatContext.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatSimulator.cs"),
+    (Join-Path $root "src\BobCoach\Core\DeterministicRng.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatEffects.cs"),
     (Join-Path $root "src\BobCoach\Core\CombatEventQueue.cs"),
     (Join-Path $root "src\BobCoach\Core\ActiveTrinketContext.cs"),
@@ -96,7 +117,8 @@ $sources = @(
 )
 
 try {
-    & $csc /nologo /langversion:latest /target:exe "/out:$output" @sources
+    & $csc /nologo /langversion:latest /target:exe "/out:$output" `
+        "/r:$(Join-Path $hdtDir 'HearthDb.dll')" "/r:$netstandard" @sources
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $output
     exit $LASTEXITCODE

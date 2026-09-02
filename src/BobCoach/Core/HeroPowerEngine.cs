@@ -113,6 +113,10 @@ namespace BobCoach.Engine
             if (tavernTier < heroPowerUnlockTier)
                 return "";
 
+            if (strategy.SpecialRule == "DIG_GOLDEN")
+                return string.Format("挖金 · {0}费", cost);
+            if (strategy.SpecialRule == "CHROMIE")
+                return string.Format("法术酒馆 · {0}费", cost);
             if (strategy.UsePurpose == HeroUsePurpose.Economy)
                 return string.Format("赚铸币 · {0}费换经济优势", cost);
             if (strategy.UsePurpose == HeroUsePurpose.Buff)
@@ -120,7 +124,7 @@ namespace BobCoach.Engine
                     ? string.Format("加buff · 场面{0}个随从收益高", boardSize)
                     : "";
             if (strategy.UsePurpose == HeroUsePurpose.Resource)
-                return boardFull ? "" : string.Format("拿资源 · 补强场面", boardSize);
+                return string.Format("拿资源 · 补强场面", boardSize);
             if (strategy.UsePurpose == HeroUsePurpose.Combat)
                 return boardSize > 0
                     ? string.Format("加战力 · 提升战斗胜率", boardSize)

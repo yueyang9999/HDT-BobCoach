@@ -10,6 +10,7 @@ namespace BobCoach.Engine
     {
         BuyMinion, BuySpell, Refresh, Upgrade, SellMinion, FreezeShop,
         UseHeroPower, PickTrinket, PickDiscover, SendGoldToTeammate, Activate,
+        PlayMinion, UseSpell,
     }
 
     public sealed class GameAction
@@ -39,13 +40,35 @@ namespace BobCoach.Engine
         public List<TrinketOption> DiscoverOptions = new List<TrinketOption>();
         public EffectiveGameRules EffectiveRules = EffectiveGameRules.Default;
         public string HeroCardId = "";
+        public string HeroPowerCardId = "";
+        public string HeroPowerType = "";
+        public bool HeroPowerExhausted;
+        public int HeroPowerUnlockTurn = 1;
+        public int HeroPowerUnlockTier = 1;
+        public string HeroPowerSpecial = "";
+        public bool HeroPowerHasDiscover;
         public List<HeroPowerState> HeroPowers = new List<HeroPowerState>();
         public int HeroPowerCost;
+        public bool NormalRecruitAvailable = true;
+        public HashSet<int> ActivatedThisTurn = new HashSet<int>();
+        public HashSet<int> RecentlyBoughtEntityIds = new HashSet<int>();
     }
 
-    public sealed class MinionData { public int EntityId; }
+    public sealed class MinionData { public int EntityId; public int Cost; }
     public sealed class TrinketOption { public int EntityId; }
-    public sealed class HeroPowerState { public string CardId; public int Cost; }
+    public sealed class HeroPowerState
+    {
+        public string CardId;
+        public string BaseHeroCardId = "";
+        public int Cost;
+        public bool IsActive;
+        public bool IsUnlocked;
+        public bool IsPrimary;
+        public bool IsSecondary;
+        public bool Exhausted;
+        public string SpecialRule = "";
+        public bool HasDiscover;
+    }
     public sealed class EffectiveGameRules
     {
         public static readonly EffectiveGameRules Default = new EffectiveGameRules();

@@ -51,6 +51,8 @@ namespace BobCoach.Engine
                 ? (double)boardPower / opponentPower
                 : 1.0;
             bool desperate = health <= 10 && powerRatio < 0.7;
+            bool needsStabilize = desperate
+                || (health <= 15 && powerRatio < 0.75);
             if (desperate && offeredExpectedValue < 0.4)
             {
                 return new DarkGiftDecision
@@ -62,16 +64,38 @@ namespace BobCoach.Engine
                 };
             }
 
+            bool earlyHold = usesRemaining >= 3
+                && turn >= 3
+                && turn <= 5
+                && !needsStabilize
+                && offeredExpectedValue < 0.85;
+            if (earlyHold)
+            {
+                return new DarkGiftDecision
+                {
+                    ShouldOpen = false,
+                    Score = 0.2,
+                    Cost = 3,
+                    Reason = "hold-early",
+                };
+            }
+
+            bool lastChance = usesRemaining == 1 && turn >= 9;
             double score = offeredExpectedValue * 0.55
                 + (hasCoreSynergy ? 0.25 : 0.0)
                 + (liveGold - 3) * 0.05
                 - (desperate ? 0.15 : 0.0);
+            if (lastChance)
+                score += 0.25;
+            double threshold = lastChance ? 0.30 : 0.45;
             return new DarkGiftDecision
             {
-                ShouldOpen = score >= 0.45,
+                ShouldOpen = score >= threshold,
                 Score = score,
                 Cost = 3,
-                Reason = score >= 0.45 ? "open" : "low-value",
+                Reason = score >= threshold
+                    ? (lastChance ? "last-open" : "open")
+                    : "low-value",
             };
         }
     }

@@ -85,10 +85,10 @@ for (const source of requiredValidationSources) {
         process.exit(1);
     }
 }
-if (!plugin.includes("private const bool TrinketRecommendationsVisible = false;")
+if (!plugin.includes("private const bool TrinketRecommendationsVisible = true;")
     || !plugin.includes("bool trinketShouldDisplay = TrinketRecommendationsVisible && trinketShouldShow;")
     || !plugin.includes("if (trinketShouldDisplay)")) {
-    console.error("FAIL trinket recommendations must use one testable default-off display gate");
+    console.error("FAIL trinket recommendations must use one testable visible display gate");
     process.exit(1);
 }
 if (plugin.includes("_trinketStatsUpdater.Active") || plugin.includes("TrinketStatRecord")) {
@@ -180,24 +180,21 @@ if (!buttonBody.includes("LogConfigEnsurer.Inspect()")
     console.error("FAIL plugin button must show the plan and require Yes before applying log.config");
     process.exit(1);
 }
-if (!plugin.includes("private bool _decisionEventRecordingOptedIn;")
-    || !buttonBody.includes("MessageBoxButton.YesNo")
-    || !buttonBody.includes("_decisionEventRecordingOptedIn = true")
-    || !buttonBody.includes("_decisionEventRecordingOptedIn = false")) {
-    console.error("FAIL local decision-event recording must default off and require explicit Yes/No consent");
+// 2026-08-19 契约同步(用户授权): 本地决策事件录制默认同意(无需手动弹窗点选)。
+// 新契约: 默认开启 + 仍受 Power.log 配置门控(fail-closed) + 数据仅本机保存 +
+// Shadow 模式不变。OnButtonPress 保留手动检查入口(不再必需)。
+if (!plugin.includes("private bool _decisionEventRecordingOptedIn = true;")
+    || !plugin.includes("_decisionEventRecordingOptedIn")) {
+    console.error("FAIL local decision-event recording must default on per user authorization (2026-08-19)");
     process.exit(1);
 }
-const configOkIndex = buttonBody.indexOf("plan.Status == Engine.LogConfigStatus.OK");
-const configOkReturnIndex = buttonBody.indexOf("return;", configOkIndex);
-const recordingConsentIndex = buttonBody.indexOf("MessageBoxButton.YesNo", configOkIndex);
-if (configOkIndex < 0 || recordingConsentIndex < 0
-    || (configOkReturnIndex >= 0 && configOkReturnIndex < recordingConsentIndex)) {
-    console.error("FAIL an already-valid log.config must not bypass recording consent");
+if (!plugin.includes("_powerLogWatcher.ConfigStatus == LogConfigStatus.OK")) {
+    console.error("FAIL recording must remain gated by Power.log config status (fail-closed)");
     process.exit(1);
 }
 if (/Settings\s*\.\s*\w+\s*=\s*_decisionEventRecordingOptedIn/.test(plugin)
     || /Profile\w*\s*\.\s*\w+\s*=\s*_decisionEventRecordingOptedIn/.test(plugin)) {
-    console.error("FAIL recording consent must remain in memory instead of adding a permanent setting/profile field");
+    console.error("FAIL recording state must remain in memory instead of adding a permanent setting/profile field");
     process.exit(1);
 }
 
@@ -208,7 +205,7 @@ if (plugin.slice(loadBegin, loadEnd).includes("MessageBox.Show")) {
     process.exit(1);
 }
 
-console.log("PASS log.config writes require explicit plugin-button consent");
+console.log("PASS local decision-event recording defaults on (user-authorized) and stays local-only");
 
 const shadowModeToken = "DecisionRuntimeMode.Shadow";
 if (!plugin.includes(shadowModeToken)

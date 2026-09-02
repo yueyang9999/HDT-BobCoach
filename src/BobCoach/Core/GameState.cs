@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 
 namespace BobCoach.Engine
 {
@@ -163,16 +164,51 @@ namespace BobCoach.Engine
         public bool NormalRecruitAvailable = true;
         public int LiveGold = -1;
         public HashSet<int> ActivatedThisTurn = new HashSet<int>();
+        public HashSet<int> RecentlyBoughtEntityIds = new HashSet<int>();
 
         /// <summary>游戏实际招募位数(基于酒馆等级, 含法术位)</summary>
         public int ShopSlotCount
         {
             get
             {
-                if (TavernTier <= 1) return 4;      // T1: 3随从+1法术
-                if (TavernTier <= 3) return 5;      // T2-T3: 4随从+1法术
-                if (TavernTier <= 5) return 6;      // T4-T5: 5随从+1法术
-                return 7;                            // T6: 6随从+1法术
+                return GetShopSlotCountForTier(TavernTier);
+            }
+        }
+
+        public int GetShopSlotCountForTier(int tavernTier)
+        {
+            int slots = tavernTier <= 1 ? 4
+                : tavernTier <= 3 ? 5
+                : tavernTier <= 5 ? 6
+                : 7;
+            if (HasAlwaysSevenTavernCards) return 7;
+            // R232: 辛达苟萨(冰冷静滞)被动"酒馆提供的随从减少一个"→ 商店槽位-1。
+            // 精确匹配 TB_BaconShop_HERO_27(原 Contains("HERO_27") 误伤 BG27_HERO_801 等)。
+            if (IsSindragosaHero)
+                slots = System.Math.Max(3, slots - 1); // R247: T1基础4槽-1=3槽, 原钳位4导致UI错位(用户实测)
+            if (ActiveTrinkets.Contains("BG30_MagicItem_423"))
+                slots = System.Math.Min(7, slots + 1);
+            return slots;
+        }
+
+        /// <summary>辛达苟萨(冰冷静滞): 商店随从减1, 板面槽位不变(7)</summary>
+        public bool IsSindragosaHero
+        {
+            get
+            {
+                return string.Equals(HeroCardId, "TB_BaconShop_HERO_27",
+                    StringComparison.Ordinal)
+                    || string.Equals(HeroCardId, "TB_BaconShop_HERO_27_SKIN_D",
+                    StringComparison.Ordinal);
+            }
+        }
+
+        public bool HasAlwaysSevenTavernCards
+        {
+            get
+            {
+                return ActiveTrinkets.Contains("BG30_MagicItem_841")
+                    || ActiveTrinkets.Contains("BG30_MagicItem_991");
             }
         }
 
@@ -188,6 +224,7 @@ namespace BobCoach.Engine
         // GameState 每帧重建, 不能持有跨帧状态 — 这是状态机曾长期失效的根因。
         public int HeroPowerCost = 1;
         public string HeroPowerCardId = "";
+        public int HeroPowerDigsRemaining = -1;
         public string HeroPowerType = "Passive";  // Passive/Active/Conditional/Aura
         public bool HeroPowerExhausted;            // 技能已使用/耗尽(EXHAUSTED)
         public bool HasSecondHeroPower;            // 实体检测: 玩家拥有≥2个英雄技能(狼王/米罗克/畸变)
@@ -195,18 +232,19 @@ namespace BobCoach.Engine
         public int HeroPowerUnlockTurn = 1;        // 英雄技能解锁回合(沙德沃克=3, 多数=1)
         public int HeroPowerUnlockTier = 1;        // 英雄技能解锁酒馆等级(米尔菲丝=4, 典狱长=2)
 
-        /// <summary>最大板面槽位: 辛达苟萨被动=6, 其他=7</summary>
+        /// <summary>最大板面槽位: 恒为7(R232 修正: 辛达苟萨被动只减商店随从, 不减板面)</summary>
         public int MaxBoardSlots
         {
             get
             {
-                if (HeroCardId != null && HeroCardId.Contains("HERO_27")) return 6;
                 return 7;
             }
         }
         public string HeroPowerSpecial = "";       // 技能特殊规则(如trigger_battlecry_free)
         public bool HeroPowerHasDiscover;          // 技能含\"发现\"机制(伊莉斯/米尔菲丝/阿莱克丝塔萨等)
         public List<HeroPowerState> HeroPowers = new List<HeroPowerState>();
+        public string LastUsedTavernSpellCardId = "";
+        public string LastUsedTavernSpellName = "";
         public List<string> ActiveTrinkets = new List<string>();
         // Node桥接字段
         public int _nodeHandIdx = -1;

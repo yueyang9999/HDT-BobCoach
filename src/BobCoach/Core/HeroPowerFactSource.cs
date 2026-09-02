@@ -19,6 +19,9 @@ namespace BobCoach.Engine
         public bool HasDiscover;
         public string PowerHint = "";
         public float LevelAggression = 1.0f;
+        public int EarlyUpgradeSuppressTurn;   // R225: 数据驱动前期升本抑制窗口(T1-TN 不推荐升本)
+        public float EarlyBuyBias;   // R226: 前期(T1-T4)买随从偏差(数据驱动)
+        public float EarlyRefBias;   // R226: 前期(T1-T4)刷新偏差(数据驱动)
         public float UpgradeValueBias;
         public float RefreshValueBias;
         public float BuyValueBias;

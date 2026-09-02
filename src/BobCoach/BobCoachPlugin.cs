@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -30,7 +30,10 @@ namespace BobCoach
         private DecisionOrchestrator _decisionOrchestrator;
         private DecisionEventRecorder _decisionEventRecorder;
         private DecisionLifecycleTracker _decisionLifecycle;
-        private bool _decisionEventRecordingOptedIn;
+        // 2026-08-19 用户授权: 默认同意本地决策事件录制(不再依赖手动弹窗点选)。
+        // 隐私契约不变: 事件仅含决策状态/动作/结果, 本机保存(decision-data/decision-events.jsonl)。
+        // 仍受 Power.log 配置检查门控(log.config 未配置时自动 fail-closed 不写)。
+        private bool _decisionEventRecordingOptedIn = true;
         private FeatureExtractor _fe;
         private OverlayRenderer _renderer;
         private StatusStripSettingsWindow _statusStripSettingsWindow;
@@ -39,14 +42,29 @@ namespace BobCoach
         private ProbabilityCalculator _probCalc;
         private ProfileEngine _profileEngine;
         private HeroPowerEngine _heroPowerEngine;
+        private HeroPlaybookRegistry _heroPlaybook;
         private readonly HeroSkillCatalog _heroSkillCatalog = new HeroSkillCatalog();
+        private static readonly Lazy<Season14TavernSpellRegistry> TavernSpellLookup =
+            new Lazy<Season14TavernSpellRegistry>(() =>
+            {
+                var registry = new Season14TavernSpellRegistry();
+                registry.LoadFromConfiguredRoot();
+                return registry;
+            });
+        private string _lastUsedTavernSpellCardId = "";
+        private string _lastUsedTavernSpellName = "";
         private DecisionVisualizer _visualizer;
         private GameRecord _currentGameRecord;
+        private Engine.GlobalReplayRecorder _globalReplayRecorder;
+        private readonly Dictionary<int, string> _powerEntityZones = new Dictionary<int, string>();
+        private readonly Dictionary<int, string> _powerEntityCards = new Dictionary<int, string>();
+        private readonly Dictionary<int, int> _powerEntityPlayers = new Dictionary<int, int>();
         private DecisionMode _decisionMode;
         private Engine.PowerLogWatcher _powerLogWatcher;
         private bool _powerLogEventsSubscribed;
         private bool _inBattlegrounds;
         private bool _engineReady;
+        private string _powerLogPhase = "shop";
         private string _lastStateHash;
         private string _lastEvalDumpSig; // Phase0评测: 全状态转储节流签名
         private readonly Engine.TrinketShadowCaptureSession _trinketShadowCaptureSession =
@@ -55,10 +73,11 @@ namespace BobCoach
         // 零副作用只读采集T6/T9饰品报价+引擎评分, 为未来B解冻(~300条)积累样本。类初始化读一次, 关时零帧开销。
         private static readonly bool _trinketShadowEnabled =
             Environment.GetEnvironmentVariable("BOBCOACH_TRINKET_SHADOW") == "1";
-        private const bool TrinketRecommendationsVisible = false;
+        private const bool TrinketRecommendationsVisible = true;
         private string _lastRenderedHash;
         private string _lastRenderedPlanHash;  // 防重复dispatch
         private bool _suggestionsActive;
+        private bool _lastLiveSafetySuppressRefresh;
         private HashSet<int> _prevBoardIds = new HashSet<int>();
         private int _prevGoldenCount = -1;        // 检测三连触发
         private int _prevGoldenHandCount = -1;    // 检测手牌三连奖励触发
@@ -73,6 +92,8 @@ namespace BobCoach
         private Engine.PowerLogChoiceBatch _timewarpPurchaseBatchFromLog = null;
         private volatile bool _timewarpPurchaseClearRequested;
         private Engine.PowerLogChoiceBatch _darkGiftBatchFromLog = null;
+        private int _darkGiftUsedCount;
+        private int _darkGiftUsedTurn = -1;
         private bool _passiveChoiceActive;
         private readonly Engine.DarkGiftTipRenderCoordinator _darkGiftTipCoordinator =
             new Engine.DarkGiftTipRenderCoordinator(TimeSpan.FromSeconds(6));
@@ -88,7 +109,7 @@ namespace BobCoach
         private int _lastTrinketHideTurn = -1;
         private bool _lastDiscoverShowState = false;
         // 面板生命周期状态机(持久持有, 跨帧存活) — GameState 每帧重建无法持有, 这是状态机曾失效的根因
-        private Engine.PanelState _trinketPanelState = new Engine.PanelState(Engine.PanelPhase.Idle, 1, 1500);
+        private Engine.PanelState _trinketPanelState = new Engine.PanelState(Engine.PanelPhase.Idle, 1, 500);
         private Engine.PanelState _discoverPanelState = new Engine.PanelState(Engine.PanelPhase.Idle, 1, 1000);
         private Engine.UiTargetStateMachine _trinketTargetState = new Engine.UiTargetStateMachine(120, 1500, 2);
         private Engine.UiTargetStateMachine _discoverTargetState = new Engine.UiTargetStateMachine(120, 1000, 2);
@@ -115,6 +136,12 @@ namespace BobCoach
         private int _updateSkippedNoChange;
         private int _updateSkippedCombat;
         private int _updateEvaluated;
+        // R219: 整回合动作链缓存(玩家连续操作时推荐计划而非时点快照)
+        private int _turnPlanTurn = -1;
+        private string _turnPlanShopSig = "";
+        // P1 2026-08: 动态铸币管理——金币变化时动作链重算(升本后金币归零不再显示买卡)
+        private int _turnPlanGold = -1;
+        private string _turnPlanChain = "";
         private int _renderVersion;
         private bool _wasInCombat = false;           // 阶段追踪
         private DateTime _lastShopChange = DateTime.MinValue;
@@ -215,11 +242,32 @@ namespace BobCoach
                     NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
                 _fe = new FeatureExtractor();
                 _renderer = new OverlayRenderer();
+                // 2026-08-19 C2: UI 被游戏图层遮挡——确保 HDT overlay 窗口置顶
+                // (插件渲染在 OverlayCanvas 上, 若 overlay 窗口未置顶则被游戏画面盖住;
+                // 向上找父 Window 设置 Topmost, 失败静默不影响加载)
+                try
+                {
+                    var ovCanvas = Core.OverlayCanvas;
+                    if (ovCanvas != null)
+                    {
+                        System.Windows.Media.Visual visual = ovCanvas;
+                        while (visual != null && !(visual is System.Windows.Window))
+                            visual = System.Windows.Media.VisualTreeHelper.GetParent(visual) as System.Windows.Media.Visual;
+                        var ovWindow = visual as System.Windows.Window;
+                        if (ovWindow != null && !ovWindow.Topmost)
+                        {
+                            ovWindow.Topmost = true;
+                            Log("C2: overlay window topmost enabled");
+                        }
+                    }
+                }
+                catch { }
                 _poolTracker = new CardPoolTracker();
                 _probCalc = new ProbabilityCalculator(_poolTracker);
                 _fe.SetProbabilityCalculator(_probCalc);
                 _profileEngine = new ProfileEngine();
                 _heroPowerEngine = _engine.HeroPower;
+                _heroPlaybook = _engine.HeroPlaybook;
                 _extractor.SetHeroPowerEngine(_heroPowerEngine);
                 _extractor.SetAnomalyRegistry(_engine.AnomalyReg);
                 _extractor.SetTrinketFactSource(_engine.TrinketFactSource);
@@ -254,6 +302,7 @@ namespace BobCoach
                 GameEvents.OnGameEnd.Add(OnGameEnd);
                 GameEvents.OnTurnStart.Add(OnTurnStart);
                 GameEvents.OnInMenu.Add(OnInMenu);
+                EnsureCombatWatchTimer();
 
                 Log("BobCoach ready.");
             }
@@ -273,6 +322,16 @@ namespace BobCoach
             ClearSuggestions();
             try { UnsubscribePowerLogWatcherEvents(); } catch { }
             try { _powerLogWatcher?.StopWatching(); } catch { }
+            try { if (_globalReplayRecorder != null) { _globalReplayRecorder.Dispose(); _globalReplayRecorder = null; } } catch { }
+            try
+            {
+                if (_combatWatchTimer != null)
+                {
+                    _combatWatchTimer.Stop();
+                    _combatWatchTimer = null;
+                }
+            }
+            catch { }
             Log("BobCoach unloaded");
         }
 
@@ -631,7 +690,7 @@ namespace BobCoach
                     {
                         if (changeType == Engine.ShopChangeType.Refreshed)
                             _shopLayoutSlotPolicy.MarkRefreshDetected();
-                        else if (!_shopLayoutSlotPolicy.AwaitingCompleteShop)
+                        else
                             _shopLayoutSlotPolicy.ObservePurchase();
                         RequestShopUiRefresh(DateTime.Now);
                         if (changeType == Engine.ShopChangeType.Purchased)
@@ -772,9 +831,10 @@ namespace BobCoach
             _inBattlegrounds = false;
             _lastStateHash = null; _lastRenderedHash = null;
             _trinketShadowCaptureSession.Reset();
-            _suggestionsActive = false;
-            try
-            {
+                _suggestionsActive = false;
+                _lastLiveSafetySuppressRefresh = false;
+                try
+                {
                 EnsureBattlegroundsInitialized();
             }
             catch { }
@@ -798,6 +858,7 @@ namespace BobCoach
                 Log(string.Format("BobsBuddy availability: {0}", _combatPredictAvailable ? "AVAILABLE" : "NOT FOUND"));
                 _cachedPlan = null; _cachedState = null;  // 清空上局缓存
                 _persistentDirty = true;
+                _engine?.ResetStrategicMemory();
                 _extractor.Reset();  // 清除上局幽灵实体累积
                 _visualizer.Reset();  // 重置流派锁+手牌标记缓存
                 _purchaseDetector.Reset();  // 重置购买检测
@@ -824,13 +885,19 @@ namespace BobCoach
                 _timewarpPurchaseBatchFromLog = null;
                 _timewarpPurchaseClearRequested = false;
                 _darkGiftBatchFromLog = null;
+                _darkGiftUsedCount = 0;
+                _darkGiftUsedTurn = -1;
+                _powerLogPhase = "shop";
+                _powerEntityZones.Clear();
+                _powerEntityCards.Clear();
+                _powerEntityPlayers.Clear();
                 _passiveChoiceActive = false;
                 _darkGiftTipCoordinator.Reset();
                 _renderer.ClearDarkGiftCandidates();
                 _claimedUpgradePrizeChoiceIds.Clear();
                 _trinketChoiceLifecycle.Reset();
                 // 跨局重置面板状态机回 Idle(防止上局 Active/Fading 残留)
-                _trinketPanelState = new Engine.PanelState(Engine.PanelPhase.Idle, 1, 1500);
+                _trinketPanelState = new Engine.PanelState(Engine.PanelPhase.Idle, 1, 500);
                 _discoverPanelState = new Engine.PanelState(Engine.PanelPhase.Idle, 1, 1000);
                 _trinketTargetState.Reset();
                 _discoverTargetState.Reset();
@@ -1024,6 +1091,22 @@ namespace BobCoach
                 ResetDecisionRecording();
             }
 
+            // 全局事件回放收尾：结算事件必须在 watcher 停止和快照导出前落盘。
+            if (_globalReplayRecorder != null)
+            {
+                try
+                {
+                    _globalReplayRecorder.RecordGameEnd(
+                        _currentGameRecord != null ? _currentGameRecord.FinalRank : placement,
+                        _currentGameRecord != null ? _currentGameRecord.TurnCount : 0,
+                        _currentGameRecord != null ? _currentGameRecord.TripleCount : 0,
+                        _currentGameRecord != null ? _currentGameRecord.BoardPowerPeak : 0);
+                }
+                catch (Exception ex) { Log("Global replay end error: " + ex.Message); }
+                try { _globalReplayRecorder.Dispose(); } catch { }
+                _globalReplayRecorder = null;
+            }
+
             // 记录本局数据
             if (_currentGameRecord != null && _profileEngine != null)
             {
@@ -1126,6 +1209,9 @@ namespace BobCoach
                             featureVector = t.FeatureVector ?? "",
                             recommendedAction = t.RecommendedActionJson ?? "",
                             actionScores = t.ActionScoresJson ?? "",
+                            shadowRecommendedAction = t.ShadowRecommendedActionJson ?? "",
+                            shadowActionScores = t.ShadowActionScoresJson ?? "",
+                            frozenShop = t.FrozenShop,
                         }).ToList()
                     });
                     Log("Turn snapshot saved: " + snapPath + " (" + _currentGameRecord.Turns.Count + " turns)");
@@ -1167,7 +1253,11 @@ namespace BobCoach
                     for (int i = events.Count - 1; i >= 0; i--)
                     {
                         var e = events[i];
-                        if (e.Tag == "PLAYER_LEADERBOARD_PLACE" && e.NumericValue >= 1 && e.NumericValue <= 8)
+                        if (e.Tag == "PLAYER_LEADERBOARD_PLACE"
+                            && e.NumericValue >= 1 && e.NumericValue <= 8
+                            && (string.IsNullOrEmpty(e.CardId)
+                                || Engine.BattlegroundsHeroIdentity.NormalizeHeroCardId(e.CardId)
+                                    == _currentGameRecord.HeroId))
                             return e.NumericValue;
                     }
                 }
@@ -1179,10 +1269,26 @@ namespace BobCoach
             {
                 if (Core.Game != null)
                 {
+                    int localCtrl = -1;
+                    try
+                    {
+                        localCtrl = Core.Game.PlayerEntity != null
+                            ? Core.Game.PlayerEntity.GetTag(
+                                HearthDb.Enums.GameTag.CONTROLLER)
+                            : -1;
+                    }
+                    catch { }
                     foreach (var entity in Core.Game.Entities.Values.ToList())
                     {
-                        if (entity == null || !entity.IsControlledBy(1)) continue;
-                        if (!entity.IsHero && !entity.CardId.StartsWith("TB_BaconShop_HERO")) continue;
+                        if (entity == null) continue;
+                        if (localCtrl > 0
+                            && entity.GetTag(HearthDb.Enums.GameTag.CONTROLLER) != localCtrl)
+                            continue;
+                        string normalizedHero = Engine.BattlegroundsHeroIdentity
+                            .NormalizeHeroCardId(entity.CardId ?? "");
+                        if (!entity.IsHero
+                            && normalizedHero != _currentGameRecord.HeroId)
+                            continue;
                         if (entity.HasTag(HearthDb.Enums.GameTag.PLAYER_LEADERBOARD_PLACE))
                         {
                             int place = entity.GetTag(HearthDb.Enums.GameTag.PLAYER_LEADERBOARD_PLACE);
@@ -1242,6 +1348,11 @@ namespace BobCoach
 
         private DecisionResult EvaluateRankingDecision(GameState state)
         {
+            if (state != null)
+            {
+                state.LastUsedTavernSpellCardId = _lastUsedTavernSpellCardId ?? "";
+                state.LastUsedTavernSpellName = _lastUsedTavernSpellName ?? "";
+            }
             DecisionResult rankingDecision;
             if (_decisionLifecycle != null && _decisionEventRecorder != null)
             {
@@ -1257,6 +1368,7 @@ namespace BobCoach
                         ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
                     _decisionEventRecorder.AttachRecommendation(context.DecisionId,
                         rankingDecision, DateTime.UtcNow.ToString("o"));
+                    rankingDecision = TryResolveRankedFallback(state, rankingDecision);
                 }
                 catch (Exception ex)
                 {
@@ -1273,11 +1385,39 @@ namespace BobCoach
                     _decisionOrchestrator = new DecisionOrchestrator(
                         _decisionPolicies.Legacy, _decisionPolicies.Unified,
                         NoOpShadowComparisonSink.Instance, DecisionRuntimeMode.Shadow);
-                rankingDecision = SafeCall(
-                    () => _decisionOrchestrator.Decide(state), "GetBestAction")
-                    ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
+                    rankingDecision = SafeCall(
+                        () => _decisionOrchestrator.Decide(state), "GetBestAction")
+                        ?? UnavailableDecisionPolicy.For(FallbackReason.NoSafeAction).Decide(state);
+                    rankingDecision = TryResolveRankedFallback(state, rankingDecision);
             }
             return rankingDecision;
+        }
+
+        private DecisionResult TryResolveRankedFallback(
+            GameState state, DecisionResult current)
+        {
+            if (current == null || current.SelectedAction != null
+                || current.FallbackReason == FallbackReason.None)
+                return current;
+            try
+            {
+                var ranked = _engine.GetRankedCandidates(state, 1);
+                if (ranked == null || ranked.Count == 0 || ranked[0] == null
+                    || ranked[0].Action == null)
+                    return current;
+                return new DecisionResult(
+                    "ranked-fallback",
+                    ranked[0].Action,
+                    ranked,
+                    ranked[0].Score,
+                    PlannerStatus.NotRequested,
+                    FallbackReason.None,
+                    "ranked fallback");
+            }
+            catch
+            {
+                return current;
+            }
         }
 
         // ── Decision evaluation & render ──
@@ -1297,6 +1437,7 @@ namespace BobCoach
                         _renderer.ClearTimewarpPurchaseHint();
                     }
 
+                    _darkGiftTipCoordinator.RefreshPressable(DateTime.Now);
                     var darkGiftStatus = _darkGiftTipCoordinator.GetStatus(DateTime.Now, BuildDarkGiftTipContext());
                     if (darkGiftStatus == null)
                     {
@@ -1311,14 +1452,19 @@ namespace BobCoach
                         _renderer.RefreshCanvasSize();
                         _renderer.ShowDarkGiftTip(darkGiftStatus);
                         if (_darkGiftBatchFromLog != null)
-                            _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
+                            _renderer.ShowDarkGiftCandidates(
+                                _darkGiftBatchFromLog.Candidates, true,
+                                ScoreDarkGiftCandidates());
                     }
                     else if (nowInCombat)
                     {
                         if (_timewarpPurchaseBatchFromLog != null)
                         {
+                            // 2026-08-19 实测修复(C1): 战斗阶段不渲染时空扭曲选择——
+                            // 游戏内面板在招募阶段出现, 战斗阶段显示会被局内图层遮挡且
+                            // 时序不同步(米罗克回合4反馈); 批次保留, 招募阶段路径渲染
                             _eventEvalRequested = false;
-                            RenderTimewarpPurchaseHint();
+                            _renderer.ClearTimewarpPurchaseHint();
                         }
                         else if (CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
                             _discoverBatchFromLog, _discoverPanelActive))
@@ -1361,7 +1507,28 @@ namespace BobCoach
             _renderer.RefreshCanvasSize();
             _renderer.ShowDarkGiftTip(status);
             if (_darkGiftBatchFromLog != null)
-                _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
+                _renderer.ShowDarkGiftCandidates(
+                    _darkGiftBatchFromLog.Candidates, true,
+                    ScoreDarkGiftCandidates());
+        }
+
+        private List<Engine.TrinketHint> ScoreDarkGiftCandidates()
+        {
+            var batch = _darkGiftBatchFromLog;
+            if (batch == null || batch.Candidates == null || batch.Candidates.Count == 0)
+                return new List<Engine.TrinketHint>();
+
+            var state = _cachedState;
+            string compDir = _cachedPlan?.Status?.CompDir ?? "";
+            return Engine.DarkGiftCandidateAdvisor.Evaluate(
+                batch.Candidates,
+                state?.BoardMinions,
+                compDir,
+                Engine.CardNameService.GetName,
+                ResolveCardTribes,
+                Engine.CardNameService.GetTier,
+                _engine != null ? _engine.IsResourceCard : (Func<string, bool>)null,
+                _engine != null ? _engine.IsCoreComboCard : (Func<string, bool>)null);
         }
 
         private Engine.DarkGiftTipContext BuildDarkGiftTipContext()
@@ -1376,24 +1543,38 @@ namespace BobCoach
             }
 
             var liveScene = BuildLiveScene(state);
+            string compDir = _cachedPlan?.Status?.CompDir ?? "";
+            bool hasCoreSynergy = !string.IsNullOrEmpty(compDir)
+                && state.BoardMinions != null
+                && state.BoardMinions.Count >= 3;
+            double offeredExpectedValue = hasCoreSynergy ? 0.65 : 0.5;
+            int liveGold = GetLiveGold(state);
+            bool inCombat = string.Equals(
+                _powerLogPhase, "MAIN_COMBAT", StringComparison.Ordinal);
+            try
+            {
+                if (Core.Game != null && Core.Game.IsBattlegroundsCombatPhase)
+                    inCombat = true;
+            }
+            catch { }
             return new Engine.DarkGiftTipContext
             {
                 StateAvailable = true,
                 GameActive = state.GameActive,
-                Phase = state.Phase ?? "",
+                Phase = inCombat ? "combat" : (state.Phase ?? ""),
                 Turn = state.Turn,
                 TavernTier = state.TavernTier,
-                Gold = state.Gold,
+                Gold = liveGold,
                 BoardMinionCount = state.BoardMinions?.Count ?? 0,
                 ShopMinionCount = state.ShopMinions?.Count ?? 0,
                 HandMinionCount = state.HandMinions?.Count ?? 0,
                 Health = state.Health,
                 BoardPower = liveScene.BoardPower,
                 OpponentPower = liveScene.OpponentAveragePower,
-                UsesRemaining = 3,
-                AlreadyUsedThisTurn = false,
-                OfferedExpectedValue = 0.5,
-                HasCoreSynergy = false,
+                UsesRemaining = Math.Max(0, 3 - _darkGiftUsedCount),
+                AlreadyUsedThisTurn = _darkGiftUsedTurn == state.Turn && _darkGiftUsedCount > 0,
+                OfferedExpectedValue = offeredExpectedValue,
+                HasCoreSynergy = hasCoreSynergy,
             };
         }
 
@@ -1460,9 +1641,43 @@ namespace BobCoach
 
         private static string ResolveDisplayName(string cardName, string cardId)
         {
-            if (!string.IsNullOrEmpty(cardName)) return cardName;
-            string resolved = Engine.CardNameService.GetName(cardId ?? "");
-            return string.IsNullOrEmpty(resolved) ? "unknown" : resolved;
+            return Engine.DisplayNameResolver.Resolve(
+                cardId ?? "", cardName ?? "", Engine.CardNameService.GetName);
+        }
+
+        private List<string> ResolveCardTribes(string cardId)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(cardId)) return result;
+
+            if (_cardMeta != null && _cardMeta.TryGetValue(cardId, out var meta))
+            {
+                foreach (var tribe in (meta.tribe ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (!result.Contains(tribe)) result.Add(tribe);
+                }
+                if (result.Count > 0) return result;
+            }
+
+            try
+            {
+                HearthDb.Card c;
+                if (HearthDb.Cards.All.TryGetValue(cardId, out c) && c != null)
+                {
+                    AddTribeCode(c.Race.ToString(), result);
+                    AddTribeCode(c.SecondaryRace.ToString(), result);
+                }
+            }
+            catch { }
+            return result;
+        }
+
+        private static void AddTribeCode(string code, List<string> result)
+        {
+            if (string.IsNullOrEmpty(code) || result == null) return;
+            string cn;
+            if (_tribeCn.TryGetValue(code, out cn) && !result.Contains(cn))
+                result.Add(cn);
         }
 
         private void EvaluateAndRender()
@@ -1473,7 +1688,9 @@ namespace BobCoach
                 _renderer.RefreshCanvasSize();
                 _renderer.ShowDarkGiftTip(darkGiftStatus);
                 if (_darkGiftBatchFromLog != null)
-                    _renderer.ShowDarkGiftCandidates(_darkGiftBatchFromLog.Candidates, true);
+                    _renderer.ShowDarkGiftCandidates(
+                        _darkGiftBatchFromLog.Candidates, true,
+                        ScoreDarkGiftCandidates());
                 return;
             }
             _renderer.ClearDarkGiftTip();
@@ -1506,16 +1723,49 @@ namespace BobCoach
             bool initialDiscoverGate = (_discoverPanelActive || hasRecentTrigger) && !combatCooldown;
             _extractor.DiscoverTriggerActive = initialDiscoverGate;
             _extractor.PassiveChoiceActive = _passiveChoiceActive;
+            _extractor.CurrentTrinketChoiceContext =
+                _trinketChoiceLifecycle.Current == null
+                    ? Engine.TrinketChoiceContext.Unknown
+                    : _trinketChoiceLifecycle.Current.Context;
 
             var state = _extractor.Extract();
             if (state == null) return;
+            if (_powerLogWatcher != null)
+                _powerLogWatcher.LocalControllerId = state.PlayerId;
+            bool canStartGlobalReplay = state.GameActive
+                && state.Turn > 0
+                && !string.IsNullOrEmpty(state.HeroPowerCardId);
+            if (canStartGlobalReplay && _globalReplayRecorder == null)
+            {
+                try
+                {
+                    _globalReplayRecorder = new Engine.GlobalReplayRecorder();
+                    string replayHeroId = Engine.HeroPowerRuleCatalog
+                        .GetHeroCardIdForPower(state.HeroCardId, state.HeroPowerCardId);
+                    _globalReplayRecorder.Start(
+                        replayHeroId,
+                        state.HeroName,
+                        state.PlayerId.ToString(),
+                        state.GameBuild,
+                        state.SeasonId);
+                }
+                catch (Exception ex)
+                {
+                    Log("Global replay start error: " + ex.Message);
+                    try { _globalReplayRecorder?.Dispose(); } catch { }
+                    _globalReplayRecorder = null;
+                }
+            }
             var liveScene = BuildLiveScene(state);
             var liveSafety = LiveSafetyGate.Evaluate(
                 liveScene, liveScene.RefreshCost, liveScene.MinBuyCost);
 
             // 只有实体刷新事件可以推进商店布局等级。购买、升本和冻结跨回合
             // 都保留上一次真实刷新的槽位宽度，避免旧商店被新等级错误扩宽。
-            if (_shopLayoutSlotPolicy.ObserveShopTier(state.TavernTier, state.ShopMinions.Count))
+            if (_shopLayoutSlotPolicy.ObserveShopTier(
+                state.TavernTier,
+                state.ShopMinions.Count,
+                state.ShopSlotCount))
                 _renderer.SetCalcTier(_shopLayoutSlotPolicy.LastRefreshTier);
 
             bool shouldEnableBuddyPool = CardPoolSampler.IsBuddyRegistryCompatible()
@@ -1537,7 +1787,17 @@ namespace BobCoach
             var discoverSource = ApplyPowerLogDiscoverCandidates(state);
             MarkUpgradePrizeDiscoverObserved(state);
             var trinketSource = ApplyPowerLogTrinketCandidates(state);
-            if (trinketSource == Engine.UiTargetSource.None)
+            if (_trinketChoiceLifecycle.Current != null
+                && _trinketChoiceLifecycle.Current.Context
+                    == Engine.TrinketChoiceContext.MysteryCubeActivation
+                && trinketSource != Engine.UiTargetSource.PowerLog)
+            {
+                trinketSource = Engine.UiTargetSource.None;
+            }
+            if (trinketSource == Engine.UiTargetSource.None
+                && (_trinketChoiceLifecycle.Current == null
+                    || _trinketChoiceLifecycle.Current.Context
+                        != Engine.TrinketChoiceContext.MysteryCubeActivation))
                 trinketSource = ApplyScheduledTrinketPlaceholder(state);
             AdvanceUiTargets(state, discoverSource, trinketSource);
 
@@ -1552,7 +1812,14 @@ namespace BobCoach
             Engine.PanelStateMachine.Advance(ref _trinketPanelState, smTrinketActive, state.Turn, enforceMaxActive: false);
             // 07072009: 发现面板改 enforceMaxActive:false(与饰品一致)。原 true 会~8s强制超时, 阮大师等慢选技能场景
             // 面板在玩家选完前就消失("闪现一下就没了")。现 SendChoices 完成信号可靠(chosen>0), 面板靠选完(候选清空→smDiscoverActive=false)关闭, 不再强制超时。
-            Engine.PanelStateMachine.Advance(ref _discoverPanelState, smDiscoverActive, state.Turn, enforceMaxActive: false);
+            // R234/R239(审查B): 发现面板超时策略按来源区分——Power.log 权威发现
+            // (有 choiceId + 有来源卡)不强制超时(玩家可能慢选如阮大师);
+            // 陈旧复发批次(同 id 但来源为空)不算权威 → 8秒超时兜底生效, 防面板卡死。
+            bool discoverHasAuthority = _discoverBatchFromLog != null
+                && _discoverBatchFromLog.ChoiceId >= 0
+                && !string.IsNullOrEmpty(_discoverBatchFromLog.SourceCardId);
+            Engine.PanelStateMachine.Advance(ref _discoverPanelState, smDiscoverActive,
+                state.Turn, enforceMaxActive: !discoverHasAuthority);
 
             // ── BobsBuddy战斗预测 (异步, 仅在板面变化时更新) ──
             TryPredictCombat(state);
@@ -1636,34 +1903,172 @@ namespace BobCoach
 
             // V1.2: 英雄技能提示（HeroPowerEngine 替代硬编码）
             // 修复4: 被动英雄不显示静态技能描述，仅主动技能有使用建议时才显示
-            var heroStrategy = _heroPowerEngine.GetStrategy(state.HeroCardId);
+            // R235: 条件限制技能规范化——未达到解锁酒馆等级时, 描述标注解锁条件,
+            // 且不显示"使用技能"建议(牛头人酋长等级2解锁, T1 不应提示使用)。
+            var heroStrategy = _heroPowerEngine.GetStrategyForPower(
+                state.HeroCardId, state.HeroPowerCardId);
+            bool heroPowerLockedByTier = heroStrategy.PowerType != HeroPowerType.Passive
+                && state.TavernTier < heroStrategy.UnlockTier;
             string heroHint = heroStrategy.PowerType == HeroPowerType.Passive
                 ? "" : HeroPowerDisplayTextResolver.Resolve(state.HeroPowerCardId);
+            if (heroPowerLockedByTier && !string.IsNullOrEmpty(heroHint))
+                heroHint = heroHint + " (酒馆等级" + heroStrategy.UnlockTier + "解锁)";
             // 动态技能使用建议: 根据当前金币+场面判断是否该用技能
             string heroUseSuggestion = "";
             HeroSkillFact heroSkill;
-            if (_heroSkillCatalog.TryGet(state.HeroCardId, state.HeroPowerCardId, out heroSkill))
+            bool heroSkillFound = _heroSkillCatalog.TryGet(
+                state.HeroCardId, state.HeroPowerCardId, out heroSkill);
+            if (!heroSkillFound)
+            {
+                var fallbackStrategy = _heroPowerEngine.GetStrategyForPower(
+                    state.HeroCardId, state.HeroPowerCardId);
+                if (fallbackStrategy != null)
+                {
+                    heroSkill = new HeroSkillFact
+                    {
+                        HeroCardId = fallbackStrategy.HeroCardId,
+                        HeroPowerCardId = state.HeroPowerCardId ?? "",
+                        PowerType = fallbackStrategy.PowerType.ToString(),
+                        Cost = fallbackStrategy.PowerCost,
+                        UnlockTurn = fallbackStrategy.UnlockTurn,
+                        UnlockTier = fallbackStrategy.UnlockTier,
+                        TextCn = fallbackStrategy.PowerHint,
+                        UsePurpose = fallbackStrategy.UsePurpose.ToString(),
+                        IsActive = fallbackStrategy.PowerType == HeroPowerType.Active
+                            || fallbackStrategy.PowerType == HeroPowerType.Conditional,
+                    };
+                }
+            }
+            if (heroSkill != null)
             {
                 int liveGoldForSkill = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+                int heroPowerCost = state.HeroPowerCost >= 0
+                    ? state.HeroPowerCost : heroSkill.Cost;
+                int unlockTurn = state.HeroPowerUnlockTurn > 0
+                    ? state.HeroPowerUnlockTurn : heroSkill.UnlockTurn;
+                int unlockTier = state.HeroPowerUnlockTier > 0
+                    ? state.HeroPowerUnlockTier : heroSkill.UnlockTier;
                 bool hasValidTarget = state.BoardMinions.Count > 0
                     || state.ShopMinions.Count > 0
-                    || heroSkill.UsePurpose == "Economy";
-                var heroSkillDecision = HeroSkillDecisionService.Decide(
+                    || heroSkill.UsePurpose == "Economy"
+                    || heroSkill.UsePurpose == "Resource";
+                bool heroShouldUse;
+                int heroDecisionCost = heroPowerCost;
+                string heroDecisionReason;
+                var playbookProfile = _heroPlaybook != null
+                    ? _heroPlaybook.GetProfileForPower(
+                        state.HeroCardId, state.HeroPowerCardId)
+                    : null;
+                if (playbookProfile != null)
+                {
+                    var playbookDecision = HeroPlaybookDecisionService.Decide(
+                        playbookProfile,
+                        heroSkill.PowerType,
+                        heroPowerCost,
+                        liveGoldForSkill,
+                        state.Turn,
+                        state.TavernTier,
+                        state.Health,
+                        state.BoardMinions.Count,
+                        state.ShopMinions.Count,
+                        state.HeroPowerExhausted,
+                        hasValidTarget);
+                    heroShouldUse = playbookDecision.ShouldUse;
+                    heroDecisionCost = playbookDecision.Cost;
+                    heroDecisionReason = playbookDecision.Reason;
+                }
+                else if (state.HeroCardId == "BG32_HERO_001")
+                {
+                    // 2026-08-19 实测修复(B8/B9): 塞纳留斯(森林之王)——技能=花3金
+                    // 铸币上限+1(长期收益), playbook 注册表数据缺失时通用决策不推荐;
+                    // 兜底: 前6回合金币够就优先用技能(高手策略: 先技能后买/升本)
+                    heroShouldUse = liveGoldForSkill >= heroPowerCost
+                        && state.Turn <= 6 && !state.HeroPowerExhausted;
+                    heroDecisionCost = heroPowerCost;
+                    heroDecisionReason = heroShouldUse
+                        ? "铸币上限+1(长期收益,前期优先)"
+                        : (liveGoldForSkill < heroPowerCost ? "金币不足" : "已使用");
+                }
+                else
+                {
+                    var heroSkillDecision = HeroSkillDecisionService.Decide(
+                        heroSkill.PowerType,
+                        heroPowerCost,
+                        unlockTurn,
+                        unlockTier,
+                        liveGoldForSkill,
+                        state.Turn,
+                        state.TavernTier,
+                        state.BoardMinions.Count,
+                        state.ShopMinions.Count,
+                        heroSkill.UsePurpose,
+                        hasValidTarget,
+                        state.HeroPowerExhausted,
+                        state.HeroCardId);
+                    heroShouldUse = heroSkillDecision.ShouldUse;
+                    heroDecisionCost = heroSkillDecision.Cost;
+                    heroDecisionReason = heroSkillDecision.Reason;
+                }
+                if (state.HeroCardId != null
+                    && state.HeroCardId.Contains("BG31_HERO_003"))
+                {
+                    if (string.IsNullOrEmpty(state.LastUsedTavernSpellCardId))
+                    {
+                        heroShouldUse = false;
+                        heroDecisionReason = "需先使用酒馆法术";
+                    }
+                    else if (!string.IsNullOrEmpty(state.LastUsedTavernSpellName))
+                    {
+                        heroDecisionReason = "复制最近酒馆法术: " + state.LastUsedTavernSpellName;
+                    }
+                }
+                // R235: 未解锁(酒馆等级不足)强制不推荐使用——防 playbook 等分支绕过。
+                // 牛头人酋长(105)技能"等级2时解锁", T1(1本)不应有任何"使用技能"提示。
+                if (heroShouldUse && heroPowerLockedByTier)
+                {
+                    heroShouldUse = false;
+                    heroDecisionReason = "酒馆等级" + heroStrategy.UnlockTier + "解锁";
+                }
+                // P3 2026-08(用户实测: 回合4板面无怪仍提示用雷诺技能/无优质随从乱用点金):
+                // 点金类(one_time_golden/变为金色)需要友方随从目标, 商店随从不是合法目标;
+                // 且点金每局限一次, 板面没有优质随从(值得点金的目标)时不推荐——性价比门控。
+                if (heroShouldUse && IsGoldenizeSkill(state, heroStrategy, heroSkill))
+                {
+                    int board = state.BoardMinions == null ? 0 : state.BoardMinions.Count;
+                    if (board == 0)
+                    {
+                        heroShouldUse = false;
+                        heroDecisionReason = "板面无随从, 点金无目标";
+                    }
+                    else if (!HasWorthyGoldenizeTarget(state))
+                    {
+                        heroShouldUse = false;
+                        heroDecisionReason = "板面无优质随从, 点金性价比低";
+                    }
+                }
+                Log(string.Format(
+                    "HeroSkill: hero={0} power={1} found={2} type={3} unlock={4}/{5} gold={6} cost={7} reason={8} use={9}",
+                    state.HeroCardId,
+                    state.HeroPowerCardId,
+                    heroSkillFound,
                     heroSkill.PowerType,
-                    heroSkill.Cost,
-                    heroSkill.UnlockTurn,
-                    heroSkill.UnlockTier,
+                    unlockTier,
+                    unlockTurn,
                     liveGoldForSkill,
-                    state.Turn,
-                    state.TavernTier,
-                    state.BoardMinions.Count,
-                    state.ShopMinions.Count,
-                    heroSkill.UsePurpose,
-                    hasValidTarget);
-                if (heroSkillDecision.ShouldUse)
+                    heroPowerCost,
+                    heroDecisionReason,
+                    heroShouldUse));
+                if (heroShouldUse)
                 {
                     heroUseSuggestion = string.Format(
-                        "使用技能 · {0}费 · {1}", heroSkillDecision.Cost, heroSkillDecision.Reason);
+                        "使用技能 · {0}费 · {1}", heroDecisionCost, heroDecisionReason);
+                    // R250: Cookie tribe direction (same-tribe 3x to discover)
+                    if (heroStrategy.SpecialRule == "COOKIE" && state != null)
+                    {
+                        string cookieTribe = PickCookieTargetTribe(state);
+                        if (!string.IsNullOrEmpty(cookieTribe))
+                            heroUseSuggestion += " · 集中投入" + cookieTribe + "随从(集齐3个发现)";
+                    }
                 }
             }
 
@@ -1671,6 +2076,7 @@ namespace BobCoach
             if (state.Turn <= 2 && state.ShopMinions.Count == 0 && state.Phase == "shop")
             {
                 var waitingPlan = _visualizer.CreateWaitingPlan(state);
+                _lastLiveSafetySuppressRefresh = liveSafety.SuppressRefresh;
                 DispatchRender(state, heroHint, waitingPlan, heroUseSuggestion);
                 return;
             }
@@ -1745,8 +2151,35 @@ namespace BobCoach
 
             var rankingDecision = EvaluateRankingDecision(state);
             var bestAction = rankingDecision.SelectedAction;
+            if (bestAction != null
+                && bestAction.Type == Engine.ActionType.SellMinion
+                && !_engine.IsSellActionValid(state, bestAction))
+            {
+                bestAction = null;
+            }
             var t0 = DateTime.UtcNow;
             var levelResult = SafeCall(() => _engine.GetLevelUpSuggestion(state), "GetLevelUpSuggestion");
+            int? liveUpgradeCost = GameRuleEvaluator.GetUpgradeCost(
+                state, state.EffectiveRules ?? EffectiveGameRules.Default);
+            if (levelResult.Suggestion == "LEVEL_UP"
+                && liveUpgradeCost.HasValue
+                && GetLiveGold(state) >= liveUpgradeCost.Value
+                && !liveSafety.SuppressUpgrade
+                && (bestAction == null || bestAction.Type != Engine.ActionType.Upgrade))
+            {
+                bool keepBuyThenUpgrade = bestAction != null
+                    && (bestAction.Type == Engine.ActionType.BuyMinion
+                        || bestAction.Type == Engine.ActionType.BuySpell)
+                    && bestAction.TargetIndex >= 0
+                    && bestAction.TargetIndex < state.ShopMinions.Count
+                    && GetLiveGold(state)
+                        - GetShopCardCost(state, state.ShopMinions[bestAction.TargetIndex])
+                        >= liveUpgradeCost.Value;
+                if (!keepBuyThenUpgrade)
+                {
+                    bestAction = new Engine.GameAction { Type = Engine.ActionType.Upgrade };
+                }
+            }
             if (liveSafety.SuppressUpgrade)
             {
                 levelResult = new Engine.LevelUpSuggestion("DANGER", liveSafety.Reason);
@@ -1756,6 +2189,12 @@ namespace BobCoach
             if (liveSafety.SuppressRefresh
                 && bestAction != null && bestAction.Type == Engine.ActionType.Refresh)
                 bestAction = null;
+            if (bestAction != null
+                && bestAction.Type == Engine.ActionType.Refresh
+                && !CanRefreshLeaveMeaningfulBudget(state, GetLiveGold(state)))
+            {
+                bestAction = null;
+            }
             if (liveSafety.SuppressBuy
                 && bestAction != null
                 && (bestAction.Type == Engine.ActionType.BuyMinion
@@ -1768,16 +2207,103 @@ namespace BobCoach
             // gold=0/1时清除二步前瞻+抑制不必要推荐(没钱就别推荐花金操作)
             var secondStep = _engine.BestTwoStepAction;
             var secondStepState = _engine.BestTwoStepState;
-            if (state.Gold == 0) { secondStep = null; secondStepState = null; }
+            if (GetLiveGold(state) == 0) { secondStep = null; secondStepState = null; }
+            if (bestAction != null && bestAction.Type == Engine.ActionType.Upgrade)
+            {
+                secondStep = null;
+                secondStepState = null;
+            }
             cardScores = FilterAffordableShopScores(state, cardScores);
             if (bestAction != null
                 && (bestAction.Type == ActionType.BuyMinion || bestAction.Type == ActionType.BuySpell)
-                && !IsShopActionAffordable(state, bestAction, state.Gold))
+                && !IsShopActionAffordable(state, bestAction, GetLiveGold(state)))
             {
                 bestAction = null;
             }
             var plan = _visualizer.CreateVisualPlan(state, bestAction, levelResult, cardScores, _heroPowerEngine, _fe, compGuidance,
                 secondStep, secondStepState, trinketScores);
+            // 2026-08-19 阶段规划行（长链路分点式思考）：把 MainlinePlan 的阶段/
+            // 模式 + StrategySequencePlanner 的跨回合步骤 + 本回合预算整合为
+            // "阶段·模式 | ①本回合 ②下回合 ③阶段目标" 分点式指导。
+            // 算法侧已思考完整链路，UI 必须同步展示（用户诉求：不能算法有效
+            // 但 UI 跟不上）。
+            if (plan != null && plan.Status != null)
+            {
+                var mainlineForPlan = _engine != null ? _engine.LastMainlinePlan : null;
+                var stratPlanForPlan = _engine != null ? _engine.LastStrategyPlan : null;
+                string stageCn = mainlineForPlan != null ? StageCn(mainlineForPlan.Stage) : "";
+                string modeCn = mainlineForPlan != null ? ModeCn(mainlineForPlan.Mode) : "";
+                plan.Status.StageLabel = stageCn;
+                plan.Status.ModeLabel = modeCn;
+                // 2026-08-20 极简方向(用户要求): 就简单说 升本-找高本随从 / 稳战力 / 囤铸币
+                string direction = "稳战力";
+                if (bestAction != null)
+                {
+                    switch (bestAction.Type)
+                    {
+                        case ActionType.Upgrade: direction = "升本-找高本随从"; break;
+                        case ActionType.Refresh: direction = "找核心"; break;
+                        case ActionType.FreezeShop: direction = "囤铸币"; break;
+                        case ActionType.UseHeroPower: direction = "技能"; break;
+                    }
+                }
+                else
+                {
+                    direction = "囤铸币";
+                }
+                // R218: 策略方向与动作分开——PlanLine 只显示纯方向词
+                // 动作(买X/升N本)由商店标记/按钮高亮表达(用户要求: 别混在一起)
+                plan.Status.PlanLine = direction;
+                // R219: 整回合动作链——用 MaxGold 预算生成计划(买A→买B→升), 
+                // 玩家连续操作时计划不变(商店刷新才重算)
+                if (state != null)
+                {
+                    string shopSig = ShopSignature(state);
+                    int liveGoldNow = GetLiveGold(state);
+                    // P1 2026-08: 金币纳入缓存签名——升本/买牌后金币变化必须重算链,
+                    // 否则"升本吃光金币仍显示买随从/法术"(用户实测: 动态铸币管理缺陷)。
+                    // 预算用实时铸币(非 MaxGold): 链始终反映当前可执行动作。
+                    if (_turnPlanTurn != state.Turn || _turnPlanShopSig != shopSig
+                        || _turnPlanGold != liveGoldNow)
+                    {
+                        _turnPlanTurn = state.Turn;
+                        _turnPlanShopSig = shopSig;
+                        _turnPlanGold = liveGoldNow;
+                        _turnPlanChain = BuildTurnActionChain(state, cardScores, liveGoldNow);
+                    }
+                    plan.Status.HintLine = _turnPlanChain;
+                }
+            // 过滤——升本吃光金币时不再推荐买卡(避免"推荐升本后没铸币还推荐购买")
+            if (levelResult.Suggestion == "LEVEL_UP"
+                && plan != null && plan.UpgradeHint != null
+                && cardScores != null && cardScores.Count > 0)
+            {
+                int goldAfterUpgrade = GetLiveGold(state) - plan.UpgradeHint.Cost;
+                var afterUpgrade = new List<ShopCardScore>();
+                if (goldAfterUpgrade > 0)
+                {
+                    foreach (var sc in cardScores)
+                        if (IsShopScoreAffordable(state, sc, goldAfterUpgrade))
+                            afterUpgrade.Add(sc);
+                }
+                if (afterUpgrade.Count != cardScores.Count)
+                {
+                    cardScores = afterUpgrade;
+                    plan = _visualizer.CreateVisualPlan(state, bestAction, levelResult, cardScores, _heroPowerEngine, _fe, compGuidance,
+                        secondStep, secondStepState, trinketScores);
+                }
+            }
+            if (levelResult.Suggestion == "LEVEL_UP"
+                && plan.UpgradeHint != null
+                && GetLiveGold(state) >= plan.UpgradeHint.Cost)
+            {
+                int liveGoldNow = GetLiveGold(state);
+                int goldAfterUpgrade = liveGoldNow - plan.UpgradeHint.Cost;
+                int heroPowerCost = state.HeroPowerCost >= 0
+                    ? state.HeroPowerCost : 0;
+                if (heroPowerCost > 0 && goldAfterUpgrade < heroPowerCost)
+                    heroUseSuggestion = "";
+            }
             // 诊断: 饰品渲染链路
             // P2修复: 畸变首购免费状态栏提示
             if (state.EffectiveRules != null
@@ -1794,10 +2320,12 @@ namespace BobCoach
             }
             var tEval = (DateTime.UtcNow - t0).TotalMilliseconds;
 
-            Log(string.Format("Eval:{0:F0}ms act={1} lvl={2} hand={3}/{4} shop={5} comp={6}",
+            Log(string.Format("Eval:{0:F0}ms act={1} lvl={2} hand={3}/{4} shop={5} comp={6} main={7}:{8} missing={9}",
                 tEval, bestAction?.Type.ToString() ?? "-", levelResult.Suggestion,
                 plan.HandMarker?.Index.ToString() ?? "-", state.HandMinions.Count,
-                plan.ShopMarkers.Count, plan.Status.CompDir));
+                plan.ShopMarkers.Count, plan.Status.CompDir,
+                compGuidance?.Archetype ?? "", compGuidance?.Reason ?? "",
+                compGuidance?.MissingCoreCardNames?.Count ?? 0));
             // 诊断(问题2/E: gold=0仍提示刷新): 选中Refresh却买不起→定位是否Refresh兜底(无更优动作)
             if (bestAction != null && bestAction.Type == Engine.ActionType.Refresh
                 && state.Gold < 1 && state.FreeRefreshCount == 0)
@@ -1818,30 +2346,60 @@ namespace BobCoach
                 List<string> actions = new List<string>();
                 if (_prevState != null && _prevState.Turn == state.Turn)
                 {
-                    // 买牌: 商店出现过的卡现在在手中或板面
-                    var prevShopIds = new HashSet<string>(_prevState.ShopMinions.Select(m => m.EntityId.ToString()));
-                    var prevBoardIds = new HashSet<string>(_prevState.BoardMinions.Select(m => m.CardId));
-                    var prevHandIds = new HashSet<string>(_prevState.HandMinions.Select(m => m.CardId));
-                    var currBoardIds = state.BoardMinions.Select(m => m.CardId).ToList();
-                    var currHandIds = state.HandMinions.Select(m => m.CardId).ToList();
+                    var prevShopEntities = new HashSet<int>(
+                        _prevState.ShopMinions.Where(m => m != null && m.EntityId > 0)
+                            .Select(m => m.EntityId));
+                    var prevBoardById = _prevState.BoardMinions
+                        .Where(m => m != null && m.EntityId > 0)
+                        .ToDictionary(m => m.EntityId);
+                    var prevHandById = _prevState.HandMinions
+                        .Where(m => m != null && m.EntityId > 0)
+                        .ToDictionary(m => m.EntityId);
+                    var currShopEntities = new HashSet<int>(
+                        state.ShopMinions.Where(m => m != null && m.EntityId > 0)
+                            .Select(m => m.EntityId));
+                    var currBoardEntities = new HashSet<int>(
+                        state.BoardMinions.Where(m => m != null && m.EntityId > 0)
+                            .Select(m => m.EntityId));
+                    var currHandEntities = new HashSet<int>(
+                        state.HandMinions.Where(m => m != null && m.EntityId > 0)
+                            .Select(m => m.EntityId));
 
-                    // 买牌: 手牌/板面新增卡 (不在上一帧中)
+                    // 买牌: 上一帧商店实体进入手牌或板面
                     foreach (var hm in state.HandMinions)
-                        if (!prevHandIds.Contains(hm.CardId) && !prevBoardIds.Contains(hm.CardId))
+                    {
+                        if (hm != null && hm.EntityId > 0
+                            && prevShopEntities.Contains(hm.EntityId)
+                            && !prevHandById.ContainsKey(hm.EntityId)
+                            && !prevBoardById.ContainsKey(hm.EntityId))
                             actions.Add("buy:" + hm.CardId + "→手牌");
+                    }
                     foreach (var bm in state.BoardMinions)
-                        if (!prevBoardIds.Contains(bm.CardId) && !prevHandIds.Contains(bm.CardId))
+                    {
+                        if (bm != null && bm.EntityId > 0
+                            && prevShopEntities.Contains(bm.EntityId)
+                            && !prevBoardById.ContainsKey(bm.EntityId)
+                            && !prevHandById.ContainsKey(bm.EntityId))
                             actions.Add("buy/play:" + bm.CardId + "→板面");
+                    }
 
-                    // 卖牌: 上一帧板面有但当前没有
+                    // 卖牌: 上一帧板面实体不再在手牌或板面
                     foreach (var pm in _prevState.BoardMinions)
-                        if (!currBoardIds.Contains(pm.CardId) && !currHandIds.Contains(pm.CardId))
+                    {
+                        if (pm == null || pm.EntityId <= 0) continue;
+                        if (!currBoardEntities.Contains(pm.EntityId)
+                            && !currHandEntities.Contains(pm.EntityId))
                             actions.Add("sell:" + pm.CardId);
+                    }
 
-                    // 打出手牌: 上一帧在手牌, 当前在板面
+                    // 打出手牌: 上一帧手牌实体进入板面
                     foreach (var hm in _prevState.HandMinions)
-                        if (currBoardIds.Contains(hm.CardId) && !currHandIds.Contains(hm.CardId))
+                    {
+                        if (hm == null || hm.EntityId <= 0) continue;
+                        if (currBoardEntities.Contains(hm.EntityId)
+                            && !currHandEntities.Contains(hm.EntityId))
                             actions.Add("play:" + hm.CardId);
+                    }
 
                     // 金币变化
                     int goldDelta = state.Gold - _prevState.Gold;
@@ -1849,18 +2407,34 @@ namespace BobCoach
                     else if (goldDelta > 0 && goldDelta != 3) actions.Add("gold:+" + goldDelta);
 
                     // 法术购买检测: 法术买入即用不入板面/手牌, 需从商店消失+金币减少推断
-                    var currShopCardIds = new HashSet<string>(state.ShopMinions.Select(m => m.CardId));
                     var prevShopSpells = _prevState.ShopMinions
-                        .Where(m => m.IsSpell && !currShopCardIds.Contains(m.CardId))
+                        .Where(m => m != null && m.IsSpell
+                            && m.EntityId > 0
+                            && !currShopEntities.Contains(m.EntityId))
                         .ToList();
                     foreach (var spell in prevShopSpells)
                     {
                         // 法术从商店消失了 + 没有出现在手牌/板面 + 金币减少了 → 法术购买
-                        bool appearedInHand = state.HandMinions.Any(m => m.CardId == spell.CardId);
-                        bool appearedOnBoard = state.BoardMinions.Any(m => m.CardId == spell.CardId);
-                        if (!appearedInHand && !appearedOnBoard)
+                        bool appearedInHand = state.HandMinions.Any(m =>
+                            m != null && m.EntityId == spell.EntityId);
+                        bool appearedOnBoard = state.BoardMinions.Any(m =>
+                            m != null && m.EntityId == spell.EntityId);
+                        if (!appearedInHand && !appearedOnBoard && state.Gold < _prevState.Gold)
                             actions.Add("spell:" + spell.CardId + "(" + (spell.CardName ?? "") + ")");
                     }
+
+                    // 刷新/冻结: 商店整体更换或冻结状态翻转时补录，避免回放时间线把这类动作漏掉。
+                    bool shopReplaced = prevShopEntities.Count > 0
+                        && currShopEntities.Count > 0
+                        && !prevShopEntities.Any(currShopEntities.Contains);
+                    bool goldSpent = state.Gold < _prevState.Gold;
+                    bool freeRefreshUsed = state.FreeRefreshCount < _prevState.FreeRefreshCount;
+                    if (shopReplaced && (goldSpent || freeRefreshUsed))
+                        actions.Add("refresh:→新商店");
+                    if (!_prevState.FrozenShop && state.FrozenShop)
+                        actions.Add("freeze:→冻结");
+                    if (!_prevState.HeroPowerExhausted && state.HeroPowerExhausted)
+                        actions.Add("heroPower:" + (state.HeroPowerCardId ?? ""));
                 }
                 // 升本
                 if (state.TavernTier != (_prevState != null ? _prevState.TavernTier : 1))
@@ -1868,9 +2442,28 @@ namespace BobCoach
                 // 检测阶段
                 try { if (Core.Game.IsBattlegroundsCombatPhase) actions.Add("phase:combat"); else actions.Add("phase:recruit"); } catch { }
 
+                string featureVector = SerializeFeatureVector(state);
+                string bestActionJson = SerializeRecommendedAction(bestAction);
+                string actionScoresJson = SerializeActionScores(state, bestAction, cardScores);
+                string shadowScoresJson = SerializeShadowActionScores(state);
+                string mainlinePlanJson = SerializeMainlinePlan(_engine.LastMainlinePlan);
+                var globalState = ToGlobalReplayState(state);
+                if (_globalReplayRecorder != null)
+                {
+                    RecordInferredGlobalActions(actions, state.Turn);
+                    _globalReplayRecorder.RecordState(globalState, "hdt");
+                    _globalReplayRecorder.RecordRecommendation(
+                        bestActionJson, actionScoresJson, shadowScoresJson, featureVector,
+                        mainlinePlanJson, state.Turn);
+                }
+
                 var snap = new TurnSnapshot
                 {
-                    Turn = state.Turn, Gold = state.Gold, MaxGold = state.MaxGold,
+                    Turn = state.Turn, Gold = state.Gold,
+                    LiveGold = GetLiveGold(state), MaxGold = state.MaxGold,
+                    FreeRefreshCount = state.FreeRefreshCount,
+                    TavernUpgradeCost = state.TavernUpgradeCost,
+                    FrozenShop = state.FrozenShop,
                     Tier = state.TavernTier, Health = state.Health, Armor = state.Armor,
                     BoardSize = state.BoardMinions.Count, ShopSize = state.ShopMinions.Count,
                     HandSize = state.HandMinions.Count,
@@ -1926,9 +2519,11 @@ namespace BobCoach
                     CompDirection = plan.Status.CompDir ?? "",
                     PlayerTimeline = actions,
                     // ── 决策引擎训练数据 ──
-                    FeatureVector = SerializeFeatureVector(state),
-                    RecommendedActionJson = SerializeRecommendedAction(bestAction),
-                    ActionScoresJson = SerializeActionScores(state, bestAction, cardScores),
+                    FeatureVector = featureVector,
+                    RecommendedActionJson = bestActionJson,
+                    ActionScoresJson = actionScoresJson,
+                    ShadowRecommendedActionJson = SerializeShadowRecommendedAction(state),
+                    ShadowActionScoresJson = shadowScoresJson,
                 };
                 _currentGameRecord.Turns.Add(snap);
                 _prevState = state;
@@ -1953,10 +2548,278 @@ namespace BobCoach
             _cachedPlan = plan;    // 缓存供每帧持久UI刷新
             _cachedState = state;
             _persistentDirty = true;
+            // 0金且无任何可执行/可卖/可打/可发动动作时，直接清掉旧的非面板UI。
+            // 防止上一帧购买/刷新高亮在 planHash 去重后继续残留。
+            if (GetLiveGold(state) <= 0
+                && state.FreeRefreshCount <= 0
+                && plan.ShopMarkers.Count == 0
+                && plan.SellMarkers.Count == 0
+                && plan.HandMarker == null
+                && plan.ActivateHint == null)
+            {
+                _renderer.ClearNonPanel();
+                Log("ZeroGoldClear: no spendable action; cleared non-panel UI");
+            }
+            _lastLiveSafetySuppressRefresh = liveSafety.SuppressRefresh;
             DispatchRender(state, heroHint, plan, heroUseSuggestion);
+            }
         }
 
         // ── 训练数据序列化 ──
+
+        private static Engine.GlobalReplayState ToGlobalReplayState(GameState state)
+        {
+            var result = new Engine.GlobalReplayState
+            {
+                GameActive = state.GameActive,
+                IsDuos = state.IsDuos,
+                HeroCardId = state.HeroCardId ?? "",
+                HeroName = state.HeroName ?? "",
+                PlayerId = state.PlayerId,
+                Turn = state.Turn,
+                Gold = state.Gold,
+                LiveGold = state.LiveGold >= 0 ? state.LiveGold : state.Gold,
+                MaxGold = state.MaxGold,
+                Tier = state.TavernTier,
+                Health = state.Health,
+                MaxHealth = state.MaxHealth,
+                Armor = state.Armor,
+                FreeRefreshCount = state.FreeRefreshCount,
+                TavernUpgradeCost = state.TavernUpgradeCost,
+                FrozenShop = state.FrozenShop,
+                LastUpgradeTurn = state.LastUpgradeTurn,
+                FirstPurchaseUsedThisTurn = state.FirstPurchaseUsedThisTurn,
+                FirstMinionPurchaseUsedThisTurn = state.FirstMinionPurchaseUsedThisTurn,
+                NormalRecruitAvailable = state.NormalRecruitAvailable,
+                PassiveChoiceActive = state.PassiveChoiceActive,
+                ReplenishingShopActive = state.ReplenishingShopActive,
+                HeroPowerExhausted = state.HeroPowerExhausted,
+                HeroPowerCost = state.HeroPowerCost,
+                HeroPowerDigsRemaining = state.HeroPowerDigsRemaining,
+                HeroPowerType = state.HeroPowerType ?? "",
+                HeroPowerUnlockTurn = state.HeroPowerUnlockTurn,
+                HeroPowerUnlockTier = state.HeroPowerUnlockTier,
+                HeroPowerSpecial = state.HeroPowerSpecial ?? "",
+                HeroPowerHasDiscover = state.HeroPowerHasDiscover,
+                HasSecondHeroPower = state.HasSecondHeroPower,
+                ExhaustedHeroPowerCount = state.ExhaustedHeroPowerCount,
+                Phase = state.Phase ?? "",
+                HeroPowerCardId = state.HeroPowerCardId ?? "",
+                AnomalyId = state.AnomalyId ?? "",
+                AnomalyActiveEffectIds = state.AnomalyContext != null
+                    ? state.AnomalyContext.ActiveGlobalEffectIds.ToList()
+                    : new List<string>(),
+                HasAmbiguousPrimary = state.AnomalyContext != null
+                    && state.AnomalyContext.HasAmbiguousPrimary,
+                AvailableTribes = state.AvailableTribes
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToList(),
+                ActiveTrinkets = state.ActiveTrinkets
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToList(),
+                RecentlyBoughtEntityIds = state.RecentlyBoughtEntityIds
+                    .OrderBy(value => value)
+                    .ToList(),
+                ActivatedThisTurn = state.ActivatedThisTurn
+                    .OrderBy(value => value)
+                    .ToList(),
+                HeroPowers = state.HeroPowers
+                    .Where(power => power != null)
+                    .Select(ToGlobalHeroPower)
+                    .ToList(),
+                LastUsedTavernSpellCardId = state.LastUsedTavernSpellCardId ?? "",
+                LastUsedTavernSpellName = state.LastUsedTavernSpellName ?? "",
+                Shop = state.ShopMinions.Select(ToGlobalCard).ToList(),
+                Board = state.BoardMinions.Select(ToGlobalCard).ToList(),
+                Hand = state.HandMinions.Select(ToGlobalCard).ToList(),
+                Discover = state.DiscoverOptions
+                    .Where(o => o != null && !string.IsNullOrEmpty(o.CardId))
+                    .Select(o => o.CardId).ToList(),
+                Trinket = state.TrinketOffer
+                    .Where(o => o != null && !string.IsNullOrEmpty(o.CardId))
+                    .Select(o => o.CardId).ToList(),
+                TrinketDetails = state.TrinketOffer
+                    .Where(o => o != null)
+                    .Select(ToGlobalTrinket)
+                    .ToList(),
+                Opponents = state.Opponents.Select(o => new Engine.GlobalOpponentRef
+                {
+                    ControllerId = o.ControllerId,
+                    HeroCardId = o.HeroCardId ?? "",
+                    HeroName = o.HeroName ?? "",
+                    Health = o.Health,
+                    TavernTier = o.TavernTier,
+                    Alive = o.Alive,
+                    Board = o.BoardMinions.Select(ToGlobalCard).ToList(),
+                }).ToList(),
+            };
+            return result;
+        }
+
+        private static Engine.GlobalCardRef ToGlobalCard(MinionData card)
+        {
+            return new Engine.GlobalCardRef
+            {
+                EntityId = card.EntityId,
+                CardId = card.CardId ?? "",
+                CardName = card.CardName ?? "",
+                Attack = card.Attack,
+                Health = card.Health,
+                Tier = card.Tier,
+                Position = card.Position,
+                Cost = card.Cost,
+                Golden = card.Golden,
+                Taunt = card.Taunt,
+                DivineShield = card.DivineShield,
+                Windfury = card.Windfury,
+                MegaWindfury = card.MegaWindfury,
+                Stealth = card.Stealth,
+                Reborn = card.Reborn,
+                Poisonous = card.Poisonous,
+                Venomous = card.Venomous,
+                Cleave = card.Cleave,
+                Overkill = card.Overkill,
+                AvengeCount = card.AvengeCount,
+                Spell = card.IsSpell,
+                Frozen = card.IsFrozen,
+                GrantsStats = card.GrantsStats,
+                Tribe = card.Tribe ?? "",
+                CardText = card.CardText ?? "",
+            };
+        }
+
+        private static Engine.GlobalHeroPowerRef ToGlobalHeroPower(Engine.HeroPowerState power)
+        {
+            return new Engine.GlobalHeroPowerRef
+            {
+                CardId = power.CardId ?? "",
+                BaseHeroCardId = power.BaseHeroCardId ?? "",
+                EntityId = power.EntityId,
+                ScriptData1 = power.ScriptData1,
+                Cost = power.Cost,
+                Exhausted = power.Exhausted,
+                IsPrimary = power.IsPrimary,
+                IsSecondary = power.IsSecondary,
+                IsActive = power.IsActive,
+                IsUnlocked = power.IsUnlocked,
+                HasDiscover = power.HasDiscover,
+                UnlockTurn = power.UnlockTurn,
+                UnlockTier = power.UnlockTier,
+                SpecialRule = power.SpecialRule ?? "",
+            };
+        }
+
+        private static Engine.GlobalTrinketRef ToGlobalTrinket(Engine.TrinketOption trinket)
+        {
+            return new Engine.GlobalTrinketRef
+            {
+                CardId = trinket.CardId ?? "",
+                TrinketName = trinket.TrinketName ?? "",
+                EntityId = trinket.EntityId,
+                IsLesser = trinket.IsLesser,
+                Tier = trinket.Tier,
+                Attack = trinket.Attack,
+                Health = trinket.Health,
+                Tribes = (trinket.Tribes ?? new List<string>())
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToList(),
+            };
+        }
+
+        private void RecordInferredGlobalActions(IEnumerable<string> actions, int turn)
+        {
+            if (_globalReplayRecorder == null || actions == null) return;
+            foreach (var raw in actions)
+            {
+                int colon = raw.IndexOf(':');
+                if (colon <= 0) continue;
+                string kind = raw.Substring(0, colon);
+                if (kind == "phase" || kind == "gold") continue;
+                string rest = raw.Substring(colon + 1);
+                string cardId = rest;
+                int arrow = rest.IndexOf("→");
+                if (arrow >= 0) cardId = rest.Substring(0, arrow);
+                int paren = cardId.IndexOf('(');
+                if (paren >= 0) cardId = cardId.Substring(0, paren);
+                _globalReplayRecorder.RecordAction(
+                    kind, cardId.Trim(), -1, 0, turn, "state");
+            }
+        }
+
+        /// <summary>序列化22维特征向量为逗号分隔字符串 (与FeatureExtractor.FeatureCount对齐)</summary>
+        private string SerializeMainlinePlan(Engine.MainlinePlan plan)
+        {
+            if (plan == null) return "null";
+            try
+            {
+                var strategyPlan = _engine != null
+                    ? _engine.LastStrategyPlan : null;
+                var strategyMemory = _engine != null
+                    ? _engine.StrategicMemorySnapshot : null;
+                return JsonConvert.SerializeObject(new
+                {
+                    archetype = plan.Archetype ?? "",
+                    guideId = plan.GuideId ?? "",
+                    tier = plan.Tier ?? "",
+                    compDir = plan.CompDir ?? "",
+                    reason = plan.Reason ?? "",
+                    metaSource = plan.MetaSource ?? "",
+                    coreCardIds = plan.CoreCardIds ?? new System.Collections.Generic.List<string>(),
+                    missingCoreCards = plan.MissingCoreCardNames ?? new System.Collections.Generic.List<string>(),
+                    boardCoreCount = plan.BoardCoreCount,
+                    handCoreCount = plan.HandCoreCount,
+                    shopCoreCount = plan.ShopCoreCount,
+                    hasTripleInShop = plan.HasTripleInShop,
+                    hasCoreInShop = plan.HasCoreInShop,
+                    shouldBuyCoreFirst = plan.ShouldBuyCoreFirst,
+                    shouldHoldForNextTurn = plan.ShouldHoldForNextTurn,
+                    nodePriority = plan.NodePriority.ToString(),
+                    stage = plan.Stage ?? "",
+                    mode = plan.Mode ?? "",
+                    currentPathScore = plan.CurrentPathScore,
+                    bestAlternativeScore = plan.BestAlternativeScore,
+                    pivotScore = plan.PivotScore,
+                    shouldConsiderPivot = plan.ShouldConsiderPivot,
+                    shouldHedge = plan.ShouldHedge,
+                    pivotObservationCount = plan.PivotObservationCount,
+                    alternativeCoreCardIds =
+                        plan.AlternativeCoreCardIds == null
+                            ? new System.Collections.Generic.List<string>()
+                            : plan.AlternativeCoreCardIds.OrderBy(x => x).ToList(),
+                    counterPlan = plan.CounterPlan ?? "",
+                    needTradeUp = plan.NeedTradeUp,
+                    strategyObjective = strategyPlan != null
+                        ? strategyPlan.Objective.ToString() : "",
+                    strategyPlanHash = strategyPlan != null
+                        ? strategyPlan.PlanHash ?? "" : "",
+                    strategyPlanSteps = strategyPlan != null
+                        && strategyPlan.Steps != null
+                        ? strategyPlan.Steps
+                            .Where(step => step != null && step.Action != null)
+                            .Select(step => step.Action.Type + ":"
+                                + step.Action.TargetIndex + ":"
+                                + (step.Action.CardId ?? ""))
+                            .ToList()
+                        : new System.Collections.Generic.List<string>(),
+                    memoryObservedCoreCardIds = strategyMemory != null
+                        && strategyMemory.ObservedCoreCardIds != null
+                        ? strategyMemory.ObservedCoreCardIds
+                            .OrderBy(cardId => cardId, StringComparer.Ordinal)
+                            .ToList()
+                        : new System.Collections.Generic.List<string>(),
+                    memoryObservedPairCardIds = strategyMemory != null
+                        && strategyMemory.ObservedPairCardIds != null
+                        ? strategyMemory.ObservedPairCardIds
+                            .OrderBy(cardId => cardId, StringComparer.Ordinal)
+                            .ToList()
+                        : new System.Collections.Generic.List<string>(),
+                });
+            }
+            catch
+            {
+                return "null";
+            }
+        }
 
         /// <summary>序列化22维特征向量为逗号分隔字符串 (与FeatureExtractor.FeatureCount对齐)</summary>
         private string SerializeFeatureVector(GameState state)
@@ -1977,38 +2840,152 @@ namespace BobCoach
                 action.Type, action.TargetIndex);
         }
 
-        /// <summary>序列化所有动作评分列表为紧凑JSON (含推荐标记)</summary>
-        private string SerializeActionScores(GameState state, GameAction bestAction, System.Collections.Generic.List<ShopCardScore> cardScores)
+        /// <summary>
+        /// 序列化 Shadow 统一评分第一名。
+        /// 可见推荐仍来自 legacy-v1.1.0；该字段仅供回放评估和训练数据审计。
+        /// </summary>
+        private string SerializeShadowRecommendedAction(GameState state)
         {
-            if (state == null) return "[]";
-            var items = new System.Collections.Generic.List<string>();
-
-            var enumerator = new Engine.ActionEnumerator();
-            var actions = enumerator.Enumerate(state, state.HeroCardId);
-            var fe = _engine.GetFeatureExtractor();
-            var sim = new Engine.Simulator();
-            var vf = _engine.GetValueFunction();
-
-            foreach (var a in actions)
+            try
             {
-                float score = 0f;
-                if (fe != null && vf != null)
-                {
-                    var ns = sim.Simulate(state, a);
-                    var fv = fe.Extract(ns);
-                    score = vf.Evaluate(fv);
-                }
-                bool isRecommended = bestAction != null
-                    && a.Type == bestAction.Type
-                    && a.TargetIndex == bestAction.TargetIndex;
-
-                items.Add(string.Format("{{\"type\":\"{0}\",\"target\":{1},\"score\":{2},\"recommended\":{3}}}",
-                    a.Type, a.TargetIndex,
-                    score.ToString("F4", System.Globalization.CultureInfo.InvariantCulture),
-                    isRecommended ? "true" : "false"));
+                var ranked = _engine.GetRankedCandidates(state, 1);
+                if (ranked == null || ranked.Count == 0 || ranked[0] == null
+                    || ranked[0].Action == null)
+                    return "null";
+                return ShadowScoreSerializer.SerializeRecommended(ranked[0].Action);
             }
+            catch
+            {
+                return "null";
+            }
+        }
 
-            return "[" + string.Join(",", items) + "]";
+        // ── 2026-08-19 阶段规划 UI 辅助（长链路分点式思考） ──
+
+        private static string StageCn(string stage)
+        {
+            switch (stage)
+            {
+                case "Early": return "前期";
+                case "Mid": return "中期";
+                case "Late": return "后期";
+                default: return "";
+            }
+        }
+
+        private static string ModeCn(string mode)
+        {
+            switch (mode)
+            {
+                case "Commit": return "成型";
+                case "Economy": return "经济";
+                case "Pivot": return "转型";
+                case "Hedge": return "对冲";
+                case "TradeUp": return "升级";
+                case "Survival": return "保命";
+                case "Flexible": return "灵活";
+                default: return "";
+            }
+        }
+
+        private static string ActionToShortText(
+            GameState state, Engine.GameAction action, GameState stepState)
+        {
+            if (action == null) return "";
+            var s = stepState ?? state;
+            switch (action.Type)
+            {
+                case Engine.ActionType.BuyMinion:
+                    if (s != null && action.TargetIndex >= 0
+                        && action.TargetIndex < s.ShopMinions.Count)
+                        return "买" + CardNameShort(s.ShopMinions[action.TargetIndex]);
+                    return "买随从";
+                case Engine.ActionType.BuySpell:
+                    if (s != null && action.TargetIndex >= 0
+                        && action.TargetIndex < s.ShopMinions.Count)
+                        return "买法术" + CardNameShort(s.ShopMinions[action.TargetIndex]);
+                    return "买法术";
+                case Engine.ActionType.Upgrade:
+                    return "升" + (state.TavernTier + 1) + "本";
+                case Engine.ActionType.Refresh:
+                    return "刷新";
+                case Engine.ActionType.FreezeShop:
+                    return "冻结";
+                case Engine.ActionType.SellMinion:
+                    if (s != null && action.TargetIndex >= 0
+                        && action.TargetIndex < s.BoardMinions.Count)
+                        return "卖" + CardNameShort(s.BoardMinions[action.TargetIndex]);
+                    return "卖随从";
+                case Engine.ActionType.UseHeroPower:
+                    return "技能";
+                case Engine.ActionType.Activate:
+                    return "发动";
+                case Engine.ActionType.PlayMinion:
+                case Engine.ActionType.UseSpell:
+                    if (s != null && action.TargetIndex >= 0
+                        && action.TargetIndex < s.HandMinions.Count)
+                        return (action.Type == Engine.ActionType.UseSpell ? "用" : "打")
+                            + CardNameShort(s.HandMinions[action.TargetIndex]);
+                    return action.Type == Engine.ActionType.UseSpell ? "用牌" : "打牌";
+                default:
+                    return action.Type.ToString();
+            }
+        }
+
+        private static string CardNameShort(Engine.MinionData m)
+        {
+            if (m == null) return "";
+            var name = !string.IsNullOrEmpty(m.CardName)
+                ? m.CardName
+                : BobCoachPlugin.GetCardNameCn(m.CardId);
+            if (string.IsNullOrEmpty(name)) return "";
+            return name.Length > 6 ? name.Substring(0, 6) + "…" : name;
+        }
+
+        private static string StageGoalText(Engine.MainlinePlan mainline, GameState state)
+        {
+            string stage = mainline != null ? (mainline.Stage ?? "") : "";
+            string mode = mainline != null ? (mainline.Mode ?? "") : "";
+            var goal = "";
+            switch (stage)
+            {
+                case "Early": goal = "T5前升3本，建立节奏"; break;
+                case "Mid": goal = "T7前升4本，找流派核心"; break;
+                case "Late": goal = "T9-T11升5本，补强核心"; break;
+                default: goal = "成型+针对对手"; break;
+            }
+            if (mode == "Survival") goal = "保名次：降本保命，反制机制";
+            else if (mode == "Pivot") goal = "转型：换新流派方向";
+            else if (mode == "Economy") goal = "经济：攒币为升本";
+            else if (mode == "TradeUp") goal = "换血：卖弱买强";
+            if (!string.IsNullOrEmpty(mode))
+                goal = "阶段目标(" + ModeCn(mode) + ")：" + goal;
+            return goal;
+        }
+
+        /// <summary>
+        /// 序列化 Shadow 统一评分列表。
+        /// 复用 GetRankedCandidates，保证评分和推荐标记来自同一候选面；
+        /// 不会改变玩家可见的 legacy 策略。
+        /// </summary>
+        private string SerializeShadowActionScores(GameState state)
+        {
+            try
+            {
+                var ranked = _engine.GetRankedCandidates(state, int.MaxValue);
+                return ShadowScoreSerializer.SerializeScores(state, ranked);
+            }
+            catch
+            {
+                return "[]";
+            }
+        }
+
+        /// <summary>保留兼容字段：新快照也写入 Shadow 统一评分，旧消费者无需依赖旧重算结果。</summary>
+        private string SerializeActionScores(GameState state, GameAction bestAction,
+            System.Collections.Generic.List<ShopCardScore> cardScores)
+        {
+            return SerializeShadowActionScores(state);
         }
 
         /// <summary>每帧刷新持久UI：状态条 + 手牌标记(帧级更新, 消除操作延迟)</summary>
@@ -2288,6 +3265,7 @@ namespace BobCoach
             _powerLogWatcher.TrinketChoiceActive += OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted += OnPowerLogChoiceCompleted;
             _powerLogWatcher.TeammateGoldTransferObserved += OnPowerLogTeammateGoldTransfer;
+            _powerLogWatcher.PowerLogEventDetected += OnPowerLogEventDetected;
             _powerLogWatcher.StateChanged += OnPowerLogStateChanged;
             _powerLogWatcher.BuildNumberChanged += OnPowerLogBuildNumberChanged;
             _powerLogEventsSubscribed = true;
@@ -2308,6 +3286,7 @@ namespace BobCoach
             _powerLogWatcher.TrinketChoiceActive -= OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted -= OnPowerLogChoiceCompleted;
             _powerLogWatcher.TeammateGoldTransferObserved -= OnPowerLogTeammateGoldTransfer;
+            _powerLogWatcher.PowerLogEventDetected -= OnPowerLogEventDetected;
             _powerLogWatcher.StateChanged -= OnPowerLogStateChanged;
             _powerLogWatcher.BuildNumberChanged -= OnPowerLogBuildNumberChanged;
             _powerLogEventsSubscribed = false;
@@ -2356,13 +3335,323 @@ namespace BobCoach
             }
         }
 
+        /// <summary>Cookie skill target tribe: majority tribe on board+shop</summary>
+        private static string PickCookieTargetTribe(GameState state)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (state.BoardMinions != null)
+                foreach (var m in state.BoardMinions)
+                    if (m != null) foreach (var t in MinionData.GetTribesArray(m.Tribe)) { int c; counts.TryGetValue(t, out c); counts[t] = c + 1; }
+            if (state.ShopMinions != null)
+                foreach (var m in state.ShopMinions)
+                    if (m != null) foreach (var t in MinionData.GetTribesArray(m.Tribe)) { int c; counts.TryGetValue(t, out c); counts[t] = c + 1; }
+            string best = null; int bestN = 0;
+            foreach (var kv in counts)
+                if (kv.Value > bestN) { bestN = kv.Value; best = kv.Key; }
+            return best;
+        }
+        
+        private int GetLiveGold(GameState state)
+        {
+            return state != null && state.LiveGold >= 0 ? state.LiveGold : (state != null ? state.Gold : 0);
+        }
+
+        private static string AppendActionHint(
+            string current,
+            string line,
+            string duplicateAnchor)
+        {
+            if (string.IsNullOrEmpty(line)) return current ?? "";
+            if (string.IsNullOrEmpty(current)) return line;
+            if (!string.IsNullOrEmpty(duplicateAnchor)
+                && current.Contains(duplicateAnchor))
+                return current;
+            if (current.IndexOf('\n') >= 0) return current;  // R213 动作链最多2段
+return current + "\n" + line;
+        }
+
+        // P3 2026-08: 点金类技能识别——雷诺·杰克逊(每局限一次使友方随从变金色)及同类
+        private static bool IsGoldenizeSkill(GameState state, Engine.HeroStrategy strategy, Engine.HeroSkillFact skill)
+        {
+            string hpId = state != null ? (state.HeroPowerCardId ?? "") : "";
+            string text = (skill != null ? (skill.TextCn ?? "") : "")
+                + " " + (strategy != null ? (strategy.PowerHint ?? "") : "");
+            if (hpId.Contains("TB_BaconShop_HP_046")) return true; // 雷诺·杰克逊点金
+            if (text.Contains("变为金色") || text.Contains("Golden") || text.Contains("点金")) return true;
+            if ((strategy != null && strategy.SpecialRule == "one_time_golden")) return true;
+            return false;
+        }
+
+        // P3: 板面是否有值得点金的目标——非金色 + 有一定价值(高本/高身材/核心卡)
+        private bool HasWorthyGoldenizeTarget(GameState state)
+        {
+            if (state == null || state.BoardMinions == null || state.BoardMinions.Count == 0) return false;
+            foreach (var m in state.BoardMinions)
+            {
+                if (m == null) continue;
+                if (m.Golden) continue;
+                int tier = m.Tier;
+                int stats = (m.Attack > 0 ? m.Attack : 0) + (m.Health > 0 ? m.Health : 0);
+                if (tier >= 4 || stats >= 12) return true;
+                if (_engine != null && (_engine.IsResourceCard(m.CardId)
+                    || _engine.IsCoreComboCard(m.CardId))) return true;
+            }
+            return false;
+        }
+
+        private bool HasSellableBoardMinion(GameState state)
+        {
+            return state != null && state.BoardMinions != null
+                && state.BoardMinions.Any(m => m != null && !m.Golden);
+        }
+
+        private bool CanAffordAfterOneSell(GameState state, int cost)
+        {
+            if (state == null) return false;
+            if (state.Turn < 3) return false;
+            int liveGold = GetLiveGold(state);
+            if (liveGold >= cost) return true;
+            // 2026-08-19 B5: 仅允许1金币缺口(卖1凑1)且需真实可卖随从
+            return cost <= liveGold + 1 && HasPotentialSellAfterTurn(state);
+        }
+
+        private bool HasPotentialSellAfterTurn(GameState state)
+        {
+            return state != null
+                && state.BoardMinions != null
+                && (state.Turn >= 4
+                    ? state.BoardMinions.Any(m => m != null && !m.Golden
+                        && (state.RecentlyBoughtEntityIds == null
+                            || !state.RecentlyBoughtEntityIds.Contains(m.EntityId)))
+                    : HasEarlyTripleSellOpportunity(state));
+        }
+
+        private bool HasEarlyTripleSellOpportunity(GameState state)
+        {
+            if (state == null || state.Turn < 3 || state.Turn > 4
+                || state.BoardMinions == null || state.BoardMinions.Count < 4
+                || state.ShopMinions == null || state.ShopMinions.Count == 0)
+                return false;
+            var rules = state.EffectiveRules ?? Engine.EffectiveGameRules.Default;
+            bool tripleInShop = state.ShopMinions.Any(shop =>
+                shop != null && !shop.IsSpell
+                    && Engine.TripleRuleEvaluator.CompletesGolden(
+                        state, shop.CardId, rules));
+            return tripleInShop
+                && state.BoardMinions.Any(m => m != null && !m.Golden);
+        }
+
+        private int GetShopCardCost(GameState state, Engine.MinionData shopCard)
+        {
+            if (state == null || shopCard == null) return 3;
+            return Engine.GameRuleEvaluator.GetPurchaseCost(
+                state, shopCard, state.HeroCardId,
+                state.EffectiveRules ?? EffectiveGameRules.Default);
+        }
+
+        private Engine.MinionData ResolveShopMarkerCard(
+            GameState state, Engine.ShopMarker marker)
+        {
+            if (state == null || marker == null) return null;
+            if (marker.Index >= 0 && marker.Index < state.ShopMinions.Count)
+                return state.ShopMinions[marker.Index];
+            if (marker.EntityId > 0)
+                return state.ShopMinions.FirstOrDefault(
+                    card => card != null && card.EntityId == marker.EntityId);
+            return null;
+        }
+
+        private bool IsShopCardAffordableOrAfterSell(GameState state, Engine.MinionData shopCard, int gold)
+        {
+            if (state == null || shopCard == null) return false;
+            int cost = GetShopCardCost(state, shopCard);
+            return gold >= cost || (cost <= gold + 1 && HasSellableBoardMinion(state));
+        }
+
+        // R219: 整回合动作链生成——按评分排序，预算内连续推荐(买A→买B→升N本)
+        private string BuildTurnActionChain(GameState state, List<ShopCardScore> cardScores, int budget)
+        {
+            if (state == null || cardScores == null || budget <= 0) return "";
+            var chain = new List<string>();
+            int remain = budget;
+            // R220: 瓦尔登·晨拥(BG22_HERO_004)——刷新触发技能复制最高级随从(免费+冻结): 高价值联动
+            if ((state.HeroCardId ?? "").StartsWith("BG22_HERO_004")
+                && remain >= 1
+                && state.ShopMinions != null && state.ShopMinions.Count > 0)
+            {
+                chain.Add("刷新(复制最高级随从)");
+                remain -= 1;
+            }
+            var sorted = cardScores.Where(s => s.Index >= 0 && s.Index < state.ShopMinions.Count)
+                .OrderByDescending(s => s.Score).ToList();
+            var rules = state.EffectiveRules ?? Engine.EffectiveGameRules.Default;
+            // P2 2026-08(用户实测: 迷诱咒术师应先买再发动偷高攻随从, UI未推荐最佳拿法):
+            // 商店发动卡联动——买得起(买费)且剩余铸币够发动费时, 优先推荐"买X→发动X"链。
+            // 仅限高价值发动效果(偷取/发现/获取), 普通 buff 类不抢链位(卡标签表达)。
+            if (chain.Count == 0 && _season14RulesEvaluator != null
+                && state.ShopMinions != null)
+            {
+                for (int ai = 0; ai < state.ShopMinions.Count && chain.Count == 0; ai++)
+                {
+                    var shopCard = state.ShopMinions[ai];
+                    if (shopCard == null || string.IsNullOrEmpty(shopCard.CardId)) continue;
+                    Engine.ActivateFact act;
+                    if (!_season14RulesEvaluator.TryGetActivate(shopCard.CardId, out act)) continue;
+                    int buyCost = 3;
+                    try { buyCost = Engine.GameRuleEvaluator.GetPurchaseCost(state, shopCard, state.HeroCardId, rules); } catch { }
+                    if (buyCost <= 0 || buyCost > remain) continue;
+                    if (act.ActivateCost <= 0 || act.ActivateCost > remain - buyCost) continue;
+                    string actText = (act.TextZhCn ?? "") + (act.TextEnUs ?? "");
+                    bool highValue = actText.Contains("偷取") || actText.Contains("Steal")
+                        || actText.Contains("发现") || actText.Contains("Discover")
+                        || actText.Contains("获取") || actText.Contains("gain")
+                        || actText.Contains("香蕉") || actText.Contains("随机施放");
+                    if (!highValue) continue;
+                    chain.Add("买" + CardNameShort(shopCard) + "→发动(偷)");
+                    remain -= buyCost + act.ActivateCost;
+                }
+            }
+            // R221: 两段式——先随从(场面优先), 预算剩余才法术
+            foreach (var sc in sorted.Where(s => !s.IsSpell))
+            {
+                if (chain.Count >= 2) break; // R225: 买随从最多1个(其余由卡标签表达), 给卖弱换强/升级留空间
+                var shopCard = state.ShopMinions[sc.Index];
+                if (shopCard == null) continue;
+                int cost = 3;
+                try { cost = Engine.GameRuleEvaluator.GetPurchaseCost(state, shopCard, state.HeroCardId, rules); } catch { }
+                if (cost <= 0 || cost > remain) continue;
+                chain.Add("买" + CardNameShort(shopCard));
+                remain -= cost;
+            }
+            // R240(第一性原理-玩家运营链): 卖弱换强——玩家每回合核心是"买→打→卖→再买"循环,
+            // 算法原链只买+升, 缺卖环节(偏差实测: 玩家每回合1-3次卖牌换强)。
+            // 条件: 板面≥4张 + 店有显著更强牌 + 预算够(卖1张得1金+买3金)。
+            if (chain.Count > 0 && state.BoardMinions != null && state.BoardMinions.Count >= 4) {
+                int weakIdx = FindWeakestBoardMinionLocal(state, null);
+                if (weakIdx >= 0 && state.BoardMinions[weakIdx] != null) {
+                    var weak = state.BoardMinions[weakIdx];
+                    var bestShopList = sorted.Where(s => !s.IsSpell && s.Index >= 0 && s.Index < state.ShopMinions.Count).ToList();
+                    if (bestShopList.Count > 0) {
+                        var bestShop = bestShopList[0];
+                        var strong = state.ShopMinions[bestShop.Index];
+                        int strongCost = 3;
+                        try { strongCost = Engine.GameRuleEvaluator.GetPurchaseCost(state, strong, state.HeroCardId, rules); } catch { }
+                        bool weakProtected = IsProtectedFromSell(state, weak);
+                        bool strongBetter = strong.Tier > weak.Tier || (strong.Attack + strong.Health) > (weak.Attack + weak.Health) * 1.3;
+                        if (!weakProtected && strongBetter && remain + 1 >= strongCost && chain.Count < 3) {
+                            chain.Add("卖" + CardNameShort(weak) + "→买" + CardNameShort(strong));
+                            remain = remain + 1 - strongCost;
+                        }
+                    }
+                }
+            }
+            // 法术段: 随从买完后剩余才考虑; 费用用真实值,提取失败跳过(R222 修复暴风城之力2费被当1费)
+            foreach (var sc in sorted.Where(s => s.IsSpell))
+            {
+                if (chain.Count >= 3) break;
+                var shopCard = state.ShopMinions[sc.Index];
+                if (shopCard == null) continue;
+                int cost = -1;
+                try { cost = Engine.GameRuleEvaluator.GetPurchaseCost(state, shopCard, state.HeroCardId, rules); } catch { cost = -1; }
+                if (cost <= 0 || cost == int.MaxValue || cost > remain) continue;
+                chain.Add("买法术" + CardNameShort(shopCard));
+                remain -= cost;
+            }
+            int upCost = state.TavernUpgradeCost >= 0 ? state.TavernUpgradeCost : 999;
+            if (upCost != int.MaxValue && remain >= upCost && state.TavernTier < 6)
+                chain.Add("升" + (state.TavernTier + 1) + "本");
+            if (chain.Count == 0) return "";
+            // R225: 动作链单行紧凑(用→连接) — 少而精准, 买牌最多1个(卡标签表达), 卖/升优先
+            // P6 2026-08: 限制单行显示宽度(约16个汉字/行), 超出在"→"边界断行——避免单行长链横跨屏幕。
+            string joined = string.Join("→", chain);
+            const int maxLineWidth = 32; // 显示宽度单位: 中文≈2, ASCII≈1 (16汉字≈32)
+            if (DisplayWidth(joined) <= maxLineWidth) return joined;
+            var segs = new List<string>();
+            string cur = "";
+            foreach (var seg in chain)
+            {
+                string piece = cur.Length == 0 ? seg : cur + "→" + seg;
+                if (cur.Length > 0 && DisplayWidth(piece) > maxLineWidth)
+                {
+                    segs.Add(cur);
+                    cur = seg;
+                }
+                else cur = piece;
+            }
+            if (cur.Length > 0) segs.Add(cur);
+            return string.Join("\n", segs);
+
+        }
+        // P6 2026-08: 显示宽度统计(中文/全角≈2, 其他≈1), 用于动作链按字数断行
+        private static int DisplayWidth(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return 0;
+            int w = 0;
+            foreach (char ch in s)
+            {
+                if (ch >= 0x2E80 && ch <= 0x9FFF) w += 2; // CJK 统一表意 + 扩展
+                else if (ch == '→' || ch == '—' || ch == '·') w += 2;
+                else w += 1;
+            }
+            return w;
+        }
+
+        // R240: 找板面最弱随从(插件自有, 攻防总和最小; 引擎版是私有方法不可达)
+        private int FindWeakestBoardMinionLocal(GameState state, object _)
+        {
+            if (state == null || state.BoardMinions == null || state.BoardMinions.Count == 0) return -1;
+            int weakest = -1;
+            double minVal = double.MaxValue;
+            for (int i = 0; i < state.BoardMinions.Count; i++) {
+                var m = state.BoardMinions[i];
+                if (m == null) continue;
+                double v = (m.Attack + m.Health);
+                if (m.Tier <= 2) v *= 0.6;
+                if (v < minVal) { minVal = v; weakest = i; }
+            }
+            return weakest;
+        }
+
+        // R240: 卖弱换强保护——核心卡/对子/成长卡不卖(防误卖, 与 R231 记忆保护一致)
+        private bool IsProtectedFromSell(GameState state, Engine.MinionData minion)
+        {
+            if (state == null || minion == null) return true;
+            if (minion.Golden) return true;
+            try {
+                if (_engine != null) {
+                    var snap = _engine.StrategicMemorySnapshot;
+                    if (snap != null && !string.IsNullOrEmpty(minion.CardId)) {
+                        string baseId = minion.CardId.EndsWith("_G", StringComparison.Ordinal)
+                            ? minion.CardId.Substring(0, minion.CardId.Length - 2) : minion.CardId;
+                        if (snap.ObservedCoreCardIds.Contains(baseId)) return true;
+                        if (snap.ObservedPairCardIds.Contains(baseId)) return true;
+                    }
+                }
+            } catch { }
+            if (minion.DivineShield || minion.Poisonous || minion.Venomous
+                || minion.Reborn || minion.Windfury) return true;
+            if (minion.Tier >= 5) return true;
+            return false;
+        }
+
+        // R219: 商店签名(商店卡列表 hash, 用于计划失效判断)
+        private string ShopSignature(GameState state)
+        {
+            if (state == null || state.ShopMinions == null) return "";
+            var sb = new System.Text.StringBuilder();
+            foreach (var m in state.ShopMinions) { if (m != null) sb.Append(m.CardId).Append(','); }
+            return sb.ToString();
+        }
+
         private List<ShopCardScore> FilterAffordableShopScores(GameState state, List<ShopCardScore> scores)
         {
             if (scores == null || scores.Count == 0) return scores ?? new List<ShopCardScore>();
             var filtered = new List<ShopCardScore>();
             foreach (var score in scores)
             {
-                if (IsShopScoreAffordable(state, score, state != null ? state.Gold : 0))
+                int liveGold = GetLiveGold(state);
+                if (IsShopScoreAffordable(state, score, liveGold)
+                    || IsShopScoreAffordableAfterSell(state, score, liveGold))
                     filtered.Add(score);
             }
             return filtered;
@@ -2388,6 +3677,148 @@ namespace BobCoach
             return IsShopCardAffordable(state, shopCard, gold);
         }
 
+        private bool IsShopScoreAffordableAfterSell(GameState state, ShopCardScore score, int gold)
+        {
+            if (state == null || state.ShopMinions == null || !HasPotentialSellAfterTurn(state))
+                return false;
+            Engine.MinionData shopCard = null;
+            if (score.Index >= 0 && score.Index < state.ShopMinions.Count)
+                shopCard = state.ShopMinions[score.Index];
+            if (shopCard == null && score.EntityId > 0)
+                shopCard = state.ShopMinions.FirstOrDefault(m => m != null && m.EntityId == score.EntityId);
+            if (shopCard == null) return false;
+            int cost = GetShopCardCost(state, shopCard);
+            if (gold >= cost) return true;
+            if (cost > gold + 1) return false;
+
+            int sellIndex = FindFilterSellCandidateIndex(state);
+            return sellIndex >= 0
+                && IsShopScoreWorthAfterSell(state, score, shopCard, cost, gold, sellIndex);
+        }
+
+        private int FindFilterSellCandidateIndex(GameState state)
+        {
+            if (state == null || state.BoardMinions == null)
+                return -1;
+
+            int worstIdx = -1;
+            double worstScore = double.MaxValue;
+            for (int i = 0; i < state.BoardMinions.Count; i++)
+            {
+                var m = state.BoardMinions[i];
+                if (m == null || m.Golden) continue;
+                if (state.RecentlyBoughtEntityIds != null
+                    && state.RecentlyBoughtEntityIds.Contains(m.EntityId))
+                    continue;
+                if (IsFilterProtectedSellMinion(state, m)) continue;
+
+                double score = m.Tier * 8.0 + m.Attack * 0.5 + m.Health * 0.3;
+                if (score < worstScore)
+                {
+                    worstScore = score;
+                    worstIdx = i;
+                }
+            }
+            return worstIdx;
+        }
+
+        private bool IsFilterProtectedSellMinion(GameState state, Engine.MinionData m)
+        {
+            if (state == null || m == null) return true;
+
+            var mainline = _engine != null ? _engine.LastMainlinePlan : null;
+            if (mainline != null && mainline.CoreCardIds != null)
+            {
+                if (mainline.CoreCardIds.Contains(m.CardId)) return true;
+                if (!string.IsNullOrEmpty(m.CardId)
+                    && m.CardId.EndsWith("_G", StringComparison.Ordinal)
+                    && mainline.CoreCardIds.Contains(
+                        m.CardId.Substring(0, m.CardId.Length - 2)))
+                    return true;
+            }
+
+            if (_engine != null
+                && (_engine.IsCoreComboCard(m.CardId)
+                    || _engine.IsResourceCard(m.CardId)))
+                return true;
+            if (OpponentTechAdvisor.IsSituationalTechCard(m.CardId)
+                && OpponentTechAdvisor.IsTechCardWorthKeeping(
+                    m.CardId, state.Opponents))
+                return true;
+            if (m.Tier >= 4 && (m.DivineShield || m.Poisonous
+                || m.Venomous || m.Reborn))
+                return true;
+            if (m.Tier >= 3 && (m.DivineShield || m.Poisonous || m.Venomous))
+                return true;
+            if (m.Taunt)
+            {
+                int tauntCount = state.BoardMinions == null
+                    ? 0
+                    : state.BoardMinions.Count(other => other != null && other.Taunt);
+                if (tauntCount <= 1) return true;
+            }
+            return false;
+        }
+
+        private bool IsShopScoreWorthAfterSell(
+            GameState state,
+            ShopCardScore score,
+            Engine.MinionData shopCard,
+            int cost,
+            int gold,
+            int sellIndex)
+        {
+            if (state == null || state.Turn < 3 || shopCard == null
+                || sellIndex < 0 || sellIndex >= state.BoardMinions.Count)
+                return false;
+            var sold = state.BoardMinions[sellIndex];
+            if (sold == null || sold.Golden) return false;
+
+            var rules = state.EffectiveRules ?? Engine.EffectiveGameRules.Default;
+            if (score.IsTriple
+                || TripleRuleEvaluator.CompletesGolden(state, shopCard.CardId, rules))
+                return true;
+            if (OpponentTechAdvisor.IsSituationalTechCard(shopCard.CardId)
+                && OpponentTechAdvisor.IsTechCardWorthKeeping(
+                    shopCard.CardId, state.Opponents))
+                return true;
+
+            if (shopCard.IsSpell)
+                return _engine != null
+                    && (_engine.IsResourceCard(shopCard.CardId)
+                        || _engine.IsCoreComboCard(shopCard.CardId));
+
+            bool resourceOrCore = _engine != null
+                && (_engine.IsResourceCard(shopCard.CardId)
+                    || _engine.IsCoreComboCard(shopCard.CardId));
+            resourceOrCore = resourceOrCore || score.IsCoreCombo
+                || score.EconomyValue >= 0.35f
+                || score.PrimaryRole == CardClassifier.CardRole.Economy
+                || score.PrimaryRole == CardClassifier.CardRole.ValueGenerator
+                || score.PrimaryRole == CardClassifier.CardRole.SpellSource
+                || score.PrimaryRole == CardClassifier.CardRole.SpellCopier;
+
+            double soldPower = _fe != null
+                ? _fe.ComputeBoardPower(new List<Engine.MinionData> { sold })
+                : 0;
+            double shopPower = _fe != null
+                ? _fe.ComputeBoardPower(new List<Engine.MinionData> { shopCard })
+                : 0;
+            if (resourceOrCore)
+            {
+                if (shopPower >= soldPower * 1.05)
+                    return true;
+                double boardAvg = state.BoardMinions != null
+                    && state.BoardMinions.Count > 0
+                        ? _fe.ComputeBoardPower(state.BoardMinions)
+                            / state.BoardMinions.Count
+                        : 0;
+                return soldPower <= boardAvg * 0.65;
+            }
+            double threshold = shopCard.Tier >= sold.Tier ? 1.20 : 1.50;
+            return shopPower >= soldPower * threshold;
+        }
+
         private bool IsShopMarkerAffordable(GameState state, Engine.ShopMarker marker, int gold)
         {
             if (state == null || marker == null || state.ShopMinions == null) return false;
@@ -2400,28 +3831,168 @@ namespace BobCoach
             return IsShopCardAffordable(state, shopCard, gold);
         }
 
+        private bool IsShopMarkerAffordableAfterSell(GameState state, Engine.ShopMarker marker, int gold)
+        {
+            if (state == null || marker == null || state.ShopMinions == null) return false;
+            Engine.MinionData shopCard = null;
+            if (marker.Index >= 0 && marker.Index < state.ShopMinions.Count)
+                shopCard = state.ShopMinions[marker.Index];
+            if (shopCard == null && marker.EntityId > 0)
+                shopCard = state.ShopMinions.FirstOrDefault(m => m != null && m.EntityId == marker.EntityId);
+            if (shopCard == null) return false;
+            int cost = GetShopCardCost(state, shopCard);
+            return cost <= gold + 1 && HasSellableBoardMinion(state);
+        }
+
+        private bool IsShopMarkerWorthAfterSell(
+            GameState state,
+            Engine.ShopMarker marker,
+            int gold,
+            int sellIndex)
+        {
+            if (state == null || marker == null || state.Turn < 3) return false;
+            if (marker.Level != DecisionLevel.Critical
+                && marker.Level != DecisionLevel.Major)
+                return false;
+            if (!IsShopMarkerAffordableAfterSell(state, marker, gold)) return false;
+            if (state.BoardMinions == null || sellIndex < 0
+                || sellIndex >= state.BoardMinions.Count)
+                return false;
+            var sold = state.BoardMinions[sellIndex];
+            if (sold == null || sold.Golden) return false;
+            if (state.RecentlyBoughtEntityIds != null
+                && state.RecentlyBoughtEntityIds.Contains(sold.EntityId))
+                return false;
+
+            Engine.MinionData shop = null;
+            if (marker.Index >= 0 && marker.Index < state.ShopMinions.Count)
+                shop = state.ShopMinions[marker.Index];
+            if (shop == null && marker.EntityId > 0)
+                shop = state.ShopMinions.FirstOrDefault(
+                    card => card != null && card.EntityId == marker.EntityId);
+            if (shop == null) return false;
+
+            var rules = state.EffectiveRules ?? Engine.EffectiveGameRules.Default;
+            if (marker.IsTriple
+                || TripleRuleEvaluator.CompletesGolden(state, shop.CardId, rules))
+                return true;
+
+            bool resourceOrCore = _engine != null
+                && (_engine.IsResourceCard(shop.CardId)
+                    || _engine.IsCoreComboCard(shop.CardId));
+            if (shop.IsSpell) return resourceOrCore;
+
+            double soldPower = _fe != null
+                ? _fe.ComputeBoardPower(new List<Engine.MinionData> { sold })
+                : 0;
+            double shopPower = _fe != null
+                ? _fe.ComputeBoardPower(new List<Engine.MinionData> { shop })
+                : 0;
+            if (resourceOrCore)
+            {
+                if (shopPower >= soldPower * 1.05)
+                    return true;
+                double boardAvg = state.BoardMinions != null
+                    && state.BoardMinions.Count > 0
+                        ? _fe.ComputeBoardPower(state.BoardMinions)
+                            / state.BoardMinions.Count
+                        : 0;
+                return soldPower <= boardAvg * 0.65;
+            }
+            double threshold = shop.Tier >= sold.Tier ? 1.20 : 1.50;
+            return shopPower >= soldPower * threshold;
+        }
+
         private bool IsShopCardAffordable(GameState state, Engine.MinionData shopCard, int gold)
         {
             if (state == null || shopCard == null) return false;
-            int cost = GameRuleEvaluator.GetPurchaseCost(
+            int cost = Engine.GameRuleEvaluator.GetPurchaseCost(
                 state, shopCard, state.HeroCardId,
                 state.EffectiveRules ?? EffectiveGameRules.Default);
             return gold >= cost;
         }
 
+        private void PruneShopMarkersByLiveGold(
+            GameState state, VisualPlan plan, int gold)
+        {
+            if (state == null || plan == null || plan.ShopMarkers == null) return;
+            if (plan.ShopMarkers.Count == 0) return;
+            var sellIndexes = plan.SellMarkers != null
+                ? plan.SellMarkers
+                    .Where(marker => marker != null && marker.BoardIndex >= 0)
+                    .Select(marker => marker.BoardIndex)
+                    .ToList()
+                : new List<int>();
+            plan.ShopMarkers.RemoveAll(marker =>
+            {
+                if (marker == null) return true;
+                var card = ResolveShopMarkerCard(state, marker);
+                if (card == null) return true;
+                int cost = GetShopCardCost(state, card);
+                if (gold >= cost) return false;
+                if (state.Turn < 3 || cost > gold + 1 || sellIndexes.Count == 0)
+                    return true;
+                foreach (var sellIndex in sellIndexes)
+                {
+                    if (IsShopMarkerWorthAfterSell(state, marker, gold, sellIndex))
+                        return false;
+                }
+                return true;
+            });
+            if (plan.ShopMarkers.Count == 0
+                && plan.UpgradeHint == null
+                && plan.HandMarker == null
+                && plan.SellMarkers != null)
+            {
+                plan.SellMarkers.Clear();
+            }
+            if (plan.ShopMarkers.Count == 0
+                && (plan.RecommendedActionType == "BuyMinion"
+                    || plan.RecommendedActionType == "BuySpell"))
+            {
+                plan.RecommendedActionType = "";
+            }
+        }
+
         private int GetMinionBuyCost(GameState state)
         {
             if (state == null) return 3;
-            return GameRuleEvaluator.GetPurchaseCost(
+            return Engine.GameRuleEvaluator.GetPurchaseCost(
                 state, new MinionData { Tier = 1 }, state.HeroCardId,
                 state.EffectiveRules ?? EffectiveGameRules.Default);
+        }
+
+        private bool CanRefreshLeaveMeaningfulBudget(GameState state, int gold)
+        {
+            if (state == null) return false;
+            if (_engine != null) return _engine.CanRefreshLeaveMeaningfulBudget(state);
+            var rules = state.EffectiveRules ?? Engine.EffectiveGameRules.Default;
+            int refreshCost = GameRuleEvaluator.GetRefreshCost(
+                state, state.HeroCardId, rules);
+            if (refreshCost <= 0 || state.FreeRefreshCount > 0) return true;
+            int remaining = gold - refreshCost;
+            if (remaining < 0) return false;
+            if (remaining >= GetMinionBuyCost(state)) return true;
+            if (state.TavernUpgradeCost >= 0
+                && remaining >= state.TavernUpgradeCost)
+                return true;
+            if (state.ShopMinions != null)
+            {
+                foreach (var shop in state.ShopMinions)
+                {
+                    if (shop == null) continue;
+                    if (remaining >= GetShopCardCost(state, shop))
+                        return true;
+                }
+            }
+            return false;
         }
 
         private void DispatchRender(GameState state, string heroHint, VisualPlan plan, string heroUseSuggestion = null)
         {
             if (state == null || plan == null) return;
             int layoutTier = _shopLayoutSlotPolicy.LastRefreshTier;
-            int tierSlots = layoutTier <= 1 ? 4 : (layoutTier <= 3 ? 5 : (layoutTier <= 5 ? 6 : 7));
+            int tierSlots = state.GetShopSlotCountForTier(layoutTier);
             var layoutDecision = _shopLayoutSlotPolicy.Resolve(
                 tierSlots,
                 state.ShopMinions.Select(minion => minion.Position),
@@ -2445,6 +4016,14 @@ namespace BobCoach
                 + plan.ShopMarkers.Count + markerIds + "|" + (plan.UpgradeHint?.Level.ToString() ?? "-") + "|"
                 + (plan.HandMarker?.CardName ?? "-") + "|" + (plan.TrinketHints?.Count ?? 0) + "|"
                 + (plan.FreezeHint?.Active == true ? "F" : "-") + "|"
+                + (plan.Status.HintLine ?? "") + "|"
+                + (plan.Status.UpgradeLine ?? "") + "|"
+                + (plan.Status.PickLine ?? "") + "|"
+                + (plan.Status.CombatLine ?? "") + "|"
+                + plan.SellMarkers.Count
+                + (plan.SellMarkers.Count > 0
+                    ? ":" + string.Join(",", plan.SellMarkers.Select(m => m.BoardIndex))
+                    : "") + "|"
                 + (int)_trinketPanelState.Phase + "_" + (int)_discoverPanelState.Phase
                 // 0711: 连续选择可能在一次 EvaluateAndRender 间隔内完成旧批次并开启新批次。
                 // 此时面板 Phase/候选数均不变；批次身份必须进入 hash，否则第二批提示被去重吞掉。
@@ -2487,7 +4066,7 @@ namespace BobCoach
                 try
                 {
                     // 现场重读金币: Dispatcher回调可能延迟执行, state.Gold已过时
-                    int liveGold = state.Gold;
+                    int liveGold = GetLiveGold(state);
                     bool inCombat = false;
                     try { inCombat = Core.Game.IsBattlegroundsCombatPhase; } catch { }
                     // 07062107修复: 回调被拦截=本plan未上屏, 清hash让同plan下帧重试(见DispatchRender头部注释)
@@ -2508,9 +4087,6 @@ namespace BobCoach
                     _renderer.RefreshCanvasSize();
                     _renderer.LogPositions();
 
-                    // ── 状态条（始终显示）──
-                    _renderer.ShowStatusStrip(status);
-
                     // ── 英雄提示 ──
                     // 英雄提示：技能建议每回合仅首次显示，避免每次操作都触发
                     string useSug = null;
@@ -2525,14 +4101,14 @@ namespace BobCoach
                     var hpStrat = _heroPowerEngine.GetStrategyForPower(state.HeroCardId, hpIdForType);
                     // 如果HP实体ID查不到策略(新技能), 用英雄本体ID回退
                     if (hpStrat == null)
-                        hpStrat = _heroPowerEngine.GetStrategy(state.HeroCardId);
+                        hpStrat = _heroPowerEngine.GetStrategyForPower(
+                            state.HeroCardId, state.HeroPowerCardId);
                     bool isActiveHP = hpStrat != null && hpStrat.PowerType == HeroPowerType.Active;
                     bool canAffordHP = liveGold >= state.HeroPowerCost;
                     bool hpNotUsed = !state.HeroPowerExhausted;
                     bool hasUseSuggestion = !string.IsNullOrEmpty(useSug);
                     // 技能熄灭卫士: EXHAUSTED/费用不够/被动技能→清光晕
-                    bool hpShouldGlow = isActiveHP && hasUseSuggestion && canAffordHP && hpNotUsed
-                        && !string.IsNullOrEmpty(state.HeroPowerCardId);
+                    bool hpShouldGlow = isActiveHP && hasUseSuggestion && canAffordHP && hpNotUsed;
                     if (hpShouldGlow)
                     {
                         // 兼容字段明确映射主技能，不再通过卡牌ID后缀猜角色。
@@ -2581,18 +4157,88 @@ namespace BobCoach
 
                     // ── 发现渲染: 状态机单一权威(_discoverPanelActive 已折入 Advance 输入) ──
                     var discoverPs = _discoverPanelState;
+                    var authoritativeDiscover = _discoverPanelActive
+                        ? _discoverBatchFromLog : null;
+                    bool hasAuthoritativeDiscover = authoritativeDiscover != null
+                        && authoritativeDiscover.ChoiceId >= 0
+                        && authoritativeDiscover.Candidates != null
+                        && authoritativeDiscover.Candidates.Count >= 2;
                     // 0708: Fading 期间候选可能已清空, 仍显示会让旧推荐(含酒馆招募面板卡)残留。
                     // 消费端必须同时要求当前帧存在 >=2 个候选, 才进入 SHOW/重绘路径。
-                    bool discoverShouldShow = discoverPs.IsVisible && (state.DiscoverOptions?.Count ?? 0) >= 2;
+                    bool discoverShouldShow = hasAuthoritativeDiscover
+                        || (discoverPs.IsVisible
+                            && (state.DiscoverOptions?.Count ?? 0) >= 2);
 
                     if (discoverShouldShow != _lastDiscoverShowState)
                     {
-                        Log(string.Format("UI Discover: {0} (phase={1} options={2})",
-                            discoverShouldShow ? "SHOW" : "HIDE", discoverPs.Phase,
-                            state.DiscoverOptions?.Count ?? 0));
+                        if (hasAuthoritativeDiscover)
+                        {
+                            Log(string.Format(
+                                "UI Discover: SHOW authoritative choice={0} options={1}",
+                                authoritativeDiscover.ChoiceId,
+                                authoritativeDiscover.Candidates.Count));
+                        }
+                        else
+                        {
+                            Log(string.Format("UI Discover: {0} (phase={1} options={2})",
+                                discoverShouldShow ? "SHOW" : "HIDE", discoverPs.Phase,
+                                state.DiscoverOptions?.Count ?? 0));
+                        }
                         _lastDiscoverShowState = discoverShouldShow;
                     }
-                    if (discoverShouldShow)
+                    if (hasAuthoritativeDiscover)
+                    {
+                        var options = authoritativeDiscover.Candidates.Select(candidate =>
+                            new Engine.TrinketOption
+                            {
+                                CardId = candidate.CardId,
+                                TrinketName = Engine.DisplayNameResolver.Resolve(
+                                    candidate.CardId, candidate.CardName,
+                                    Engine.CardNameService.GetName),
+                                EntityId = candidate.EntityId,
+                                Tribes = ResolveCardTribes(candidate.CardId),
+                            }).ToList();
+                        var scoringState = new GameState { DiscoverOptions = options };
+                        if (_cachedState != null)
+                        {
+                            scoringState.Turn = _cachedState.Turn;
+                            scoringState.Gold = _cachedState.Gold;
+                            scoringState.LiveGold = _cachedState.LiveGold;
+                            scoringState.Health = _cachedState.Health;
+                            scoringState.Armor = _cachedState.Armor;
+                            scoringState.BoardMinions = _cachedState.BoardMinions
+                                ?? new List<Engine.MinionData>();
+                            scoringState.HandMinions = _cachedState.HandMinions
+                                ?? new List<Engine.MinionData>();
+                            scoringState.CurrentCompGuideTier =
+                                _cachedState.CurrentCompGuideTier;
+                            scoringState.Opponents = _cachedState.Opponents;
+                        }
+                        var discoverHints = ScoreDiscoverOptions(scoringState);
+                        if (discoverHints.Count == 0)
+                        {
+                            for (int di = 0; di < options.Count; di++)
+                            {
+                                var option = options[di];
+                                discoverHints.Add(new Engine.TrinketHint
+                                {
+                                    Index = di,
+                                    Name = option.TrinketName ?? option.CardId ?? "?",
+                                    Score = 1.0,
+                                    Reason = "发现选项",
+                                    IsTopPick = di == 0,
+                                });
+                            }
+                        }
+                        int statusLines = 1;
+                        if (!string.IsNullOrEmpty(plan.Status.CompDir)) statusLines++;
+                        if (!string.IsNullOrEmpty(plan.Status.HintLine)) statusLines++;
+                        if (!string.IsNullOrEmpty(plan.Status.PickLine)) statusLines++;
+                        _renderer.RefreshCanvasSize();
+                        _renderer.ShowAuthoritativeDiscoverHints(
+                            discoverHints, statusLines);
+                    }
+                    else if (discoverShouldShow)
                     {
                         var discoverHints = ScoreDiscoverOptions(state);
                         if (discoverHints.Count == 0 && state.DiscoverOptions.Count > 0)
@@ -2647,27 +4293,48 @@ namespace BobCoach
                     // 特殊界面/等待状态：只显示状态条+英雄+手牌，不显示商店策略
                     if (isWaiting || specialScreen)
                     {
+                        _renderer.ShowStatusStrip(status);
                         _suggestionsActive = true;
                         return;
                     }
 
                     // ── 金币不足时仅清除不可支付目标, 保留低费法术和首购免费 ──
                     int minBuyCost = GetMinionBuyCost(state);
-                    bool canBuyMinion = liveGold >= minBuyCost;
-                    bool hasAffordableShopMarker = plan.ShopMarkers.Any(m => IsShopMarkerAffordable(state, m, liveGold));
+                    PruneShopMarkersByLiveGold(state, plan, liveGold);
+                    bool sellPath = plan.SellMarkers.Count > 0 && HasSellableBoardMinion(state);
+                    bool handWaitingOnFullBoard = sellPath
+                        && state.BoardMinions.Count >= state.MaxBoardSlots
+                        && state.HandMinions != null
+                        && state.HandMinions.Any(hm => hm != null && !hm.IsSpell);
+                    bool hasUpgradeAfterSell = plan.UpgradeHint != null
+                        && plan.UpgradeHint.Cost > 0
+                        && CanAffordAfterOneSell(state, plan.UpgradeHint.Cost);
+                    bool canBuyMinion = liveGold >= minBuyCost
+                        || (sellPath && plan.ShopMarkers.Count > 0
+                            && CanAffordAfterOneSell(state, minBuyCost));
+                    bool hasAffordableShopMarker = plan.ShopMarkers.Any(m => IsShopMarkerAffordable(state, m, liveGold))
+                        || (sellPath && plan.ShopMarkers.Any(m => IsShopMarkerWorthAfterSell(
+                            state, m, liveGold, plan.SellMarkers[0].BoardIndex)));
                     bool canRefresh = liveGold >= 1 || state.FreeRefreshCount > 0;
                     if (!hasAffordableShopMarker)
                     {
-                        plan.ShopMarkers.RemoveAll(m => !IsShopMarkerAffordable(state, m, liveGold));
+                        plan.ShopMarkers.RemoveAll(m => !IsShopMarkerAffordable(state, m, liveGold)
+                            && !(sellPath && IsShopMarkerWorthAfterSell(
+                                state, m, liveGold, plan.SellMarkers[0].BoardIndex)));
                         plan.HandMarker = null;
                         if (plan.RecommendedActionType == "BuyMinion" || plan.RecommendedActionType == "BuySpell")
                             plan.RecommendedActionType = "";
+                        if (!handWaitingOnFullBoard && !hasUpgradeAfterSell)
+                            plan.SellMarkers.Clear();
                     }
                     else
                     {
-                        plan.ShopMarkers.RemoveAll(m => !IsShopMarkerAffordable(state, m, liveGold));
+                        plan.ShopMarkers.RemoveAll(m => !IsShopMarkerAffordable(state, m, liveGold)
+                            && !(sellPath && IsShopMarkerWorthAfterSell(
+                                state, m, liveGold, plan.SellMarkers[0].BoardIndex)));
                     }
-                    if (!canRefresh && !hasAffordableShopMarker)
+                    if (!canRefresh && !hasAffordableShopMarker
+                        && !handWaitingOnFullBoard && !hasUpgradeAfterSell)
                     {
                         // 既买不起也刷不起 → 清空所有指导, 只留冻结(如有价值)
                         plan.ShopMarkers.Clear();
@@ -2681,28 +4348,58 @@ namespace BobCoach
                     // ── 铸币分配: 升本优先但需预算检查 ──
                     // 优先级: 升本 > 手牌打出 > 买牌 > 冻结 > 卖牌 > 刷新
                     bool shownPrimary = false;
+                    int upgradeCost = plan.UpgradeHint != null ? plan.UpgradeHint.Cost : int.MaxValue;
+                    bool levelOkViaSell = plan.UpgradeHint != null
+                        && liveGold < upgradeCost
+                        && sellPath
+                        && CanAffordAfterOneSell(state, upgradeCost);
                     bool levelUrgent = plan.UpgradeHint != null
                         && plan.UpgradeHint.Level == DecisionLevel.Critical
                         && liveGold >= plan.UpgradeHint.Cost;
-                    bool levelOk = plan.UpgradeHint != null && liveGold >= plan.UpgradeHint.Cost;
-                    int goldAfterUpgrade = levelOk ? liveGold - plan.UpgradeHint.Cost : liveGold;
+                    bool levelOk = plan.UpgradeHint != null
+                        && (liveGold >= upgradeCost || levelOkViaSell);
+                    int goldAfterUpgrade = levelOk
+                        ? liveGold + (levelOkViaSell ? 1 : 0) - upgradeCost
+                        : liveGold;
                     bool canBuyAfterUpgrade = goldAfterUpgrade >= 3;
+                    bool hasBuyThenUpgrade = plan.UpgradeHint != null
+                        && plan.UpgradeHint.Cost > 0
+                        && plan.ShopMarkers.Any(m =>
+                        {
+                            var buyCard = ResolveShopMarkerCard(state, m);
+                            if (buyCard == null) return false;
+                            int buyCost = GetShopCardCost(state, buyCard);
+                            return IsShopMarkerAffordable(state, m, liveGold)
+                                && liveGold - buyCost >= plan.UpgradeHint.Cost;
+                        });
+                    bool upgradePrimary = plan.UpgradeHint != null
+                        && plan.UpgradeHint.Cost > 0;
+                    if (upgradePrimary && !hasBuyThenUpgrade)
+                    {
+                        plan.ShopMarkers.Clear();
+                        plan.SellMarkers.Clear();
+                        plan.HandMarker = null;
+                        plan.Status.HintLine = "";
+                        plan.RecommendedActionType = "Upgrade";
+                    }
                     // 1. 升本提示 — 铸币不足时清除商店标记避免冲突指导
                     // 升级信息仅通过按钮光晕(ShowLevelUpGlow)显示, 状态栏不重复
                     if (!shownPrimary && levelUrgent)
                     {
                         shownPrimary = true;
-                        if (!canBuyAfterUpgrade)
+                        if (!canBuyAfterUpgrade && !hasBuyThenUpgrade)
                         {
                             plan.ShopMarkers.Clear();
                             plan.HandMarker = null;
+                            plan.Status.HintLine = "";
                             plan.RecommendedActionType = "Upgrade";
                         }
                     }
                     else if (!shownPrimary && levelOk && (!canBuyAfterUpgrade || plan.ShopMarkers.Count == 0))
                     {
                         shownPrimary = true;
-                        if (!canBuyAfterUpgrade) plan.ShopMarkers.Clear();
+                        if (!canBuyAfterUpgrade && !hasBuyThenUpgrade)
+                            plan.ShopMarkers.Clear();
                     }
                     // ── 战斗预测 (独立于动作推荐, 有缓存结果就显示) ──
                     if (_lastCombatPrediction != null && _lastCombatPrediction.SimulationCount > 0)
@@ -2732,7 +4429,8 @@ namespace BobCoach
                         if (plan.ShopMarkers.Count == 0)
                         {
                             shownPrimary = true;
-                            plan.Status.HintLine = "打→" + (plan.HandMarker.CardName ?? "");
+                            if (string.IsNullOrEmpty(plan.Status.HintLine))
+                                plan.Status.HintLine = "打→" + (plan.HandMarker.CardName ?? "");
                         }
                         // 有商店推荐时: ShopMarkers优先, 手牌作为次要(不清除标签)
                     }
@@ -2741,7 +4439,40 @@ namespace BobCoach
                     {
                         shownPrimary = true;
                         var topCard = plan.ShopMarkers.OrderByDescending(m => m.Score).First();
-                        plan.Status.HintLine = "拿→" + ResolveDisplayName(topCard.CardName, "");
+                        // 2026-08 对抗性审查 L2: 显式守卫 SellMarkers 非空(与 4349 一致),
+                        // 消除对"Clear 必同时清 ShopMarkers"隐式不变式的依赖
+                        bool sellRequired = sellPath
+                            && plan.SellMarkers.Count > 0
+                            && !IsShopMarkerAffordable(state, topCard, liveGold)
+                            && IsShopMarkerWorthAfterSell(
+                                state, topCard, liveGold, plan.SellMarkers[0].BoardIndex);
+                        Engine.MinionData topShopCard = null;
+                        if (topCard.Index >= 0 && topCard.Index < state.ShopMinions.Count)
+                            topShopCard = state.ShopMinions[topCard.Index];
+                        else if (topCard.EntityId > 0)
+                            topShopCard = state.ShopMinions.FirstOrDefault(
+                                m => m != null && m.EntityId == topCard.EntityId);
+                        string topName = ResolveDisplayName(
+                            topCard.CardName,
+                            topShopCard != null ? topShopCard.CardId : "");
+                        if (sellRequired
+                            && plan.SellMarkers.Count > 0
+                            && plan.SellMarkers[0].BoardIndex >= 0
+                            && plan.SellMarkers[0].BoardIndex < state.BoardMinions.Count)
+                        {
+                            var sold = state.BoardMinions[plan.SellMarkers[0].BoardIndex];
+                            string soldName = ResolveDisplayName(sold.CardName, sold.CardId);
+                            string sellChain = "卖→" + soldName
+                                + "→拿→" + topName;
+                            plan.Status.HintLine = AppendActionHint(
+                                plan.Status.HintLine, sellChain, soldName);
+                        }
+                        else if (string.IsNullOrEmpty(plan.Status.HintLine)
+                            || !plan.Status.HintLine.Contains(topName))
+                        {
+                            plan.Status.HintLine = AppendActionHint(
+                                plan.Status.HintLine, "拿→" + topName, topName);
+                        }
                         if (plan.ShopMarkers.Count > 3)
                             plan.ShopMarkers = plan.ShopMarkers.OrderByDescending(m => m.Score).Take(3).ToList();
                     }
@@ -2754,16 +4485,23 @@ namespace BobCoach
                     }
                     // 5. 卖牌 — 仅当出售后有金买更强随从或升本时才推荐
                     if (!shownPrimary && plan.SellMarkers.Count > 0
-                        && (canBuyMinion || levelOk) && liveGold >= 1)
+                        && (canBuyMinion || levelOk))
                     {
                         shownPrimary = true;
                         if (plan.SellMarkers[0].BoardIndex >= 0
                             && plan.SellMarkers[0].BoardIndex < state.BoardMinions.Count)
-                            plan.Status.HintLine = "卖→" + ResolveDisplayName(
+                        {
+                            string soldName = ResolveDisplayName(
                                 state.BoardMinions[plan.SellMarkers[0].BoardIndex].CardName,
                                 state.BoardMinions[plan.SellMarkers[0].BoardIndex].CardId);
+                            plan.Status.HintLine = AppendActionHint(
+                                plan.Status.HintLine,
+                                "卖→" + soldName,
+                                soldName);
+                        }
                         else
-                            plan.Status.HintLine = "卖";
+                            plan.Status.HintLine = AppendActionHint(
+                                plan.Status.HintLine, "卖", "");
                     }
                     // 5.5 Activate 发动 — 仅当无更高优先动作且铸币足够时显示
                     if (plan.ActivateHint != null
@@ -2779,10 +4517,13 @@ namespace BobCoach
                             && plan.SellMarkers.Count == 0)
                         {
                             shownPrimary = true;
-                            plan.Status.HintLine = "发动→" + ResolveDisplayName(
-                                plan.ActivateHint.CardName,
-                                plan.ActivateHint.CardId)
-                                + " (" + plan.ActivateHint.Cost + "费)";
+                            plan.Status.HintLine = AppendActionHint(
+                                plan.Status.HintLine,
+                                "发动→" + ResolveDisplayName(
+                                    plan.ActivateHint.CardName,
+                                    plan.ActivateHint.CardId)
+                                    + " (" + plan.ActivateHint.Cost + "费)",
+                                "");
                         }
                     }
                     // 兜底: 无任何目标时, 不显示空动作
@@ -2793,6 +4534,9 @@ namespace BobCoach
                     {
                         plan.RecommendedActionType = "";
                     }
+
+                    // 状态条必须在所有门控/裁剪完成后渲染，避免文字建议与实际UI不一致。
+                    _renderer.ShowStatusStrip(status);
 
                     // ── 商店卡片高亮（从VisualPlan读取）──
                     // 布局数量使用酒馆理论槽位, 并被 live 最大原始槽位撑开。
@@ -2845,12 +4589,17 @@ namespace BobCoach
                     var liveRules = state.EffectiveRules ?? EffectiveGameRules.Default;
                     int liveRefreshCost = GameRuleEvaluator.GetRefreshCost(state, state.HeroCardId, liveRules);
                     bool canAffordRefresh = liveRules.ManualRefreshAllowed && liveGold >= liveRefreshCost;
+                    int renderGold = Math.Min(liveGold, state.Gold >= 0 ? state.Gold : int.MaxValue);
+                    bool refreshAffordableByState = renderGold >= liveRefreshCost
+                        && (renderGold >= 1 || state.FreeRefreshCount > 0 || liveRefreshCost == 0);
                     bool earlySuppressRefresh = state.Turn <= 5 && state.FreeRefreshCount == 0;
                     bool badShop = plan.ShopMarkers.Count == 0 && plan.UpgradeHint == null
                         && state.ShopMinions.Count > 0 && !earlySuppressRefresh;
                     bool needRefresh = plan.RecommendedActionType.Equals("Refresh", StringComparison.OrdinalIgnoreCase);
                     bool showRefresh = liveRules.ManualRefreshAllowed
-                        && (needRefresh || badShop) && canAffordRefresh;
+                        && !_lastLiveSafetySuppressRefresh
+                        && (needRefresh || badShop) && canAffordRefresh && refreshAffordableByState
+                        && CanRefreshLeaveMeaningfulBudget(state, liveGold);
                     if (showRefresh)
                     {
                         // 诊断: gold=0仍提示刷新(0611 06111357 问题E)。打印决策各因子定位
@@ -2861,15 +4610,43 @@ namespace BobCoach
                         string refreshReason = badShop ? "牌差，换一页" : "找核心牌";
                         _renderer.ShowRefreshGlow(badShop ? false : true, refreshReason);
                     }
+                    else
+                    {
+                        _renderer.ClearRefreshGlow();
+                        if ((needRefresh || badShop)
+                            && !refreshAffordableByState
+                            && state.Gold < 1
+                            && state.FreeRefreshCount == 0)
+                        {
+                            Log(string.Format(
+                                "DIAG RefreshBlockedZeroGold: gold={0} live={1} free={2} turn={3}",
+                                state.Gold, liveGold, state.FreeRefreshCount, state.Turn));
+                        }
+                    }
 
                     // ── 冻结提示: 推荐冻结时在刷新按钮右侧显示蓝色提示框 ──
                     bool showFreeze = plan.FreezeHint != null && plan.FreezeHint.Active;
-                    if (!showFreeze) { _freezeGlowSince = DateTime.MinValue; }
+                    // 2026-08-19 实测修复(A4): 冻结与刷新互斥——冻结=店里有价值要保留,
+                    // 刷新=店差要换页, 同屏同时指导是冲突操作误导用户;
+                    // 推荐冻结时抑制刷新光晕(冻结优先, 保守保留价值)
+                    if (showFreeze && showRefresh) { showRefresh = false; _renderer.ClearRefreshGlow(); }
+                    // 2026-08-19 实测修复(B10): 刚升本后的回合抑制冻结推荐——下回合
+                    // 商店自动刷新为更高等级, 冻结当前低等级牌是浪费(塞纳留斯回合5反馈)
+                    if (showFreeze && state.LastUpgradeTurn == state.Turn - 1)
+                    {
+                        showFreeze = false;
+                        _renderer.ClearFreezeGlow();
+                    }
+                    if (!showFreeze
+                        || (DateTime.Now - _freezeGlowSince).TotalSeconds >= 10.0)
+                    {
+                        _freezeGlowSince = DateTime.MinValue;
+                        _renderer.ClearFreezeGlow();
+                    }
                     else
                     {
                         if (_freezeGlowSince == DateTime.MinValue) _freezeGlowSince = DateTime.Now;
-                        if ((DateTime.Now - _freezeGlowSince).TotalSeconds < 10.0)
-                            _renderer.ShowFreezeGlow(plan.FreezeHint.Urgent, plan.FreezeHint.Reason);
+                        _renderer.ShowFreezeGlow(plan.FreezeHint.Urgent, plan.FreezeHint.Reason);
                     }
 
                     // ── 卖牌标记(按cardId匹配当前位置, 应对玩家拖动) ──
@@ -2919,6 +4696,7 @@ namespace BobCoach
                     TrinketName = Engine.DisplayNameResolver.Resolve(
                         c.CardId, c.CardName, Engine.CardNameService.GetName),
                     EntityId = c.EntityId,
+                    Tribes = ResolveCardTribes(c.CardId),
                 }).ToList();
                 return Engine.UiTargetSource.PowerLog;
             }
@@ -2939,6 +4717,7 @@ namespace BobCoach
                 TrinketName = Engine.DisplayNameResolver.Resolve(
                     candidate.CardId, candidate.CardName, Engine.CardNameService.GetName),
                 EntityId = candidate.EntityId,
+                Tribes = ResolveCardTribes(candidate.CardId),
             }).ToList();
             var scoringState = new GameState { DiscoverOptions = options };
             if (_cachedState != null)
@@ -2990,6 +4769,7 @@ namespace BobCoach
                 CardId = candidate.CardId,
                 TrinketName = ResolveDisplayName(candidate.CardName, candidate.CardId),
                 EntityId = candidate.EntityId,
+                Tribes = ResolveCardTribes(candidate.CardId),
             }).ToList();
             var scoringState = new GameState { DiscoverOptions = options };
             if (_cachedState != null)
@@ -3006,22 +4786,23 @@ namespace BobCoach
             var scoresByIndex = hints
                 .GroupBy(hint => hint.Index)
                 .ToDictionary(group => group.Key, group => group.First().Score);
-            int bestIndex = Engine.TimewarpPurchaseAdvisor.SelectBestAffordableIndex(
-                batch, scoresByIndex);
-            if (bestIndex < 0 || bestIndex >= batch.Candidates.Count)
+            var selectedIndices = Engine.TimewarpPurchaseAdvisor.SelectAffordableIndices(
+                batch, scoresByIndex, Math.Max(1, Math.Min(2, batch.TimeCoinCount)));
+            if (selectedIndices == null || selectedIndices.Count == 0)
             {
                 _renderer.ClearTimewarpPurchaseHint();
                 return;
             }
 
-            var best = batch.Candidates[bestIndex];
+            var indices = selectedIndices.ToArray();
+            var costs = indices.Select(i => batch.Candidates[i].PurchaseCost).ToArray();
+            var names = indices.Select(i => ResolveDisplayName(
+                batch.Candidates[i].CardName, batch.Candidates[i].CardId)).ToArray();
             _renderer.RefreshCanvasSize();
             _renderer.ClearDiscoverHints();
             _lastDiscoverShowState = false;
-            _renderer.ShowTimewarpPurchaseRating(
-                bestIndex, batch.Candidates.Count,
-                ResolveDisplayName(best.CardName, best.CardId),
-                best.PurchaseCost, batch.TimeCoinCount);
+            _renderer.ShowTimewarpPurchaseRatings(
+                indices, costs, names, batch.Candidates.Count, batch.TimeCoinCount);
         }
 
         private Engine.UiTargetSource ApplyPowerLogTrinketCandidates(GameState state)
@@ -3044,29 +4825,39 @@ namespace BobCoach
                 var localOffers = new List<Engine.TrinketOption>();
                 foreach (var candidate in candidates)
                 {
-                    Engine.TrinketFact fact;
+                    Engine.TrinketFact fact = default(Engine.TrinketFact);
                     try
                     {
-                        if (_engine == null || _engine.TrinketFactSource == null
-                            || !_engine.TrinketFactSource.TryGet(candidate.CardId, out fact)
-                            || !string.Equals(fact.CardId, candidate.CardId, StringComparison.Ordinal))
-                            return state.TrinketOffer != null && state.TrinketOffer.Count >= 2
-                                ? Engine.UiTargetSource.Entity : Engine.UiTargetSource.None;
+                        if (_engine != null && _engine.TrinketFactSource != null
+                            && _engine.TrinketFactSource.TryGet(candidate.CardId, out fact)
+                            && string.Equals(fact.CardId, candidate.CardId, StringComparison.Ordinal))
+                        {
+                            localOffers.Add(new Engine.TrinketOption
+                            {
+                                CardId = fact.CardId,
+                                TrinketName = !string.IsNullOrEmpty(fact.NameZhCn)
+                                    ? fact.NameZhCn
+                                    : !string.IsNullOrEmpty(fact.NameEnUs)
+                                        ? fact.NameEnUs : fact.CardId,
+                                EntityId = candidate.EntityId,
+                                IsLesser = fact.IsLesser,
+                            });
+                            continue;
+                        }
                     }
                     catch
                     {
-                        return state.TrinketOffer != null && state.TrinketOffer.Count >= 2
-                            ? Engine.UiTargetSource.Entity : Engine.UiTargetSource.None;
+                        fact = default(Engine.TrinketFact);
                     }
                     localOffers.Add(new Engine.TrinketOption
                     {
-                        CardId = fact.CardId,
-                        TrinketName = !string.IsNullOrEmpty(fact.NameZhCn)
-                            ? fact.NameZhCn
-                            : !string.IsNullOrEmpty(fact.NameEnUs)
-                                ? fact.NameEnUs : fact.CardId,
+                        CardId = candidate.CardId,
+                        TrinketName = Engine.DisplayNameResolver.Resolve(
+                            candidate.CardId,
+                            candidate.CardName,
+                            Engine.CardNameService.GetName),
                         EntityId = candidate.EntityId,
-                        IsLesser = fact.IsLesser,
+                        IsLesser = state.Turn == 6,
                     });
                 }
                 state.TrinketOffer = localOffers;
@@ -3225,12 +5016,13 @@ namespace BobCoach
             bool isPrizeDiscover = prizeScores != null && prizeScores.Count > 0;
 
             string compDir = _cachedPlan?.Status?.CompDir ?? "";
+            string normalizedComp = (compDir ?? "").TrimEnd('?').Trim();
             var scored = new List<(int idx, double score, string reason)>();
             for (int i = 0; i < state.DiscoverOptions.Count; i++)
             {
                 var d = state.DiscoverOptions[i];
                 double sc = 3.0;
-                string reason = "";
+                var reasonParts = new List<string>();
 
                 // 奖品法术: 使用专属评分覆盖默认评分
                 if (isPrizeDiscover)
@@ -3261,28 +5053,61 @@ namespace BobCoach
                 if (tier < 1) tier = 1;
 
                 // 高星加分
-                if (tier >= 5) { sc += 4; reason = "高星"; }
-                else if (tier >= 4) { sc += 2.5; reason = "优质"; }
+                if (tier >= 5) { sc += 4; reasonParts.Add("高星"); }
+                else if (tier >= 4) { sc += 2.5; reasonParts.Add("优质"); }
                 else if (tier >= 3) sc += 1;
 
-                // 流派匹配
-                if (!string.IsNullOrEmpty(compDir))
+                // 流派匹配: 优先用结构化Tribes, 不依赖中文名 Contains
+                bool compMatched = false;
+                if (!string.IsNullOrEmpty(normalizedComp))
                 {
-                    string dn = d.TrinketName ?? "";
-                    if (dn.Contains(compDir))
-                    { sc += 3; reason = "匹配流派"; }
+                    var optionTribes = d.Tribes != null && d.Tribes.Count > 0
+                        ? d.Tribes : ResolveCardTribes(d.CardId);
+                    string compCn = TribeCnName(normalizedComp);
+                    compMatched = optionTribes.Any(t =>
+                        string.Equals(t, normalizedComp, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(t, compCn, StringComparison.OrdinalIgnoreCase)
+                        || t == "全" || t == "全部" || t == "ALL");
+                    if (!compMatched && optionTribes.Count == 0)
+                    {
+                        string dn = d.TrinketName ?? "";
+                        compMatched = (!string.IsNullOrEmpty(normalizedComp)
+                                && dn.Contains(normalizedComp))
+                            || (!string.IsNullOrEmpty(compCn) && dn.Contains(compCn));
+                    }
+                }
+                if (compMatched)
+                {
+                    sc += 3;
+                    reasonParts.Add("匹配流派");
+                }
+
+                // 核心牌与资源牌: 前中期资源牌权重最高，后期核心引擎权重最高
+                bool isCore = _engine != null && _engine.IsCoreComboCard(d.CardId);
+                bool isResource = _engine != null && _engine.IsResourceCard(d.CardId);
+                if (isResource)
+                {
+                    sc += state.Turn <= 5 ? 5.5
+                        : state.Turn <= 9 ? 4.5 : 3.0;
+                    reasonParts.Add("资源牌");
+                }
+                if (isCore)
+                {
+                    sc += state.Turn <= 5 ? 4.5
+                        : state.Turn <= 9 ? 5.0 : 6.0;
+                    reasonParts.Add("核心牌");
                 }
 
                 // 关键词加成
                 string name = d.TrinketName ?? "";
                 if (name.Contains("铜须") || name.Contains("达瑞尔") || name.Contains("瑞文"))
-                { sc += 3; reason = "引擎"; }
+                { sc += 3; reasonParts.Add("引擎"); }
 
                 // 发现来源差异化: 三连(+25%) > 英雄技能(+12%) > 战吼/法术(基准)
                 double sourceMult = _discoverSource == "triple" ? 1.25
                     : _discoverSource == "prize" ? 1.18
                     : _discoverSource == "heroPower" ? 1.12 : 1.0;
-                scored.Add((i, sc * sourceMult, reason));
+                scored.Add((i, sc * sourceMult, string.Join("+", reasonParts)));
             }
             scored.Sort((a, b) => b.score.CompareTo(a.score));
             for (int si = 0; si < scored.Count; si++)
@@ -3307,6 +5132,8 @@ namespace BobCoach
             var sb = new System.Text.StringBuilder();
             bool isSell = bestAction != null && bestAction.Type == ActionType.SellMinion;
             bool isRefresh = bestAction != null && bestAction.Type == ActionType.Refresh;
+            bool isUseSpell = bestAction != null && bestAction.Type == ActionType.UseSpell;
+            bool isPlayMinion = bestAction != null && bestAction.Type == ActionType.PlayMinion;
 
             if (isSell)
             {
@@ -3336,6 +5163,21 @@ namespace BobCoach
                         if (i > 0) sb.Append("\n");
                         sb.AppendFormat("{0}. {1} T{2}{3}", i + 1, m.CardName, m.Tier, tag);
                     }
+                }
+            }
+            else if (isUseSpell || isPlayMinion)
+            {
+                if (state.HandMinions == null) return "";
+                string prefix = isUseSpell ? "建议使用:\n" : "建议上阵:\n";
+                sb.Append(prefix);
+                int target = bestAction != null ? bestAction.TargetIndex : -1;
+                if (target >= 0 && target < state.HandMinions.Count)
+                {
+                    var m = state.HandMinions[target];
+                    sb.AppendFormat("{0}. {1} T{2}",
+                        target + 1,
+                        string.IsNullOrEmpty(m.CardName) ? m.CardId : m.CardName,
+                        m.Tier);
                 }
             }
             else
@@ -3384,6 +5226,8 @@ namespace BobCoach
                 case ActionType.Refresh: return "刷";
                 case ActionType.BuyMinion: return "选";
                 case ActionType.SellMinion: return "卖";
+                case ActionType.PlayMinion: return "打";
+                case ActionType.UseSpell: return "用";
                 default: return "稳";
             }
         }
@@ -3396,6 +5240,8 @@ namespace BobCoach
                 case ActionType.Refresh: return "#00BFFF";
                 case ActionType.BuyMinion: return "#69F0AE";
                 case ActionType.SellMinion: return "#FFAB40";
+                case ActionType.PlayMinion: return "#69F0AE";
+                case ActionType.UseSpell: return "#B388FF";
                 default: return "#FFD700";
             }
         }
@@ -3506,16 +5352,39 @@ namespace BobCoach
             {
                 var atkBoard = new List<Engine.MinionData>(state.BoardMinions);
                 var defBoard = new List<Engine.MinionData>(opp.BoardMinions);
-                _lastCombatPrediction = Engine.BobsBuddyBridge.Simulate(atkBoard, defBoard, simCount: 2000);
-                if (_lastCombatPrediction != null)
+                // 2026-08 对抗性审查 M2: Simulate(2000次模拟+反射)在UI线程同步执行会
+                // 阻塞覆盖层(注释原称"异步"实为同步)。改后台线程跑 + Dispatcher 写回,
+                // 写回前比对 hash 防 stale-clobber(板面已再变化时丢弃旧结果)。
+                string capturedHash = hash;
+                System.Threading.Tasks.Task.Run(() =>
                 {
-                    Log(string.Format("CombatPredict: win={0:F1}% tie={1:F1}% lose={2:F1}% dmg={3:F1} sims={4}",
-                        _lastCombatPrediction.WinRate * 100,
-                        _lastCombatPrediction.TieRate * 100,
-                        _lastCombatPrediction.LossRate * 100,
-                        _lastCombatPrediction.AvgDamageTaken,
-                        _lastCombatPrediction.SimulationCount));
-                }
+                    Engine.BobsBuddyBridge.CombatResult prediction = null;
+                    try
+                    {
+                        prediction = Engine.BobsBuddyBridge.Simulate(atkBoard, defBoard, simCount: 2000);
+                    }
+                    catch (Exception simEx) { Log("CombatPredict sim error: " + simEx.Message); }
+                    var app = System.Windows.Application.Current;
+                    if (app == null) return;
+                    app.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                    {
+                        try
+                        {
+                            if (capturedHash != _lastCombatBoardHash) return; // 板面已变, 丢弃旧结果
+                            _lastCombatPrediction = prediction;
+                            if (prediction != null)
+                            {
+                                Log(string.Format("CombatPredict: win={0:F1}% tie={1:F1}% lose={2:F1}% dmg={3:F1} sims={4}",
+                                    prediction.WinRate * 100,
+                                    prediction.TieRate * 100,
+                                    prediction.LossRate * 100,
+                                    prediction.AvgDamageTaken,
+                                    prediction.SimulationCount));
+                            }
+                        }
+                        catch (Exception ex) { Log("CombatPredict writeback error: " + ex.Message); }
+                    }));
+                });
             }
             catch (Exception ex) { Log("CombatPredict error: " + ex.Message); }
         }
@@ -3646,6 +5515,9 @@ namespace BobCoach
         /// <summary>Power.log NEXT_STEP 事件: 以Power.log为权威时钟源校准计时</summary>
         private void OnPowerLogPhaseChanged(string phase)
         {
+            if (DispatchToUiThread(() => OnPowerLogPhaseChanged(phase))) return;
+            _powerLogPhase = phase ?? "shop";
+            _globalReplayRecorder?.RecordPhase(_powerLogPhase);
             // 修复: MAIN_ACTION(招募开始)不应清除UI, 仅在MAIN_COMBAT(战斗开始)清除
             if (phase == "MAIN_COMBAT")
             {
@@ -3676,6 +5548,7 @@ namespace BobCoach
 
         private void OnPowerLogBuildNumberChanged(int build)
         {
+            if (DispatchToUiThread(() => OnPowerLogBuildNumberChanged(build))) return;
             try
             {
                 Log("Current game BuildNumber=" + build);
@@ -3686,6 +5559,7 @@ namespace BobCoach
         /// <summary>Power.log 发现候选事件: 来自ChoiceList或FULL_ENTITY批量检测</summary>
         private void OnPowerLogDiscoverOffered(Engine.PowerLogChoiceBatch batch)
         {
+            if (DispatchToUiThread(() => OnPowerLogDiscoverOffered(batch))) return;
             var candidates = batch?.Candidates;
             if (candidates == null) return;
             if (candidates.Count > 0 && _extractor != null)
@@ -3707,6 +5581,17 @@ namespace BobCoach
                 OnPowerLogStateChanged();
                 return;
             }
+            if (_globalReplayRecorder != null)
+            {
+                int observedTurn = _cachedState != null ? _cachedState.Turn : -1;
+                _globalReplayRecorder.RecordChoice(
+                    "discover",
+                    batch.ChoiceId,
+                    batch.TaskList,
+                    batch.SourceCardId,
+                    candidates.Select(c => c.CardId),
+                    observedTurn);
+            }
             _discoverBatchFromLog = batch;
             _discoverPanelActive = true; _discoverPanelActivatedAt = DateTime.UtcNow;
             _lastDiscoverTriggerTime = DateTime.UtcNow;
@@ -3719,10 +5604,18 @@ namespace BobCoach
 
         private void OnPowerLogTimewarpPurchaseOffered(Engine.PowerLogChoiceBatch batch)
         {
+            if (DispatchToUiThread(() => OnPowerLogTimewarpPurchaseOffered(batch))) return;
             if (batch == null || batch.ChoiceId < 0 || batch.Candidates == null
                 || batch.Candidates.Count < 2) return;
             _timewarpPurchaseBatchFromLog = batch;
             _timewarpPurchaseClearRequested = false;
+            _globalReplayRecorder?.RecordChoice(
+                "timewarp",
+                batch.ChoiceId,
+                batch.TaskList,
+                batch.SourceCardId,
+                batch.Candidates.Select(c => c.CardId),
+                _cachedState != null ? _cachedState.Turn : -1);
             Log(string.Format(
                 "Timewarp purchase: choice={0} source={1} coins={2} candidates=[{3}]",
                 batch.ChoiceId, batch.SourceCardId, batch.TimeCoinCount,
@@ -3734,35 +5627,77 @@ namespace BobCoach
 
         private void OnPowerLogDarkGiftChoiceActive(Engine.PowerLogChoiceBatch batch)
         {
+            if (DispatchToUiThread(() => OnPowerLogDarkGiftChoiceActive(batch))) return;
             if (batch == null || batch.ChoiceId < 0) return;
             _darkGiftBatchFromLog = batch;
             _darkGiftTipCoordinator.OnDarkGiftChoiceActive(DateTime.Now);
+            _globalReplayRecorder?.RecordChoice(
+                "darkGift",
+                batch.ChoiceId,
+                batch.TaskList,
+                batch.SourceCardId,
+                batch.Candidates.Select(c => c.CardId),
+                _cachedState != null ? _cachedState.Turn : -1);
             Log("Dark Gift: choice=" + batch.ChoiceId + " source=" + batch.SourceCardId);
             OnPowerLogStateChanged();
         }
 
         private void OnPowerLogDarkGiftCompleted(Engine.PowerLogChoiceCompletion completion)
         {
+            if (DispatchToUiThread(() => OnPowerLogDarkGiftCompleted(completion))) return;
             if (completion == null || _darkGiftBatchFromLog == null
                 || _darkGiftBatchFromLog.ChoiceId != completion.ChoiceId) return;
             _darkGiftBatchFromLog = null;
+            _darkGiftUsedCount = Math.Min(3, _darkGiftUsedCount + 1);
+            _darkGiftUsedTurn = _cachedState != null ? _cachedState.Turn : -1;
             _darkGiftTipCoordinator.OnDarkGiftCompleted(DateTime.Now);
+            _globalReplayRecorder?.RecordChoiceCompleted(
+                "darkGift",
+                completion.ChoiceId,
+                completion.SelectedCardId,
+                _darkGiftUsedTurn);
             Log("Dark Gift: choice=" + completion.ChoiceId + " completed selected=" + completion.SelectedCardId);
             OnPowerLogStateChanged();
         }
 
         private void OnPowerLogPassiveChoiceActive(Engine.PowerLogChoiceBatch batch)
         {
+            if (DispatchToUiThread(() => OnPowerLogPassiveChoiceActive(batch))) return;
             if (batch == null || batch.ChoiceId < 0) return;
             _passiveChoiceActive = true;
+            _discoverBatchFromLog = batch;
+            _discoverPanelActive = true;
+            _discoverPanelActivatedAt = DateTime.UtcNow;
+            _lastDiscoverTriggerTime = DateTime.UtcNow;
+            _globalReplayRecorder?.RecordChoice(
+                "passive",
+                batch.ChoiceId,
+                batch.TaskList,
+                batch.SourceCardId,
+                batch.Candidates.Select(c => c.CardId),
+                _cachedState != null ? _cachedState.Turn : -1);
             Log("Passive choice: active choice=" + batch.ChoiceId + " source=" + batch.SourceCardId);
             OnPowerLogStateChanged();
         }
 
         private void OnPowerLogPassiveChoiceCompleted(Engine.PowerLogChoiceCompletion completion)
         {
+            if (DispatchToUiThread(() => OnPowerLogPassiveChoiceCompleted(completion))) return;
             if (completion == null) return;
             _passiveChoiceActive = false;
+            if (_discoverBatchFromLog != null
+                && _discoverBatchFromLog.ChoiceId == completion.ChoiceId)
+            {
+                _discoverBatchFromLog = null;
+                _discoverPanelActive = false;
+                _discoverPanelActivatedAt = DateTime.MinValue;
+                _discoverTargetState.CompleteChoice();
+            }
+            _globalReplayRecorder?.RecordChoiceCompleted(
+                "passive",
+                completion.ChoiceId,
+                completion.SelectedCardId,
+                _cachedState != null ? _cachedState.Turn : -1);
             Log("Passive choice: completed choice=" + completion.ChoiceId
                 + " selected=" + completion.SelectedCardId);
             OnPowerLogStateChanged();
@@ -3770,9 +5705,17 @@ namespace BobCoach
 
         private void OnPowerLogDarkGiftPressableChanged(Engine.PowerLogDarkGiftPressable pressable)
         {
+            if (DispatchToUiThread(() => OnPowerLogDarkGiftPressableChanged(pressable))) return;
             if (pressable == null || pressable.CardId != "BG36_Button_DarkGift") return;
             _darkGiftTipCoordinator.OnPressableChanged(
                 pressable.Pressable, DateTime.Now, pressable.Backfilled);
+            _globalReplayRecorder?.RecordAction(
+                "darkGiftPressable",
+                pressable.CardId,
+                pressable.EntityId,
+                3,
+                _cachedState != null ? _cachedState.Turn : -1,
+                "powerlog");
             Log(string.Format("Dark Gift: pressable={0} entity={1} backfilled={2}",
                 pressable.Pressable, pressable.EntityId, pressable.Backfilled));
             OnPowerLogStateChanged();
@@ -3781,6 +5724,7 @@ namespace BobCoach
         /// <summary>Power.log 饰品选择事件: 来自ChoiceList(含MagicItem/Trinket的选项)</summary>
         private void OnPowerLogTrinketChoiceActive(Engine.PowerLogChoiceBatch batch)
         {
+            if (DispatchToUiThread(() => OnPowerLogTrinketChoiceActive(batch))) return;
             var candidates = batch?.Candidates;
             if (candidates == null) return;
             if (candidates.Count == 0)
@@ -3790,8 +5734,14 @@ namespace BobCoach
                     && _trinketChoiceLifecycle.Current.Batch?.ChoiceId != batch.ChoiceId) return;
                 _trinketChoiceLifecycle.Reset();
                 _trinketPanelActive = false; _trinketPanelActivatedAt = DateTime.MinValue;
+                _trinketPanelState.Transition(Engine.PanelPhase.Expired);
                 if (_cachedState != null) _lastTrinketHideTurn = _cachedState.Turn;
                 _trinketTargetState.CompleteChoice();
+                _globalReplayRecorder?.RecordChoiceCompleted(
+                    "trinket",
+                    batch.ChoiceId,
+                    "",
+                    _cachedState != null ? _cachedState.Turn : -1);
                 Log("Trinket panel: Power.log signaled choice completed, clearing");
                 OnPowerLogStateChanged();
                 return;
@@ -3804,6 +5754,13 @@ namespace BobCoach
                 Log("Trinket panel: skipped by Season14 mechanic profile");
                 return;
             }
+            _globalReplayRecorder?.RecordChoice(
+                "trinket",
+                batch.ChoiceId,
+                batch.TaskList,
+                batch.SourceCardId,
+                candidates.Select(c => c.CardId),
+                observedTurn);
             _trinketPanelActive = true; _trinketPanelActivatedAt = DateTime.UtcNow;
             Log(string.Format("Trinket panel: choice={0} source={1} observedTurn={2} targetTurn={3} context={4} signaled {5} options [{6}]",
                 batch.ChoiceId, batch.SourceCardId, observedTurn, binding.TargetTurn, binding.Context, candidates.Count,
@@ -3815,6 +5772,7 @@ namespace BobCoach
         /// <summary>Power.log 选择完成 — 只清理 choiceId 匹配的面板。</summary>
         private void OnPowerLogChoiceCompleted(Engine.PowerLogChoiceCompletion completion)
         {
+            if (DispatchToUiThread(() => OnPowerLogChoiceCompleted(completion))) return;
             if (completion == null) return;
             if (_extractor != null)
                 _extractor.ObserveSecondHeroPowerChoiceSelection(
@@ -3825,6 +5783,11 @@ namespace BobCoach
                 _discoverPanelActive = false; _discoverPanelActivatedAt = DateTime.MinValue;
                 _discoverBatchFromLog = null;
                 _discoverTargetState.CompleteChoice();
+                _globalReplayRecorder?.RecordChoiceCompleted(
+                    "discover",
+                    completion.ChoiceId,
+                    completion.SelectedCardId,
+                    _cachedState != null ? _cachedState.Turn : -1);
                 Log(string.Format("Discover panel: choice={0} completed selected={1}",
                     completion.ChoiceId, completion.SelectedCardId));
             }
@@ -3833,6 +5796,11 @@ namespace BobCoach
             {
                 _timewarpPurchaseBatchFromLog = null;
                 _timewarpPurchaseClearRequested = true;
+                _globalReplayRecorder?.RecordChoiceCompleted(
+                    "timewarp",
+                    completion.ChoiceId,
+                    completion.SelectedCardId,
+                    _cachedState != null ? _cachedState.Turn : -1);
                 Log(string.Format("Timewarp purchase: choice={0} completed selected={1}",
                     completion.ChoiceId, completion.SelectedCardId));
             }
@@ -3842,8 +5810,15 @@ namespace BobCoach
                 if (_trinketShadowEnabled)
                     TrinketShadowComplete(completedTrinket, completion);
                 _trinketPanelActive = false; _trinketPanelActivatedAt = DateTime.MinValue;
+                _renderer.ClearTrinketHints();
+                _trinketPanelState = default(Engine.PanelState);
                 if (_cachedState != null) _lastTrinketHideTurn = _cachedState.Turn;
                 _trinketTargetState.CompleteChoice();
+                _globalReplayRecorder?.RecordChoiceCompleted(
+                    "trinket",
+                    completion.ChoiceId,
+                    completion.SelectedCardId,
+                    _cachedState != null ? _cachedState.Turn : -1);
                 Log(string.Format("Trinket panel: choice={0} completed selected={1} context={2}",
                     completion.ChoiceId, completion.SelectedCardId, completedTrinket.Context));
             }
@@ -3852,6 +5827,7 @@ namespace BobCoach
 
         private void OnPowerLogTeammateGoldTransfer(Engine.PLEvent evt)
         {
+            if (DispatchToUiThread(() => OnPowerLogTeammateGoldTransfer(evt))) return;
             var state = _cachedState;
             var rule = state != null && state.EffectiveRules != null
                 ? state.EffectiveRules.TeammateGoldTransfer : null;
@@ -3861,12 +5837,254 @@ namespace BobCoach
             string evidenceId = evt.EntityId + "@" + evt.Timestamp.Ticks;
             if (_extractor.ObserveTeammateGoldTransfer(
                 rule, turn, evt.CardId, evt.EntityId, evidenceId, "power_log"))
+            {
+                _globalReplayRecorder?.RecordAction(
+                    "teammateGold",
+                    evt.CardId,
+                    evt.EntityId,
+                    rule.GoldPerUse,
+                    turn,
+                    "powerlog");
                 OnPowerLogStateChanged();
+            }
+        }
+
+        /// <summary>Power.log 原始事件流 → 紧凑回放事件（动作/战斗，不写原始行）。</summary>
+        private void OnPowerLogEventDetected(Engine.PLEvent evt)
+        {
+            if (DispatchToUiThread(() => OnPowerLogEventDetected(evt))) return;
+            if (evt == null || _globalReplayRecorder == null) return;
+            int turn = evt.Turn > 0
+                ? evt.Turn
+                : (_cachedState != null ? _cachedState.Turn : 0);
+            string phase = string.IsNullOrEmpty(_powerLogPhase)
+                ? (evt.Value ?? "")
+                : _powerLogPhase;
+
+            if (evt.PlayerId > 0)
+            {
+                _powerEntityPlayers[evt.EntityId] = evt.PlayerId;
+                if (!string.IsNullOrEmpty(evt.Zone))
+                    _powerEntityZones[evt.EntityId] = evt.Zone;
+                if (!string.IsNullOrEmpty(evt.CardId))
+                    _powerEntityCards[evt.EntityId] = evt.CardId;
+            }
+
+            if (evt.Type == Engine.PLEventType.Attack)
+            {
+                string defCard = evt.TargetCardId;
+                if (string.IsNullOrEmpty(defCard) && evt.TargetId > 0)
+                    _powerEntityCards.TryGetValue(evt.TargetId, out defCard);
+                _globalReplayRecorder.RecordCombatEvent(
+                    "attack", evt.SourceId, evt.CardId, evt.PlayerId,
+                    evt.TargetId, defCard, evt.TargetPlayerId, 0, 0, turn, phase);
+                return;
+            }
+            if (evt.Type == Engine.PLEventType.Damage)
+            {
+                _globalReplayRecorder.RecordCombatEvent(
+                    "damage", 0, "", 0, evt.EntityId, evt.CardId, evt.PlayerId,
+                    evt.NumericValue, evt.BeforeHealth, turn, phase);
+                return;
+            }
+            if (evt.Type == Engine.PLEventType.MinionDeath)
+            {
+                _globalReplayRecorder.RecordCombatEvent(
+                    "death", 0, "", 0, evt.EntityId, evt.CardId, evt.PlayerId,
+                    0, 0, turn, phase);
+                return;
+            }
+            if (evt.Type == Engine.PLEventType.HeroPowerUsed)
+            {
+                if (IsLocalPowerEvent(evt))
+                    _globalReplayRecorder.RecordPowerAction(
+                        "heroPower", evt.CardId, evt.EntityId, "", 0, turn, phase);
+                return;
+            }
+            if (evt.Type == Engine.PLEventType.Triple)
+            {
+                if (IsLocalPowerEvent(evt))
+                    _globalReplayRecorder.RecordPowerAction(
+                        "triple", evt.NewCardId, evt.EntityId, evt.OldCardId,
+                        0, turn, phase);
+                return;
+            }
+            if (evt.Type == Engine.PLEventType.ZoneChange)
+            {
+                RecordPowerZoneEvent(evt, turn, phase);
+                return;
+            }
+            if (evt.Type == Engine.PLEventType.PlayerAction
+                && evt.BlockType == "PLAY"
+                && !string.IsNullOrEmpty(evt.CardId))
+            {
+                RecordPowerActionBlock(evt, turn, phase);
+            }
+        }
+
+        private void RecordPowerZoneEvent(Engine.PLEvent evt, int turn, string phase)
+        {
+            if (evt == null || string.IsNullOrEmpty(evt.Value)) return;
+            int playerId = evt.PlayerId;
+            if (playerId <= 0) _powerEntityPlayers.TryGetValue(evt.EntityId, out playerId);
+            if (playerId > 0 && !IsLocalPowerPlayer(playerId)) return;
+
+            string cardId = evt.CardId;
+            if (string.IsNullOrEmpty(cardId))
+                _powerEntityCards.TryGetValue(evt.EntityId, out cardId);
+            if (string.IsNullOrEmpty(cardId)
+                || cardId.StartsWith("TB_BaconShop", StringComparison.Ordinal))
+                return;
+
+            string oldZone = evt.Zone;
+            if (string.IsNullOrEmpty(oldZone))
+                _powerEntityZones.TryGetValue(evt.EntityId, out oldZone);
+            string newZone = evt.Value;
+            _powerEntityZones[evt.EntityId] = newZone;
+            _powerEntityCards[evt.EntityId] = cardId;
+            if (playerId > 0) _powerEntityPlayers[evt.EntityId] = playerId;
+
+            bool combat = phase != null
+                && phase.IndexOf("COMBAT", StringComparison.Ordinal) >= 0;
+            if (combat) return;
+
+            string kind = "";
+            if (oldZone == "HAND" && newZone == "PLAY") kind = "play";
+            else if (oldZone == "PLAY" && newZone == "SETASIDE") kind = "sell";
+            if (!string.IsNullOrEmpty(kind))
+            {
+                if (kind == "play" && IsTavernSpellCard(cardId))
+                {
+                    _lastUsedTavernSpellCardId = cardId;
+                    _lastUsedTavernSpellName = ResolveCardName(cardId);
+                }
+                _globalReplayRecorder.RecordPowerAction(
+                    kind, cardId, evt.EntityId, "", 0, turn, phase);
+                OnPowerLogStateChanged();
+            }
+        }
+
+        private static bool IsTavernSpellCard(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return false;
+            Engine.Season14MechanicCardFact fact;
+            return TavernSpellLookup.Value.TryGet(cardId, out fact)
+                && string.Equals(
+                    fact.Type,
+                    "BATTLEGROUND_SPELL",
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ResolveCardName(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return "";
+            Engine.Season14MechanicCardFact fact;
+            if (TavernSpellLookup.Value.TryGet(cardId, out fact))
+            {
+                if (!string.IsNullOrEmpty(fact.NameZhCn)) return fact.NameZhCn;
+                if (!string.IsNullOrEmpty(fact.NameEnUs)) return fact.NameEnUs;
+            }
+            return CardNameService.GetName(cardId);
+        }
+
+        private void RecordPowerActionBlock(Engine.PLEvent evt, int turn, string phase)
+        {
+            int playerId = evt.PlayerId;
+            if (playerId > 0 && !IsLocalPowerPlayer(playerId)) return;
+
+            string cardId = evt.CardId ?? "";
+            string targetCardId = evt.TargetCardId ?? "";
+            if (string.IsNullOrEmpty(targetCardId) && evt.TargetId > 0)
+                _powerEntityCards.TryGetValue(evt.TargetId, out targetCardId);
+
+            if (cardId.StartsWith("TB_BaconShop_DragBuy", StringComparison.Ordinal))
+            {
+                string kind = cardId.EndsWith("_Spell", StringComparison.Ordinal)
+                    ? "spell" : "buy";
+                _globalReplayRecorder.RecordPowerAction(
+                    kind, targetCardId, evt.TargetId, "", evt.TargetPlayerId,
+                    turn, phase);
+            }
+            else if (cardId.StartsWith("TB_BaconShop_DragSell", StringComparison.Ordinal))
+            {
+                _globalReplayRecorder.RecordPowerAction(
+                    "sell", targetCardId, evt.TargetId, "", evt.TargetPlayerId,
+                    turn, phase);
+            }
+            else if (cardId.IndexOf("Reroll_Button", StringComparison.Ordinal) >= 0
+                || cardId.StartsWith("TB_BaconShop_8p_Reroll_Button", StringComparison.Ordinal))
+            {
+                _globalReplayRecorder.RecordPowerAction(
+                    "refresh", cardId, evt.EntityId, "", 0, turn, phase);
+            }
+            else if (cardId.IndexOf("TechUp", StringComparison.Ordinal) >= 0
+                && cardId.IndexOf("_Button", StringComparison.Ordinal) >= 0)
+            {
+                _globalReplayRecorder.RecordPowerAction(
+                    "level", cardId, evt.EntityId, "", 0, turn, phase);
+            }
+            else if (cardId.IndexOf("Freeze", StringComparison.Ordinal) >= 0
+                || cardId.IndexOf("_Frozen_", StringComparison.Ordinal) >= 0)
+            {
+                _globalReplayRecorder.RecordPowerAction(
+                    "freeze", cardId, evt.EntityId, "", 0, turn, phase);
+            }
+            else if (cardId.IndexOf("BG36_Button_DarkGift", StringComparison.Ordinal) >= 0)
+            {
+                _globalReplayRecorder.RecordPowerAction(
+                    "darkGift", cardId, evt.EntityId, "", 0, turn, phase);
+            }
+            else if (IsHeroPowerCardId(cardId))
+            {
+                _globalReplayRecorder.RecordPowerAction(
+                    "heroPower", cardId, evt.EntityId, evt.TargetCardId,
+                    evt.TargetPlayerId, turn, phase);
+            }
+
+            if (cardId.StartsWith("TB_BaconShop", StringComparison.Ordinal)
+                || IsHeroPowerCardId(cardId))
+                OnPowerLogStateChanged();
+        }
+
+        private bool IsLocalPowerEvent(Engine.PLEvent evt)
+        {
+            if (evt == null) return false;
+            return evt.PlayerId <= 0 || IsLocalPowerPlayer(evt.PlayerId);
+        }
+
+        private bool IsLocalPowerPlayer(int playerId)
+        {
+            return _powerLogWatcher == null
+                || _powerLogWatcher.LocalControllerId <= 0
+                || playerId == _powerLogWatcher.LocalControllerId;
+        }
+
+        private static bool IsHeroPowerCardId(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return false;
+            return cardId.Contains("_HP_")
+                || cardId.Contains("BACON_HERO_POWER")
+                || (cardId.Contains("_HERO_") && cardId.EndsWith("p"))
+                || cardId.Contains("HeroPower");
+        }
+
+        // 2026-08 对抗性审查 M1: PowerLogWatcher 事件在后台线程触发, 回调直接写共享字段/调 WPF 对象
+        // (OnPowerLogPhaseChanged 的 _renderer.Clear() 在后台线程被 catch 吞 → 战斗开始 UI 残留)。
+        // 所有 OnPowerLog* 回调经此 marshal 到 UI 线程执行: 共享状态读写归一到 UI 线程, 消除竞争,
+        // 也让 WPF 对象调用真正生效。回调主体零改动(仅方法首行插派发行)。
+        private bool DispatchToUiThread(Action action)
+        {
+            var app = System.Windows.Application.Current;
+            if (app == null) return false; // 无 UI 上下文(单元测试/卸载中): 直接执行
+            if (app.Dispatcher.CheckAccess()) return false; // 已在 UI 线程: 直接执行
+            try { app.Dispatcher.BeginInvoke(DispatcherPriority.Normal, action); } catch { }
+            return true; // 已派发, 调用方应 return
         }
 
         /// <summary>Power.log 关键状态变化 → 设置flag, UI线程OnUpdate下一帧即时评估</summary>
         private void OnPowerLogStateChanged()
         {
+            if (DispatchToUiThread(() => OnPowerLogStateChanged())) return;
             try
             {
                 if (!_engineReady || !_inBattlegrounds) return;

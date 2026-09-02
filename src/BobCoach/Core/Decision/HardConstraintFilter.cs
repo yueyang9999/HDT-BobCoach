@@ -63,6 +63,8 @@ namespace BobCoach.Engine.Decision
                 return action.TargetIndex < 0 || action.TargetIndex >= state.TrinketOffer.Count;
             if (action.Type == ActionType.PickDiscover)
                 return action.TargetIndex < 0 || action.TargetIndex >= state.DiscoverOptions.Count;
+            if (action.Type == ActionType.PlayMinion || action.Type == ActionType.UseSpell)
+                return action.TargetIndex < 0 || action.TargetIndex >= state.HandMinions.Count;
             return false;
         }
 
@@ -90,9 +92,12 @@ namespace BobCoach.Engine.Decision
         {
             var rules = state.EffectiveRules ?? EffectiveGameRules.Default;
             if (action.Type == ActionType.BuyMinion)
-                return state.BoardMinions.Count >= state.MaxBoardSlots;
+                return state.BoardMinions.Count >= state.MaxBoardSlots
+                    && state.HandMinions.Count >= 10;
             if (action.Type == ActionType.BuySpell)
                 return state.HandMinions.Count >= 10;
+            if (action.Type == ActionType.PlayMinion)
+                return state.BoardMinions.Count >= state.MaxBoardSlots;
             if (action.Type == ActionType.Refresh)
                 return !rules.ManualRefreshAllowed;
             if (action.Type == ActionType.Upgrade)

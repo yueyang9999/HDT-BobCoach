@@ -87,11 +87,12 @@ namespace BobCoach.Engine
             EffectiveGameRules effectiveRules = null,
             int tavernUpgradeCost = -1,
             IList<ObservedPurchase> observedPurchases = null,
-            bool normalRecruitAvailable = true)
+            bool normalRecruitAvailable = true,
+            int goldAdjustment = 0)  // R251: spell/power gold gain net delta, positive-only correction
         {
             effectiveRules = effectiveRules ?? EffectiveGameRules.Default;
             if (!normalRecruitAvailable)
-                return 0;
+                return _selfTrackedGold;
             int maxGold = Math.Min(10, 2 + turn); // T1=3,T2=4...T8起=10(与 GameState.MaxGold 同步)
             maxGold = Math.Min(20, maxGold + goldPerTurn); // 畸变可能超过10
             // 开局一次性加金(金钱大战等): 当回合上限拔高
@@ -230,7 +231,10 @@ namespace BobCoach.Engine
             _prevTavernTier = tavernTier;
             _prevTavernUpgradeCost = tavernUpgradeCost;
             _prevShopEntityIds = curShopIds;
-
+            // R251: spell-gold correction - positive only (gold decreases via actions or increases via effects),
+            // negative rejected (prevent double-charge); wiring needs Power.log RESOURCES observation, awaiting replay.
+            if (goldAdjustment > 0)
+                _selfTrackedGold = Math.Min(maxGoldWithBonus, _selfTrackedGold + goldAdjustment);
             return Math.Max(0, Math.Min(maxGoldWithBonus, _selfTrackedGold));
         }
 

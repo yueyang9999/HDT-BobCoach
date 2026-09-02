@@ -4,11 +4,35 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const os = require("os");
-const { findRoslynCompiler, skipOrFail } = require("./dotnet_test_env");
+const {
+    findFrameworkAssembly,
+    findRoslynCompiler,
+    skipOrFail,
+} = require("./dotnet_test_env");
 
 const root = path.resolve(__dirname, "..");
 const compiler = findRoslynCompiler();
 if (!compiler) skipOrFail("log.config consent: Roslyn compiler unavailable; set BOBCOACH_CSC");
+
+function firstExisting(candidates) {
+    for (const candidate of candidates) {
+        if (candidate && fs.existsSync(candidate)) return path.resolve(candidate);
+    }
+    return null;
+}
+
+const hearthDbDll = firstExisting([
+    process.env.BOBCOACH_HDT_DIR
+        ? path.join(process.env.BOBCOACH_HDT_DIR, "HearthDb.dll")
+        : null,
+    path.join(process.env.LOCALAPPDATA || "", "HearthstoneDeckTracker", "HearthDb.dll"),
+    path.join(process.env.ProgramFiles || "", "Hearthstone Deck Tracker", "HearthDb.dll"),
+    path.join(process.env["ProgramFiles(x86)"] || "", "Hearthstone Deck Tracker", "HearthDb.dll"),
+]);
+const netstandard = findFrameworkAssembly("netstandard.dll");
+if (!hearthDbDll || !netstandard) {
+    skipOrFail("log.config consent: HearthDb.dll/netstandard.dll unavailable; set BOBCOACH_HDT_DIR");
+}
 
 const dataPathsSource = path.join(root, "src", "BobCoach", "Core", "BobCoachDataPaths.cs");
 const source = path.join(root, "src", "BobCoach", "Core", "LogConfigEnsurer.cs");
@@ -45,8 +69,11 @@ if (!gameEndBlock.includes("UnsubscribePowerLogWatcherEvents();")
     process.exit(1);
 }
 try {
+    fs.copyFileSync(hearthDbDll, path.join(tempRoot, "HearthDb.dll"));
     const build = spawnSync(compiler, [
         "/nologo", "/langversion:7.3", "/target:exe", `/out:${output}`,
+        `/r:${hearthDbDll}`,
+        `/r:${netstandard}`,
         dataPathsSource, source, parserSource, scannerSource, watcherSource, harness,
     ], { encoding: "utf8" });
     if (build.status !== 0) {

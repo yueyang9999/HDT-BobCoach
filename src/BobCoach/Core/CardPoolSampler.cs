@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -41,7 +41,6 @@ namespace BobCoach.Engine
             { 1, 3 }, { 2, 4 }, { 3, 4 }, { 4, 5 }, { 5, 5 }, { 6, 6 }
         };
 
-        private static Random _rng = new Random();
         private static bool _initialized;
         private static HashSet<string> _lastAvailableTribesCn;
 #if BOBCOACH_LEGACY_CARD_POOL_REGISTRY
@@ -452,10 +451,19 @@ namespace BobCoach.Engine
             int slots = ShopSlots.ContainsKey(tavernTier) ? ShopSlots[tavernTier] : 3;
             var tierDist = ShopTierPct.ContainsKey(tavernTier) ? ShopTierPct[tavernTier] : ShopTierPct[1];
 
+            // 确定性随机源: 同一 (等级, 回合, 种族池) → 同一采样序列
+            // 注意: 种族集合需排序后哈希, HashSet 迭代顺序不稳定
+            var tribeFingerprint = _lastAvailableTribesCn == null
+                ? ""
+                : string.Join("|", new SortedSet<string>(_lastAvailableTribesCn));
+            var rng = new DeterministicRng(StableSeeds.Mix(
+                0x53484F50, tavernTier, turn,
+                StableSeeds.HashString(tribeFingerprint)));
+
             for (int i = 0; i < slots; i++)
             {
                 // 按tier分布权重选择tier
-                double roll = _rng.NextDouble();
+                double roll = rng.NextDouble();
                 double cum = 0;
                 int chosenTier = 1;
                 foreach (var kv in tierDist)
@@ -473,7 +481,7 @@ namespace BobCoach.Engine
 
                 if (pool != null && pool.Count > 0)
                 {
-                    var entry = pool[_rng.Next(pool.Count)];
+                    var entry = pool[rng.Next(pool.Count)];
                     var minion = BuildMinionData(entry);
                     result.Add(minion);
                 }
@@ -484,6 +492,34 @@ namespace BobCoach.Engine
             }
 
             return result;
+        }
+
+        /// <summary>模拟“出售时获得一张随机1星随从”的奖励。</summary>
+        public static MinionData SampleTierOneReplacement(
+            EffectiveGameRules rules, int turn)
+        {
+            var pool = _initialized && IsShopPoolRegistryCompatible()
+                ? GetEligiblePool(1, rules ?? EffectiveGameRules.Default, turn)
+                : new List<CardPoolEntry>();
+            if (pool.Count == 0)
+            {
+                return new MinionData
+                {
+                    CardId = "sim_tier1",
+                    CardName = "随机1星随从",
+                    Tier = 1,
+                    Attack = 2,
+                    Health = 2,
+                    Position = -1,
+                };
+            }
+
+            var rng = new DeterministicRng(StableSeeds.Mix(0x54314F4E, turn, _filteredPool.Count));
+            var entry = pool[rng.Next(pool.Count)];
+            var replacement = BuildMinionData(entry);
+            replacement.EntityId = 0;
+            replacement.Position = -1;
+            return replacement;
         }
 
         public static bool IsCardEligibleForShop(

@@ -47,6 +47,17 @@ namespace BobCoach.Engine
             }
         }
 
+        public bool IsPressableActive
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _pressableActive;
+                }
+            }
+        }
+
         public void Reset()
         {
             Close();
@@ -114,14 +125,33 @@ namespace BobCoach.Engine
         {
             lock (_sync)
             {
-                if (_choiceActive) return "\u6697\u8d50\u9009\u62e9\u4e2d";
+                if (_choiceActive)
+                {
+                    if (context != null
+                        && ((context.Gold >= 0 && context.Gold < 3)
+                            || (!string.IsNullOrEmpty(context.Phase)
+                                && context.Phase != "shop")))
+                        return null;
+                    return "\u6697\u8d50\u9009\u62e9\u4e2d";
+                }
                 if (!_gate.ShouldShow(now)) return null;
 
                 var effectiveContext = context ?? new DarkGiftTipContext();
+                if (effectiveContext.Gold >= 0 && effectiveContext.Gold < 3)
+                    return null;
                 effectiveContext.Pressable = true;
                 effectiveContext.Backfilled = false;
                 var advice = _advisor.Evaluate(effectiveContext);
                 return advice.ShouldShow ? advice.StatusText : null;
+            }
+        }
+
+        public void RefreshPressable(DateTime now)
+        {
+            lock (_sync)
+            {
+                if (!_choiceActive && _gate.IsPressableActive && _gate.ShouldShow(now))
+                    _gate.OnPressableChanged(true, now, false);
             }
         }
 
@@ -174,12 +204,12 @@ namespace BobCoach.Engine
     /// <summary>
     /// Decides when the dark gift pressable hint is worth showing. It is a
     /// transparent context gate, not a card-effect scorer: unknown state stays
-    /// closed, and the tip text exposes the exact context used.
+    /// closed, and the tip text stays minimal so it does not distract gameplay.
     /// </summary>
     public sealed class DarkGiftTipAdvisor
     {
         private const string ChoiceActiveText = "\u6697\u8d50\u9009\u62e9\u4e2d";
-        private const string PressableText = "\u6697\u8d50\u53ef\u53d1\u73b0";
+        private const string PressableText = "\u5efa\u8bae\u70b9\u51fb\u9ed1\u6697\u53d1\u73b0";
 
         public DarkGiftTipAdvice Evaluate(DarkGiftTipContext context)
         {
@@ -197,6 +227,8 @@ namespace BobCoach.Engine
                 || context.ShopMinionCount < 0
                 || context.HandMinionCount < 0)
                 return Create(false, null, "state_incomplete");
+            if (context.Gold < 3)
+                return Create(false, null, "insufficient-gold");
 
             int opportunityCount = context.BoardMinionCount
                 + context.ShopMinionCount
@@ -217,12 +249,7 @@ namespace BobCoach.Engine
             if (!decision.ShouldOpen)
                 return Create(false, null, decision.Reason);
 
-            string statusText = string.Format(
-                "{0} T{1} \u672c{2} \u91d1{3} \u573a{4} \u5e97{5} \u624b{6} \u8bc4{7:F2}",
-                PressableText, context.Turn, context.TavernTier, context.Gold,
-                context.BoardMinionCount, context.ShopMinionCount,
-                context.HandMinionCount, decision.Score);
-            return Create(true, statusText, "open");
+            return Create(true, PressableText, "open");
         }
 
         private static DarkGiftTipAdvice Create(bool shouldShow, string statusText, string reason)

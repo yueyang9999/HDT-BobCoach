@@ -58,9 +58,48 @@ namespace BobCoach.Engine
                 case ActionType.Activate:
                     SimulateActivate(next, action);
                     break;
+                case ActionType.PlayMinion:
+                    SimulatePlayMinion(next, action);
+                    break;
+                case ActionType.UseSpell:
+                    SimulateUseSpell(next, action);
+                    break;
             }
 
             return next;
+        }
+
+        private void SimulatePlayMinion(GameState state, GameAction action)
+        {
+            if (state == null || action == null
+                || state.HandMinions == null || state.BoardMinions == null
+                || action.TargetIndex < 0 || action.TargetIndex >= state.HandMinions.Count)
+                return;
+            var card = state.HandMinions[action.TargetIndex];
+            if (card == null || card.IsSpell || state.BoardMinions.Count >= state.MaxBoardSlots)
+                return;
+            state.HandMinions.RemoveAt(action.TargetIndex);
+            state.BoardMinions.Add(card);
+            state.LiveGold = state.Gold;
+        }
+
+        private void SimulateUseSpell(GameState state, GameAction action)
+        {
+            if (state == null || action == null
+                || state.HandMinions == null
+                || action.TargetIndex < 0 || action.TargetIndex >= state.HandMinions.Count)
+                return;
+            var card = state.HandMinions[action.TargetIndex];
+            if (card == null || !card.IsSpell) return;
+            int cost = action.Cost > 0 ? action.Cost : (card.Cost >= 0 ? card.Cost : 0);
+            if (state.Gold < cost) return;
+            state.Gold -= cost;
+            state.LiveGold = state.Gold;
+            state.HandMinions.RemoveAt(action.TargetIndex);
+            state.LastUsedTavernSpellCardId = card.CardId ?? "";
+            state.LastUsedTavernSpellName = card.CardName ?? "";
+            if (card.CardId == "BG28_805")
+                state.MaxGold = Math.Min(20, state.MaxGold + 1);
         }
 
         private void SimulateActivate(GameState state, GameAction action)
@@ -98,6 +137,7 @@ namespace BobCoach.Engine
 
             if (state.Gold < cost) return; // 买不起
             state.Gold -= cost;
+            state.LiveGold = state.Gold;
 
             // 从商店移除
             state.ShopMinions.RemoveAt(action.TargetIndex);
@@ -226,6 +266,7 @@ namespace BobCoach.Engine
             int cost = GameRuleEvaluator.GetRefreshCost(state, state.HeroCardId, rules);
             if (state.Gold < cost) return;
             state.Gold -= cost;
+            state.LiveGold = state.Gold;
             if (state.FreeRefreshCount > 0)
                 state.FreeRefreshCount--;
 
@@ -271,6 +312,7 @@ namespace BobCoach.Engine
             if (!cost.HasValue || state.Gold < cost.Value) return;
             int fromTier = state.TavernTier;
             state.Gold -= cost.Value;
+            state.LiveGold = state.Gold;
             state.TavernTier++;
             state.LastUpgradeTurn = state.Turn;  // 记录升级回合
             var occurrence = UpgradePrizeEvaluator.CreateOccurrence(
@@ -293,9 +335,25 @@ namespace BobCoach.Engine
             if (sold == null) return;
             state.BoardMinions.RemoveAt(action.TargetIndex);
             state.Gold += 1; // 出售获得 1 金币
+            state.LiveGold = state.Gold;
 
             // 特殊卡牌额外金币（如白赚赌徒返 3 金币）
-            if (sold.CardId == "BGS_049") state.Gold += 2;
+            if (sold.CardId == "BGS_049")
+            {
+                state.Gold += 2;
+                state.LiveGold = state.Gold;
+            }
+
+            // 江河弹跳鱼：出售后获得一张随机1星随从，形成“卖鱼→拿币/买经济牌”的多步链
+            if (sold.CardId == "BG33_140" || sold.CardId == "BG33_140_G")
+            {
+                if (state.HandMinions == null)
+                    state.HandMinions = new List<MinionData>();
+                var replacement = CardPoolSampler.SampleTierOneReplacement(
+                    state.EffectiveRules ?? EffectiveGameRules.Default, state.Turn);
+                if (replacement != null)
+                    state.HandMinions.Add(replacement);
+            }
         }
 
         private void SimulateHeroPower(GameState state, GameAction action)
@@ -309,9 +367,13 @@ namespace BobCoach.Engine
             {
                 selectedPower = state.HeroPowers.FirstOrDefault(power => power != null
                     && power.CardId == action.CardId);
+                int effectiveCost = selectedPower != null && selectedPower.Cost > 0
+                    ? selectedPower.Cost
+                    : (state.HeroPowerCost >= 0 ? state.HeroPowerCost : 0);
                 if (selectedPower == null || !selectedPower.IsActive || !selectedPower.IsUnlocked
-                    || selectedPower.Exhausted || state.Gold < selectedPower.Cost) return;
-                state.Gold -= selectedPower.Cost;
+                    || selectedPower.Exhausted || state.Gold < effectiveCost) return;
+                state.Gold -= effectiveCost;
+                state.LiveGold = state.Gold;
                 selectedPower.Exhausted = true;
                 state.HasSecondHeroPower = state.HeroPowers.Count(power => power.IsSecondary) > 0;
                 state.ExhaustedHeroPowerCount = state.HeroPowers.Count(power => power.Exhausted);
@@ -322,15 +384,17 @@ namespace BobCoach.Engine
             {
                 if (state.HeroPowerExhausted || state.Gold < state.HeroPowerCost) return;
                 state.Gold -= state.HeroPowerCost;
+                state.LiveGold = state.Gold;
                 state.HeroPowerExhausted = true;
             }
             string powerCardId = selectedPower != null
                 ? selectedPower.CardId : state.HeroPowerCardId;
             int powerCost = selectedPower != null
-                ? selectedPower.Cost : state.HeroPowerCost;
+                ? (selectedPower.Cost > 0 ? selectedPower.Cost : state.HeroPowerCost)
+                : state.HeroPowerCost;
             // 塞纳留斯类: 铸币上限+1
-            if (powerCardId == "BG32_HERO_001p")
-                state.MaxGold = Math.Min(11, state.MaxGold + 1);
+            state.MaxGold = HeroPowerRuleCatalog.AdvancePermanentGoldCap(
+                powerCardId, state.MaxGold);
             // 沙德沃克(0费): 触发战吼 → 场面有战吼随从时提升板面战力
             if (powerCost == 0 && powerCardId != null
                 && powerCardId.Contains("23"))
@@ -372,6 +436,7 @@ namespace BobCoach.Engine
 
             int ordinal = TeammateGoldTransferEvaluator.GetUsedCount(state, state.Turn) + 1;
             state.Gold -= rule.GoldPerUse;
+            state.LiveGold = state.Gold;
             state.SimulatedTeammateGoldTransfers.Add(new SimulatedTeammateGoldTransfer(
                 rule.SourceId + ":send_gold_to_teammate@" + state.Turn + "#" + ordinal,
                 state.Turn, rule.GoldPerUse, rule.SourceId));
@@ -553,6 +618,9 @@ namespace BobCoach.Engine
                 ActivatedThisTurn = src.ActivatedThisTurn != null
                     ? new HashSet<int>(src.ActivatedThisTurn)
                     : new HashSet<int>(),
+                RecentlyBoughtEntityIds = src.RecentlyBoughtEntityIds != null
+                    ? new HashSet<int>(src.RecentlyBoughtEntityIds)
+                    : new HashSet<int>(),
                 Armor = src.Armor,
                 AvailableTribes = src.AvailableTribes != null
                     ? new HashSet<string>(src.AvailableTribes) : new HashSet<string>(),
@@ -565,6 +633,8 @@ namespace BobCoach.Engine
                 HeroPowers = src.HeroPowers != null
                     ? src.HeroPowers.Select(power => power.Copy()).ToList()
                     : new List<HeroPowerState>(),
+                LastUsedTavernSpellCardId = src.LastUsedTavernSpellCardId ?? "",
+                LastUsedTavernSpellName = src.LastUsedTavernSpellName ?? "",
                 _nodeHandIdx = -1,           // 重置Node桥接字段, 模拟状态不继承手牌推荐
                 _nodeHandReason = "",
                 _nodeHeroPower = false,

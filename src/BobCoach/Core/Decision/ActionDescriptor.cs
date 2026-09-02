@@ -41,6 +41,7 @@ namespace BobCoach.Engine.Decision
             if (type == ActionType.BuyMinion || type == ActionType.BuySpell) return "shop";
             if (type == ActionType.SellMinion) return "board";
             if (type == ActionType.Activate) return "board";
+            if (type == ActionType.PlayMinion || type == ActionType.UseSpell) return "hand";
             if (type == ActionType.PickTrinket || type == ActionType.PickDiscover) return "choice";
             return "tavern";
         }
@@ -51,6 +52,8 @@ namespace BobCoach.Engine.Decision
                 || type == ActionType.PickDiscover) return "hand";
             if (type == ActionType.SellMinion) return "none";
             if (type == ActionType.Activate) return "board";
+            if (type == ActionType.PlayMinion) return "board";
+            if (type == ActionType.UseSpell) return "none";
             return "tavern";
         }
 
@@ -65,6 +68,9 @@ namespace BobCoach.Engine.Decision
             if (action.Type == ActionType.Activate
                 && action.TargetIndex >= 0 && action.TargetIndex < state.BoardMinions.Count)
                 return state.BoardMinions[action.TargetIndex].EntityId;
+            if ((action.Type == ActionType.PlayMinion || action.Type == ActionType.UseSpell)
+                && action.TargetIndex >= 0 && action.TargetIndex < state.HandMinions.Count)
+                return state.HandMinions[action.TargetIndex].EntityId;
             if (action.Type == ActionType.PickTrinket
                 && action.TargetIndex >= 0 && action.TargetIndex < state.TrinketOffer.Count)
                 return state.TrinketOffer[action.TargetIndex].EntityId;
@@ -100,6 +106,8 @@ namespace BobCoach.Engine.Decision
                     : int.MaxValue;
             }
             if (action.Type == ActionType.Activate) return action.Cost;
+            if (action.Type == ActionType.PlayMinion) return 0;
+            if (action.Type == ActionType.UseSpell) return 0;
             return 0;
         }
 
@@ -108,8 +116,10 @@ namespace BobCoach.Engine.Decision
             if (type == ActionType.Refresh) return SimulatorSupport.ExpectedValue;
             if (type == ActionType.BuyMinion || type == ActionType.SellMinion
                 || type == ActionType.Upgrade) return SimulatorSupport.Deterministic;
+            if (type == ActionType.PlayMinion) return SimulatorSupport.Deterministic;
             if (type == ActionType.BuySpell || type == ActionType.FreezeShop
-                || type == ActionType.UseHeroPower || type == ActionType.Activate)
+                || type == ActionType.UseHeroPower || type == ActionType.Activate
+                || type == ActionType.UseSpell)
                 return SimulatorSupport.Partial;
             if (type == ActionType.SendGoldToTeammate) return SimulatorSupport.Partial;
             return SimulatorSupport.None;

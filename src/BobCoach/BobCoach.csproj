@@ -65,8 +65,13 @@
     <Compile Include="Core\EconomySnapshot.cs" />
     <Compile Include="Core\LiveSceneAnalyzer.cs" />
     <Compile Include="Core\CardObjectDatabase.cs" />
+    <Compile Include="Core\TurnProjector.cs" />
+    <Compile Include="Core\EarlyTurnRecruitGate.cs" />
     <Compile Include="Core\HeroSkillCatalog.cs" />
     <Compile Include="Core\UnifiedActionScorer.cs" />
+    <Compile Include="Core\ShadowScoreSerializer.cs" />
+    <Compile Include="Core\GlobalReplayRecorder.cs" />
+    <Compile Include="Core\HandCombatCardPolicy.cs" />
     <Compile Include="Core\HeroSkillDecisionService.cs" />
     <Compile Include="Core\DarkGiftDecisionService.cs" />
     <Compile Include="Core\RecommendationPlan.cs" />
@@ -74,6 +79,7 @@
     <Compile Include="Core\SeasonDataSelector.cs" />
     <Compile Include="Core\SeasonMechanicProfile.cs" />
     <Compile Include="Core\CompGuideCatalog.cs" />
+    <Compile Include="Core\SeasonMetaBaseline.cs" />
     <Compile Include="Core\Season14CardRegistry.cs" />
     <Compile Include="Core\Season14MinionRegistry.cs" />
     <Compile Include="Core\Season14MinionPurchaseFactSource.cs" />
@@ -87,6 +93,7 @@
     <Compile Include="Core\FishbaitFactSource.cs" />
     <Compile Include="Core\DarkGiftRegistry.cs" />
     <Compile Include="Core\DarkGiftFactSource.cs" />
+    <Compile Include="Core\DarkGiftCandidateAdvisor.cs" />
     <Compile Include="Core\DarkGiftTipGate.cs" />
     <Compile Include="Core\DisplayNameResolver.cs" />
     <Compile Include="Core\AnomalyContext.cs" />
@@ -139,6 +146,10 @@
     <Compile Include="Core\SecondaryHeroPowerRule.cs" />
     <Compile Include="Core\HeroPowerState.cs" />
     <Compile Include="Core\HeroPowerStateResolver.cs" />
+    <Compile Include="Core\HeroPowerRuleCatalog.cs" />
+    <Compile Include="Core\HeroPlaybookProfile.cs" />
+    <Compile Include="Core\HeroPlaybookRegistry.cs" />
+    <Compile Include="Core\HeroPlaybookDecisionService.cs" />
     <Compile Include="Core\TimewarpVisit.cs" />
     <Compile Include="Core\TimewarpScheduleEvaluator.cs" />
     <Compile Include="Core\TimewarpOfferRule.cs" />
@@ -161,10 +172,16 @@
     <Compile Include="Core\CardClassificationRuleEvaluator.cs" />
     <Compile Include="Core\CachedCardClassificationSource.cs" />
     <Compile Include="Core\HearthDbCardClassificationFactSource.cs" />
+    <Compile Include="Core\DeterministicRng.cs" />
     <Compile Include="Core\ValueFunction.cs" />
     <Compile Include="Core\ActionEnumerator.cs" />
     <Compile Include="Core\Simulator.cs" />
     <Compile Include="Core\DecisionEngine.cs" />
+    <Compile Include="Core\MainlineStrategyPlanner.cs" />
+    <Compile Include="Core\Decision\StrategicPlan.cs" />
+    <Compile Include="Core\Decision\StrategicMemory.cs" />
+    <Compile Include="Core\Decision\SequenceSearchPlanner.cs" />
+    <Compile Include="Core\Decision\StrategySequencePlanner.cs" />
     <Compile Include="Core\Decision\Contracts.cs" />
     <Compile Include="Core\Decision\ActionDescriptor.cs" />
     <Compile Include="Core\Decision\ActionFeatureSchema.cs" />
@@ -236,6 +253,7 @@
     <Compile Include="Core\CardEffectBaselineProvider.cs" />
     <Compile Include="Core\CardEffectFactSource.cs" />
     <Compile Include="Core\CardEffectRuleEvaluator.cs" />
+    <Compile Include="Core\StatGiftRuleEvaluator.cs" />
     <Compile Include="Core\EffectValueTable.cs" />
     <Compile Include="Core\HearthDbCardEffectFactSource.cs" />
     <Compile Include="Core\GameLayoutCalculator.cs" />
