@@ -157,6 +157,9 @@ namespace BobCoach
         private const int ShopUiClearCooldownMs = 250;
         private bool _lastFrameFrozen = false;       // 冻结跨回合UI保护
         private int _lastRenderTurn = 0;
+        private int _lastUiDiagTurn = -1;
+        private int _lastUiDiagGold = -1;
+        private string _lastUiDiagSig = "";   // 1.2.2 T1状态条文字诊断节流
         private DateTime _lastRenderTime = DateTime.MinValue;
         private string _lastShopIdStr = "";
         private int _lastShopCount = 0;                    // 商店实体数稳定性跟踪
@@ -2425,6 +2428,18 @@ namespace BobCoach
                 Log(string.Format("  ShopMarker idx={0} level={1} score={2:F2} card={3} tier={4}",
                     sm.Index, sm.Level, sm.Score, sm.CardName, sm.Tier));
             }
+            // 1.2.2 T1反馈: 状态条文字诊断 — UI 提示"买X + 拿Y"两行误导, 文字层之前不进日志,
+            // 无法从回放/日志定位来源。此处打印最终上屏文字(节流: 同turn+gold只打一次, 防刷屏)。
+            if (_lastUiDiagTurn != state.Turn || _lastUiDiagGold != state.Gold
+                || _lastUiDiagSig != (plan.Status.HintLine ?? "") + "|" + (plan.Status.PlanLine ?? ""))
+            {
+                _lastUiDiagTurn = state.Turn; _lastUiDiagGold = state.Gold;
+                _lastUiDiagSig = (plan.Status.HintLine ?? "") + "|" + (plan.Status.PlanLine ?? "");
+                Log(string.Format("UISTATUS turn={0} gold={1} best={2} | hint=[{3}] plan=[{4}] pick=[{5}] stage={6} mode={7}",
+                    state.Turn, state.Gold, bestAction != null ? bestAction.Type.ToString() : "-",
+                    plan.Status.HintLine, plan.Status.PlanLine, plan.Status.PickLine,
+                    plan.Status.StageLabel, plan.Status.ModeLabel));
+            }
 
             // ── 回放快照: 记录逐回合完整状态(含随从属性/对手/手牌) ──
             if (_currentGameRecord != null)
@@ -3600,6 +3615,22 @@ return current + "\n" + line;
                     remain -= buyCost + act.ActivateCost;
                 }
             }
+            // 1.2.2 牛头人T7反馈: 升本优先 — gold 够升本时应优先建议升本(链首), 而非先买随从
+            // 花光钱导致末段 remain<upCost 不显示升本(用户 gold9 够升4本+技能, 算法却推买2张)。
+            // 特例: 商店有可立即凑成的三连(CompletesGolden)时先买(与引擎 R-triple-timing 一致)。
+            int earlyUpCost = state.TavernUpgradeCost >= 0 ? state.TavernUpgradeCost : 999;
+            if (chain.Count == 0 && state.TavernTier < 6 && earlyUpCost != int.MaxValue
+                && remain >= earlyUpCost)
+            {
+                bool shopHasImmediateTriple = state.ShopMinions != null
+                    && state.ShopMinions.Any(sc => !sc.IsSpell
+                        && Engine.TripleRuleEvaluator.CompletesGolden(state, sc.CardId, rules));
+                if (!shopHasImmediateTriple)
+                {
+                    chain.Add("升" + (state.TavernTier + 1) + "本");
+                    remain -= earlyUpCost;
+                }
+            }
             // R221: 两段式——先随从(场面优先), 预算剩余才法术
             foreach (var sc in sorted.Where(s => !s.IsSpell))
             {
@@ -3652,14 +3683,16 @@ return current + "\n" + line;
             if (chain.Count == 0) return "";
             // R225: 动作链单行紧凑(用→连接) — 少而精准, 买牌最多1个(卡标签表达), 卖/升优先
             // P6 2026-08: 限制单行显示宽度(约16个汉字/行), 超出在"→"边界断行——避免单行长链横跨屏幕。
-            string joined = string.Join("→", chain);
+            // 1.2.3 辛达苟萨反馈: "买A→买B" 的箭头被理解为"指向/派生", 实际是预算内顺序执行。
+            // 序列项用中文顿号分隔(买A、买B), "→" 仅保留在单项内部表示真派生(卖X→买Y / 买X→发动)。
+            string joined = string.Join("、", chain);
             const int maxLineWidth = 32; // 显示宽度单位: 中文≈2, ASCII≈1 (16汉字≈32)
             if (DisplayWidth(joined) <= maxLineWidth) return joined;
             var segs = new List<string>();
             string cur = "";
             foreach (var seg in chain)
             {
-                string piece = cur.Length == 0 ? seg : cur + "→" + seg;
+                string piece = cur.Length == 0 ? seg : cur + "、" + seg;
                 if (cur.Length > 0 && DisplayWidth(piece) > maxLineWidth)
                 {
                     segs.Add(cur);
@@ -5842,6 +5875,26 @@ return current + "\n" + line;
                 batch.Candidates.Select(c => c.CardId),
                 _cachedState != null ? _cachedState.Turn : -1);
             Log("HeroPower discover: active choice=" + batch.ChoiceId + " source=" + batch.SourceCardId + " candidates=" + string.Join(",", batch.Candidates.Select(c => c.CardName ?? c.CardId ?? "?")));
+            // 1.2.2 辛达苟萨/阮大师反馈: 英雄技能发现的 choice 有记录但 UI 不弹面板。
+            // 复用普通发现的渲染链(_discoverBatchFromLog + _discoverPanelActive),
+            // DispatchRender 据此绘制权威发现提示(ShowAuthoritativeDiscoverHints)。
+            if (batch.Candidates != null && batch.Candidates.Count >= 2)
+            {
+                _discoverBatchFromLog = batch;
+                _discoverPanelActive = true; _discoverPanelActivatedAt = DateTime.UtcNow;
+                _lastDiscoverTriggerTime = DateTime.UtcNow;
+                OnPowerLogStateChanged();
+            }
+            else if (batch.Candidates != null && batch.Candidates.Count == 0)
+            {
+                // 空 = 英雄技能发现结束, 与普通发现一致清面板
+                if (_discoverBatchFromLog != null && batch.ChoiceId >= 0
+                    && batch.ChoiceId != _discoverBatchFromLog.ChoiceId) return;
+                _discoverBatchFromLog = null;
+                _discoverPanelActive = false; _discoverPanelActivatedAt = DateTime.MinValue;
+                _discoverTargetState.CompleteChoice();
+                OnPowerLogStateChanged();
+            }
         }
 
         private void OnPowerLogPassiveChoiceCompleted(Engine.PowerLogChoiceCompletion completion)

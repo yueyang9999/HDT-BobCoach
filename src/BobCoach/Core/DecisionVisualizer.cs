@@ -822,8 +822,24 @@ namespace BobCoach.Engine
                 // 第二步(二步前瞻): 买→技 / 买→买等, 带目标对象
                 // 2026-08-19 实测反馈: 第一步为"刷新酒馆"时抑制二步随从指向——
                 // 刷新后商店内容变化, 指向当前商店的随从/法术可能不存在
+                // 1.2.2 T1反馈: 动态铸币复核 — 第一步买完后预算不足时不显示需花钱的第二步,
+                // 避免状态条 "买A\n买B" 两行误导; 免费打出动作在第一步为购买时也不显示。
+                bool step1Bought = bestAction != null
+                    && (bestAction.Type == ActionType.BuyMinion || bestAction.Type == ActionType.BuySpell);
+                bool step2NeedsGold = secondStep != null
+                    && (secondStep.Type == ActionType.BuyMinion
+                        || secondStep.Type == ActionType.BuySpell
+                        || secondStep.Type == ActionType.Upgrade
+                        || secondStep.Type == ActionType.Refresh
+                        || secondStep.Type == ActionType.SellMinion);
+                bool noBudgetForStep2 = step1Bought && secondStepState != null
+                    && (secondStepState.Gold < 3 || step2NeedsGold);
+                bool freeStep2AfterBuy = step1Bought && secondStep != null
+                    && (secondStep.Type == ActionType.PlayMinion || secondStep.Type == ActionType.UseSpell);
                 if (secondStep != null
-                    && !(bestAction != null && bestAction.Type == ActionType.Refresh))
+                    && !(bestAction != null && bestAction.Type == ActionType.Refresh)
+                    && !noBudgetForStep2
+                    && !freeStep2AfterBuy)
                 {
                     switch (secondStep.Type)
                     {

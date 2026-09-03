@@ -203,10 +203,10 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
     $pluginSize = (Get-Item -LiteralPath (Join-Path $packageRoot "BobCoach.dll")).Length
     $manifest = [ordered]@{
         schemaVersion = 2
-        packageVersion = "1.2.2"
-        assemblyVersion = "1.2.2.0"
-        fileVersion = "1.2.2.0"
-        informationalVersion = "1.2.2"
+        packageVersion = "1.2.3"
+        assemblyVersion = "1.2.3.0"
+        fileVersion = "1.2.3.0"
+        informationalVersion = "1.2.3"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
         hdtBaselineVersion = "1.57.1.0"

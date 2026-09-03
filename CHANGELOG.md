@@ -2,6 +2,14 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.3 - 2026-09-03
+
+- Tavern-upgrade guidance now comes first: when the current gold covers the upgrade cost (and the shop has no immediate triple ready), the turn chain opens with the upgrade instead of spending gold on minions first and silently hiding the upgrade at the end (e.g. a T7 gold=9 E.T.C. board previously saw "buy two" while an affordable level-to-4 + hero-power line existed).
+- Hero-power discovery now renders the discover panel: hero-skill discovers (Sindragosa's Life Swap / Renathal etc.) reuse the normal discover render chain and clear the panel when the choice ends, instead of only recording the choice invisibly.
+- Removed the misleading "→" between sequential turn actions: actions within the same gold budget are now joined with Chinese enumeration commas ("买A、买B"), and "→" is kept only inside a single item to express a true derivation (sell→buy / buy→activate). Addresses user confusion about arrow directionality.
+- Two-step action preview display gate: when the first step is a purchase and the second step would need gold the player no longer has (or is a free play the engine would not run after a buy), the second step is suppressed instead of showing a second line that cannot be afforded.
+- Added throttled on-screen status-text diagnostics (UISTATUS) to the local log so status-bar wording can be traced to its builder for UI feedback without per-frame log spam.
+
 ## 1.2.2 - 2026-09-03
 
 - Fixed turn-one double buy guidance: the two-step action preview now enforces a dynamic-gold budget (executing the first step must leave enough gold for the second), and shop markers are truncated to what the current gold can actually cover instead of showing every affordable card.
