@@ -2391,7 +2391,11 @@ namespace BobCoach
                         _turnPlanGold = liveGoldNow;
                         _turnPlanChain = BuildTurnActionChain(state, cardScores, liveGoldNow);
                     }
-                    plan.Status.HintLine = _turnPlanChain;
+                    // 1.2.4 逐回合分析发现: best=PickTrinket(选饰品/发现)时 HintLine 应清空 —
+                    // 饰品面板(PickLine)已表达推荐, 状态条再显示买牌链=自相矛盾(实测多局)。
+                    plan.Status.HintLine = bestAction != null
+                        && bestAction.Type == Engine.ActionType.PickTrinket
+                        ? "" : _turnPlanChain;
                 }
             // 过滤——升本吃光金币时不再推荐买卡(避免"推荐升本后没铸币还推荐购买")
             if (levelResult.Suggestion == "LEVEL_UP"
@@ -2421,7 +2425,11 @@ namespace BobCoach
                         _turnPlanShopSig = ShopSignature(state);
                         _turnPlanGold = GetLiveGold(state);
                         _turnPlanChain = BuildTurnActionChain(state, cardScores, GetLiveGold(state));
-                        plan.Status.HintLine = _turnPlanChain;
+                        // 1.2.4 逐回合分析发现: best=PickTrinket(选饰品/发现)时 HintLine 应清空 —
+                    // 饰品面板(PickLine)已表达推荐, 状态条再显示买牌链=自相矛盾(实测多局)。
+                    plan.Status.HintLine = bestAction != null
+                        && bestAction.Type == Engine.ActionType.PickTrinket
+                        ? "" : _turnPlanChain;
                     }
                 }
             }
