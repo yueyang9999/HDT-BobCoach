@@ -2247,6 +2247,8 @@ namespace BobCoach.Engine
             "BGS_018",       // 提图斯·瑞文戴尔 (亡语两次)
             "BG_DAL_775",    // 瑞文戴尔男爵 (亡语触发两次)
             "BG35_155",      // 骷髅狂射手
+            "BG34_140",      // 飞行专家 (进击拉手牌最高攻, 手牌流引擎)
+            "BG34_140_G",    // 飞行专家 金色
         };
         private static bool IsKnownEngine(string cardId)
         {
@@ -2491,6 +2493,13 @@ namespace BobCoach.Engine
             var m = state.BoardMinions[index];
             if (m == null || m.Golden) return true;
             if (IsKnownEngine(m.CardId)) return true;
+            // 1.2.2 feedbackD: 手牌召唤引擎(飞行专家 BG34_140 等) — 手牌还有随从时
+            // 卖它=手牌随从无法进战斗(进击拉手牌最高攻仅本场), 用户T9实测严重失误。
+            if (m.CardId != null
+                && (m.CardId == "BG34_140" || m.CardId == "BG34_140_G")
+                && state.HandMinions != null
+                && state.HandMinions.Any(h => h != null && !h.IsSpell))
+                return true;
             if (_lastMainlinePlan != null
                 && _lastMainlinePlan.CoreCardIds != null
                 && _lastMainlinePlan.CoreCardIds.Contains(m.CardId))

@@ -46,6 +46,16 @@ namespace BobCoach.Engine
             _refreshTierUpdatePending = true;
         }
 
+        // 1.2.2 feedbackB: 升本后立即同步布局等级。真实刷新事件才推进 LastRefreshTier
+        // (ObserveShopTier 需 visibleCount>=expected 防旧商店误扩宽), 但升本后的新商店
+        // 没有手动刷新事件, 若不同步 tier 会按旧等级槽位渲染导致 UI 错位(用户T3实测)。
+        public void OnTavernTierChanged(int newTavernTier)
+        {
+            LastRefreshTier = NormalizeTier(newTavernTier);
+            _refreshTierUpdatePending = false;
+            AwaitingCompleteShop = true;
+        }
+
         public bool ObserveShopTier(
             int currentTavernTier,
             int visibleCount,

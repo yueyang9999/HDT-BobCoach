@@ -1770,6 +1770,15 @@ namespace BobCoach
 
             // 只有实体刷新事件可以推进商店布局等级。购买、升本和冻结跨回合
             // 都保留上一次真实刷新的槽位宽度，避免旧商店被新等级错误扩宽。
+            // 1.2.2 feedbackB: 升本后新商店可见但 ShopMinions.Count(不含法术位实体)常小于
+            // ShopSlotCount(理论含法术位), ObserveShopTier 的 visible>=expected 门槛永不满足,
+            // tier 停留旧等级 → 槽位按旧本渲染导致 UI 错位(T3 实测: tier2 商店 layoutTier=1)。
+            // 修复: 已升本(当前tier>布局tier)且商店有可见实体时, 直接采纳当前tier(新商店已生成)。
+            bool upgraded = state.TavernTier > _shopLayoutSlotPolicy.LastRefreshTier
+                && state.ShopMinions.Count > 0
+                && !state.FrozenShop;
+            if (upgraded)
+                _shopLayoutSlotPolicy.OnTavernTierChanged(state.TavernTier);
             if (_shopLayoutSlotPolicy.ObserveShopTier(
                 state.TavernTier,
                 state.ShopMinions.Count,
@@ -1906,6 +1915,8 @@ namespace BobCoach
             {
                 _lastUpgradeTurn = state.Turn;
                 _prevTavernTier = state.TavernTier;
+                // 1.2.2 feedbackB: 升本后的布局tier同步统一在 EvaluateAndRender 商店可见处
+                // (L1773 upgraded 分支)处理 — 升本瞬间旧商店可能还在, 立即扩宽会错位。
             }
             state.LastUpgradeTurn = _lastUpgradeTurn;
 
@@ -2216,6 +2227,74 @@ namespace BobCoach
             var secondStep = _engine.BestTwoStepAction;
             var secondStepState = _engine.BestTwoStepState;
             if (GetLiveGold(state) == 0) { secondStep = null; secondStepState = null; }
+            // 1.2.2 feedbackA: 动态铸币约束二步前瞻 — 执行完第一步(bestAction)后剩余铸币
+            // 不足承担第二步任何非零花费动作时, 清掉二步(否则 T1 3金 状态条会显示
+            // "买→A→买→B" 两个购买建议, 铸币根本覆盖不了; 免费动作(打/技)允许保留)。
+            if (secondStep != null && bestAction != null)
+            {
+                int budgetAfterStep1 = GetLiveGold(state);
+                int step1Cost = 0;
+                try
+                {
+                    if (bestAction.Type == Engine.ActionType.BuyMinion
+                        || bestAction.Type == Engine.ActionType.BuySpell)
+                    {
+                        var step1Card = bestAction.TargetIndex >= 0
+                            && bestAction.TargetIndex < state.ShopMinions.Count
+                            ? state.ShopMinions[bestAction.TargetIndex] : null;
+                        if (step1Card != null)
+                            step1Cost = GetShopCardCost(state, step1Card);
+                    }
+                    else if (bestAction.Type == Engine.ActionType.Upgrade)
+                    {
+                        var upCost2 = GameRuleEvaluator.GetUpgradeCost(
+                            state, state.EffectiveRules ?? EffectiveGameRules.Default);
+                        if (upCost2.HasValue) step1Cost = upCost2.Value;
+                    }
+                }
+                catch { }
+                budgetAfterStep1 = Math.Max(0, budgetAfterStep1 - step1Cost);
+                bool step2IsFree = secondStep.Type == Engine.ActionType.PlayMinion
+                    || secondStep.Type == Engine.ActionType.UseHeroPower
+                    || secondStep.Type == Engine.ActionType.FreezeShop;
+                bool step2Affordable = step2IsFree;
+                if (!step2IsFree)
+                {
+                    int step2Cost = 0;
+                    try
+                    {
+                        if (secondStep.Type == Engine.ActionType.BuyMinion
+                            || secondStep.Type == Engine.ActionType.BuySpell)
+                        {
+                            var s2State = secondStepState ?? state;
+                            var step2Card = secondStep.TargetIndex >= 0
+                                && secondStep.TargetIndex < s2State.ShopMinions.Count
+                                ? s2State.ShopMinions[secondStep.TargetIndex] : null;
+                            if (step2Card != null)
+                                step2Cost = GetShopCardCost(s2State, step2Card);
+                        }
+                        else if (secondStep.Type == Engine.ActionType.Refresh)
+                        {
+                            step2Cost = GameRuleEvaluator.GetRefreshCost(
+                                state, state.HeroCardId,
+                                state.EffectiveRules ?? EffectiveGameRules.Default);
+                        }
+                        else if (secondStep.Type == Engine.ActionType.Upgrade)
+                        {
+                            var up2 = GameRuleEvaluator.GetUpgradeCost(
+                                state, state.EffectiveRules ?? EffectiveGameRules.Default);
+                            if (up2.HasValue) step2Cost = up2.Value;
+                        }
+                    }
+                    catch { }
+                    step2Affordable = step2Cost <= budgetAfterStep1;
+                }
+                if (!step2Affordable)
+                {
+                    secondStep = null;
+                    secondStepState = null;
+                }
+            }
             if (bestAction != null && bestAction.Type == Engine.ActionType.Upgrade)
             {
                 secondStep = null;
@@ -3638,6 +3717,12 @@ return current + "\n" + line;
                     }
                 }
             } catch { }
+            // 1.2.2 feedbackD: 手牌召唤引擎保护(与引擎层 IsProtectedSellMinion 一致)
+            if (minion.CardId != null
+                && (minion.CardId == "BG34_140" || minion.CardId == "BG34_140_G")
+                && state.HandMinions != null
+                && state.HandMinions.Any(h => h != null && !h.IsSpell))
+                return true;
             if (minion.DivineShield || minion.Poisonous || minion.Venomous
                 || minion.Reborn || minion.Windfury) return true;
             if (minion.Tier >= 5) return true;
@@ -3949,6 +4034,37 @@ return current + "\n" + line;
                 }
                 return true;
             });
+            // 1.2.2 feedbackA: 动态铸币总量约束 — marker 不应超过当前铸币能负担的张数(+卖牌换强1张)。
+            // T1 3金同时高亮2个3金购买marker会误导"两个购买建议"(用户实测)。
+            if (plan.ShopMarkers.Count > 1)
+            {
+                bool canSellForMore = sellIndexes.Count > 0
+                    && state.BoardMinions != null
+                    && state.BoardMinions.Count > 0;
+                // 预算: 每买一张扣其费用; 卖牌可+1张(卖1得1金近似, 买3金卡需差额)。
+                // 简单稳妥: 仅按"首张买后剩余金还能负担几张同价随从"截断, 不精确模拟卖牌。
+                var affordable = plan.ShopMarkers
+                    .OrderByDescending(m => m.Score)
+                    .ToList();
+                int remaining = gold;
+                int keep = 0;
+                bool first = true;
+                foreach (var m in affordable)
+                {
+                    var c2 = ResolveShopMarkerCard(state, m);
+                    if (c2 == null) { keep++; continue; }
+                    int c = GetShopCardCost(state, c2);
+                    if (first) { if (remaining >= c) { remaining -= c; keep++; } first = false; continue; }
+                    if (remaining >= c) { remaining -= c; keep++; }
+                    else if (canSellForMore && keep < 2) { keep++; } // 卖弱换强最多允许多1张
+                    else break;
+                }
+                if (keep < plan.ShopMarkers.Count)
+                {
+                    plan.ShopMarkers = new List<Engine.ShopMarker>(
+                        affordable.Take(keep));
+                }
+            }
             if (plan.ShopMarkers.Count == 0
                 && plan.UpgradeHint == null
                 && plan.HandMarker == null

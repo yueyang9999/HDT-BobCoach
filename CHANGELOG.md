@@ -2,6 +2,14 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.2 - 2026-09-03
+
+- Fixed turn-one double buy guidance: the two-step action preview now enforces a dynamic-gold budget (executing the first step must leave enough gold for the second), and shop markers are truncated to what the current gold can actually cover instead of showing every affordable card.
+- Fixed shop UI misalignment after tavern upgrade: the shop layout tier now adopts the new tavern tier once the upgraded shop is visible (previously it only advanced on a manual refresh, so a tier-2 shop kept rendering at tier-1 slot width).
+- Fixed a severe end-of-turn sell suggestion for Flight Expert (BG34_140): it is the hand-to-battle summon engine for hand-buff murlocs; with minions in hand it is now protected from sell suggestions in both the engine and UI layers.
+- Recognized the sell-to-produce economy chain (Merchant Elemental BGS_115 sells into Water Droplet, etc.): the card classifier now tags on-sell minion/token gainers as economy plus value generators, so the water-droplet triple chain players use is no longer invisible to the engine.
+
+
 ## 1.2.1 - 2026-09-03
 
 - Fixed hero-power discovery UI (identity reveal EBG_Spell_037 / swap-skill discovers): Power.log choice candidates that are hero powers (TB_BaconShop_HP_* / *_HERO_*p) are now recognized and offered as a HeroPowerDiscover choice batch instead of being filtered out; recorded replay-local as heroPowerDiscover.

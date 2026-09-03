@@ -122,6 +122,20 @@ internal static class ShopLayoutSlotPolicyBehavior
                 "T" + tier + " confirmed purchase must use dense slots");
         }
 
+        // 1.2.2 feedbackB: 升本后商店可见即采纳新tier(修复 ObserveShopTier visible>=expected 门槛
+        // 在2本商店只显示4实体<理论5槽时永不满足、layoutTier 停留旧本导致 UI 错位的问题)。
+        policy.Reset(1);
+        policy.MarkRefreshDetected();
+        policy.ObserveShopTier(1, 4, 4);
+        Equal(1, policy.LastRefreshTier, "setup: tier-one shop width");
+        // 升本 + 新商店可见(4实体, 理论2本5槽但不可见第5张) → 直接采纳tier2
+        policy.OnTavernTierChanged(2);
+        Equal(2, policy.LastRefreshTier,
+            "upgraded shop with visible cards must adopt the new tavern tier");
+        var upgradedLayout = policy.Resolve(5, new[] { 0, 1, 2, 3 }, false);
+        Equal(5, upgradedLayout.LayoutCount,
+            "upgraded tier-two shop must keep the theoretical five-slot width while awaiting");
+
         Console.WriteLine("PASS shop layout slot policy");
         return 0;
     }
