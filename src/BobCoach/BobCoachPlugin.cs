@@ -143,6 +143,14 @@ namespace BobCoach
         private int _turnPlanGold = -1;
         private string _turnPlanChain = "";
         private int _renderVersion;
+        // 1.2.1 feedback4: DispatchRender merge-snapshot — high-frequency shop change (ReplenishingShop gauntlet)
+//        auto-refill / rapid actions) raced _renderVersion so queued callbacks all expired & dropped, UI starved (turn7/8 no render at all).
+//        On version-expiry now render latest pending snapshot (frame merge) so UI always reflects newest state.
+//        see AGENTS.md Release Deployment SOP SHA pairing for deploy rules.
+        private GameState _pendingRenderState;
+        private Engine.VisualPlan _pendingRenderPlan;
+        private string _pendingRenderHeroHint;
+        private string _pendingRenderHeroUseSuggestion;
         private bool _wasInCombat = false;           // 阶段追踪
         private DateTime _lastShopChange = DateTime.MinValue;
         private DateTime _lastShopUiClearAt = DateTime.MinValue;
@@ -3261,6 +3269,7 @@ namespace BobCoach
             _powerLogWatcher.DarkGiftCompleted += OnPowerLogDarkGiftCompleted;
             _powerLogWatcher.PassiveChoiceActive += OnPowerLogPassiveChoiceActive;
             _powerLogWatcher.PassiveChoiceCompleted += OnPowerLogPassiveChoiceCompleted;
+            _powerLogWatcher.HeroPowerDiscoverOffered += OnPowerLogHeroPowerDiscoverOffered;
             _powerLogWatcher.DarkGiftPressableChanged += OnPowerLogDarkGiftPressableChanged;
             _powerLogWatcher.TrinketChoiceActive += OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted += OnPowerLogChoiceCompleted;
@@ -3282,6 +3291,7 @@ namespace BobCoach
             _powerLogWatcher.DarkGiftCompleted -= OnPowerLogDarkGiftCompleted;
             _powerLogWatcher.PassiveChoiceActive -= OnPowerLogPassiveChoiceActive;
             _powerLogWatcher.PassiveChoiceCompleted -= OnPowerLogPassiveChoiceCompleted;
+            _powerLogWatcher.HeroPowerDiscoverOffered -= OnPowerLogHeroPowerDiscoverOffered;
             _powerLogWatcher.DarkGiftPressableChanged -= OnPowerLogDarkGiftPressableChanged;
             _powerLogWatcher.TrinketChoiceActive -= OnPowerLogTrinketChoiceActive;
             _powerLogWatcher.ChoiceCompleted -= OnPowerLogChoiceCompleted;
@@ -4051,6 +4061,10 @@ return current + "\n" + line;
 
             // 修复: 不在此处同步Clear, 避免清除→重绘间的空白闪烁。
             // Dispatcher回调内的Clear(第1249行)在重绘前瞬间执行, 无可见闪烁。
+            _pendingRenderState = state;
+            _pendingRenderPlan = plan;
+            _pendingRenderHeroHint = heroHint;
+            _pendingRenderHeroUseSuggestion = heroUseSuggestion;
             _renderVersion++;
             int capturedVersion = _renderVersion;
 
@@ -4071,7 +4085,27 @@ return current + "\n" + line;
                     try { inCombat = Core.Game.IsBattlegroundsCombatPhase; } catch { }
                     // 07062107修复: 回调被拦截=本plan未上屏, 清hash让同plan下帧重试(见DispatchRender头部注释)
                     if (inCombat) { _lastRenderedPlanHash = null; return; }
-                    if (capturedVersion != _renderVersion) { _lastRenderedPlanHash = null; return; }
+                    if (capturedVersion != _renderVersion)
+                    {
+                        // 1.2.1 feedback4: 版本过期=回调排队期间又有更高版本dispatch。
+                        // 原实现直接丢弃, 高频变化(辐光护手补牌/连买)下UI饿死不刷新。
+                        // 合并策略: 渲染最新pending快照(非丢弃), 保证UI最终收敛到最新状态。
+                        if (_pendingRenderState != null && _pendingRenderPlan != null
+                            && !ReferenceEquals(_pendingRenderState, state))
+                        {
+                            state = _pendingRenderState;
+                            plan = _pendingRenderPlan;
+                            heroHint = _pendingRenderHeroHint ?? heroHint;
+                            heroUseSuggestion = _pendingRenderHeroUseSuggestion ?? heroUseSuggestion;
+                            liveGold = GetLiveGold(state);
+                            _lastRenderedPlanHash = null;
+                        }
+                        else
+                        {
+                            _lastRenderedPlanHash = null;
+                            return;
+                        }
+                    }
                     // 商店已空+非特殊界面 → 过渡到战斗, 不渲染(防拔线或异步回调残留)
                     bool shopGone = state.ShopMinions.Count == 0 && state.HeroOptions.Count == 0
                         && state.TrinketOffer.Count == 0 && state.DiscoverOptions.Count == 0;
@@ -5678,6 +5712,20 @@ return current + "\n" + line;
                 _cachedState != null ? _cachedState.Turn : -1);
             Log("Passive choice: active choice=" + batch.ChoiceId + " source=" + batch.SourceCardId);
             OnPowerLogStateChanged();
+        }
+        private void OnPowerLogHeroPowerDiscoverOffered(Engine.PowerLogChoiceBatch batch)
+        {
+            if (DispatchToUiThread(() => OnPowerLogHeroPowerDiscoverOffered(batch))) return;
+            if (batch == null || batch.ChoiceId < 0) return;
+            // R1.2.1: 身份揭晓(EBG_Spell_037)发现新英雄技能 — 记录 + 触发独立提示
+            _globalReplayRecorder?.RecordChoice(
+                "heroPowerDiscover",
+                batch.ChoiceId,
+                batch.TaskList,
+                batch.SourceCardId,
+                batch.Candidates.Select(c => c.CardId),
+                _cachedState != null ? _cachedState.Turn : -1);
+            Log("HeroPower discover: active choice=" + batch.ChoiceId + " source=" + batch.SourceCardId + " candidates=" + string.Join(",", batch.Candidates.Select(c => c.CardName ?? c.CardId ?? "?")));
         }
 
         private void OnPowerLogPassiveChoiceCompleted(Engine.PowerLogChoiceCompletion completion)

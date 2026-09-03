@@ -158,6 +158,56 @@ For release candidates, additionally verify offline install, upgrade, rollback, 
 - 部署完成后验证 3 目录哈希一致(HDT 未运行时无文件锁, 验证最可靠)。
 - 若之前误杀了 HDT, 重新启动前先确认用户不在对局中(可通过 HDT 日志/对局记录判断)。
 
+## Release Deployment SOP（2026-09-03 固化, 用户要求: 部署流程固定成规则文档, 每次自动执行不需要提醒; 重点固化 SHA 文件对应关系）
+
+### 0. 前置: 用户实测反馈闭环
+- 用户实测 → 给具体反馈(回合/卡牌/UI现象) → 证据定位根因(回放+Power.log) → 修复 → 单测 → 才部署。
+- 没有反馈, 禁止盲目调权重/重构; 所有行为改动必须有回放/Power.log 证据支撑。
+
+### 1. HDT 进程纪律（不可违反）
+- HDT 运行时严禁自动杀进程/自动重启; 部署前 Get-Process HearthstoneDeckTracker 必须为空。
+- HDT 在运行 → 暂停部署, 请用户手动关闭后再部署; 部署完成后不自动启动 HDT。
+
+### 2. 标准部署命令
+```powershell
+# 构建(校验 HDT 目录 exe 基线版本)
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\build_release.ps1
+# 部署: 归档旧版 → 同步 5 目录 DLL+sidecar → 逐一 SHA 核验
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\deploy_local_release.ps1
+```
+
+### 3. SHA 文件对应关系（核心规则, 每次部署必须逐目录核验, 不允许凭记忆）
+- **每个插件目录只允许一对文件**: `BobCoach.dll` + `BobCoach.dll.sha256`。
+- **sidecar 文件格式(必须精确)**: 内容 = `<64位大写SHA256>` + 两个空格 + `BobCoach.dll`, 行尾 CRLF。
+  - 缺 `  BobCoach.dll` 后缀或大小写不对 → HDT 完整性校验 FAILED, 插件拒绝启动(2026-08-10 D盘历史事故)。
+  - 示例: `7AF4A5569D408F1CA7A00A581E94B0844FF046288F178F603634FBE58E2E9E55  BobCoach.dll`
+- **sidecar 的哈希必须 = 同目录 BobCoach.dll 的 SHA-256**, 严禁从不同版本安装包混放配对。
+- **部署目标 5 目录(必须同步同一版本 + 同一哈希)**:
+  1. `%APPDATA%\HearthstoneDeckTracker\Plugins\`
+  2. `%LOCALAPPDATA%\HearthstoneDeckTracker\app-1.54.1\Plugins\`
+  3. `%LOCALAPPDATA%\HearthstoneDeckTracker\app-1.54.0\Plugins\`
+  4. `D:\software\game\HDT-V2.7.0\HDT\Plugins\`
+  5. `D:\software\game\HDT团子版V2.5.9\HDT\Plugins\`
+- 核验命令(逐目录执行, 两者哈希必须相等):
+```powershell
+Get-FileHash '<目录>\BobCoach.dll' -Algorithm SHA256 | Select-Object -ExpandProperty Hash
+Get-Content '<目录>\BobCoach.dll.sha256'   # 应输出: <同一SHA256>  BobCoach.dll
+```
+
+### 4. 版本与归档
+- 每次正式部署前 bump 版本号并全链路同步: release_identity / ReleaseAssemblyInfo.cs / package.json / CHANGELOG / NOTICE / README / INSTALL.html / 测试断言。
+- 版本号与 SHA 由脚本从 release_identity.json 派生, 不手写。
+- 部署脚本自动把部署前各目录全部 BobCoach.dll* 归档到证据库 dll-archive(时间戳+SHA), 保留可回滚。
+
+### 5. 部署后验证（每次必做, 贴输出）
+- 5 目录 DLL 版本一致 + SHA 全等; sidecar 格式含 `  BobCoach.dll` 后缀。
+- 归档 manifest 生成成功。
+- 记录: 新版本号 + SHA256 前16位 + 归档路径(ITERATION_LEARNINGS.md / HANDOVER)。
+
+### 6. 回滚
+- 旧版 DLL 从归档目录找回(含 backup 时间戳+旧SHA)。
+- 回滚 = 复制旧 `BobCoach.dll`+`BobCoach.dll.sha256` 回 5 目录, 并重新逐目录核验配对。
+
 ## Cleanup
 
 - Generated files belong outside the repository or in ignored directories and must be removable without affecting source.

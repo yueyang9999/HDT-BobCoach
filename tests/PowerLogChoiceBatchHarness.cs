@@ -485,6 +485,8 @@ public static class PowerLogChoiceBatchHarness
         if (barovMulliganTavernExit != 0) return barovMulliganTavernExit;
         var faelinPassiveExit = RunFaelinPassiveChoiceTest();
         if (faelinPassiveExit != 0) return faelinPassiveExit;
+        var heroPowerDiscoverExit = RunHeroPowerDiscoverTest();
+        if (heroPowerDiscoverExit != 0) return heroPowerDiscoverExit;
         var displayNameExit = RunDisplayNameResolverTest();
         if (displayNameExit != 0) return displayNameExit;
 
@@ -560,6 +562,37 @@ public static class PowerLogChoiceBatchHarness
             return Fail("Faelin passive choice fired on mismatched taskList");
 
         Console.WriteLine("PASS Faelin passive choice stays independent from ordinary choice events");
+        return 0;
+    }
+
+
+    private static int RunHeroPowerDiscoverTest()
+    {
+        var parser = new PowerLogParser();
+        int hpOffers = 0;
+        int discoverLeaks = 0;
+        int trinketLeaks = 0;
+        PowerLogChoiceBatch hpBatch = null;
+        parser.HeroPowerDiscoverOffered += batch => { hpOffers++; hpBatch = batch; };
+        parser.DiscoverOffered += batch => discoverLeaks++;
+        parser.TrinketChoiceActive += batch => trinketLeaks++;
+        // 身份揭晓(EBG_Spell_037)发现新英雄技能: Power.log 无 WAIT 前置, 直接 EntityChoices
+        parser.ParseLine("D 08:35:50.7319040 GameState.DebugPrintEntityChoices() - id=19 Player=Local TaskList= ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 08:35:50.7319040 GameState.DebugPrintEntityChoices() -   Source=[entityName=身份揭晓 id=23108 zone=PLAY zonePos=0 cardId=EBG_Spell_037 player=1]");
+        parser.ParseLine("D 08:35:50.7319040 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=随风而行 id=23182 zone=SETASIDE zonePos=0 cardId=TB_BaconShop_HP_086 player=1]");
+        parser.ParseLine("D 08:35:50.7319040 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=大调颂歌 id=23183 zone=SETASIDE zonePos=0 cardId=BG26_HERO_102p player=1]");
+        parser.ParseLine("D 08:35:50.7319040 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=亲见圣光 id=23184 zone=SETASIDE zonePos=0 cardId=BG20_HERO_101p player=1]");
+        parser.ParseLine("D 08:35:50.7319040 ChoiceCardMgr.WaitThenShowChoices() - id=19 BEGIN");
+        if (hpOffers != 1 || hpBatch == null || hpBatch.ChoiceId != 19
+            || hpBatch.SourceCardId != "EBG_Spell_037"
+            || hpBatch.Candidates == null || hpBatch.Candidates.Count != 3
+            || hpBatch.Candidates[0].CardId != "TB_BaconShop_HP_086"
+            || hpBatch.Candidates[1].CardId != "BG26_HERO_102p"
+            || hpBatch.Candidates[2].CardId != "BG20_HERO_101p")
+            return Fail("hero power discover did not emit one 3-candidate batch with hero power cards");
+        if (discoverLeaks != 0 || trinketLeaks != 0)
+            return Fail("hero power discover leaked into ordinary discover/trinket channels");
+        Console.WriteLine("PASS hero power discover (身份揭晓) emits typed hero-power batch without leaking");
         return 0;
     }
 

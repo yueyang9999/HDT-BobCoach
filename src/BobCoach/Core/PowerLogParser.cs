@@ -162,6 +162,9 @@ namespace BobCoach.Engine
 
         public event Action<PowerLogChoiceCompletion> PassiveChoiceCompleted;
 
+        /// <summary>身份揭晓等"发现新英雄技能"的候选批次 (英雄技能卡). R1.2.1</summary>
+        public event Action<PowerLogChoiceBatch> HeroPowerDiscoverOffered;
+
         /// <summary>BG36_Button_DarkGift pressable state observed from Power.log.</summary>
         public event Action<PowerLogDarkGiftPressable> DarkGiftPressableChanged;
 
@@ -846,6 +849,10 @@ namespace BobCoach.Engine
                 int.TryParse(sourceMatch.Groups[6].Value, out _currentEntityChoice.SourcePlayerId);
                 _currentEntityChoice.SourceGrantsOrdinaryDiscover =
                     IsTrustedOrdinaryDiscoverSource(_currentEntityChoice.SourceCardId);
+                // R1.2.1: 身份揭晓(EBG_Spell_037)等"发现新英雄技能" — 候选是英雄技能卡,
+                // 普通发现通道会过滤 _HP/_HERO_*p, 故单独标记(见候选块按此上下文放行)
+                _currentEntityChoice.IsHeroPowerDiscover =
+                    IsHeroPowerDiscoverSource(_currentEntityChoice.SourceCardId);
 
                 if (IsPassiveHeroPowerChoiceSource(_currentEntityChoice.SourceCardId))
                 {
@@ -934,8 +941,11 @@ namespace BobCoach.Engine
 
             if (entityMatch.Success && _currentEntityChoice != null)
             {
-                if (!IsOrdinaryDiscoverCandidate(entityMatch.Groups[6].Value,
-                    entityMatch.Groups[4].Value))
+                bool isHpDiscoverCandidate = _currentEntityChoice.IsHeroPowerDiscover
+                    && IsHeroPowerCardId(entityMatch.Groups[6].Value);
+                if (!isHpDiscoverCandidate
+                    && !IsOrdinaryDiscoverCandidate(entityMatch.Groups[6].Value,
+                        entityMatch.Groups[4].Value))
                     return null;
                 _lastChoiceContextAt = ts;
                 int idx = int.Parse(entityMatch.Groups[1].Value);
@@ -992,6 +1002,32 @@ namespace BobCoach.Engine
                     {
                         _currentEntityChoice.Fired = true;
                         EmitTimewarpPurchaseOffered(_currentEntityChoice);
+                    }
+                    else if (_currentEntityChoice.IsHeroPowerDiscover)
+                    {
+                        // R1.2.1: 身份揭晓等"发现新英雄技能" — 候选均为英雄技能卡。
+                        // 发射时机: 收集满全部候选(身份揭晓固定 3 选 1)才发, 避免中途 2 候选误发。
+                        if (validCandidates.Count < 3) return null;
+                        _currentEntityChoice.Fired = true;
+                        DiagLog(string.Format("HeroPowerDiscover via EntityChoices: {0} candidates [{1}]",
+                            validCandidates.Count,
+                            string.Join(", ", validCandidates.Select(c => c.CardName ?? c.CardId ?? "?"))));
+                        try
+                        {
+                            HeroPowerDiscoverOffered?.Invoke(new PowerLogChoiceBatch
+                            {
+                                ChoiceId = _currentEntityChoice.Id,
+                                TaskList = _currentEntityChoice.TaskList,
+                                PlayerName = _currentEntityChoice.PlayerName,
+                                ChoiceType = _currentEntityChoice.ChoiceType,
+                                SourceCardId = _currentEntityChoice.SourceCardId,
+                                SourceName = _currentEntityChoice.SourceName,
+                                SourcePlayerId = _currentEntityChoice.SourcePlayerId,
+                                Timestamp = _currentEntityChoice.Timestamp,
+                                Candidates = new List<DiscoverCandidate>(validCandidates),
+                            });
+                        }
+                        catch { }
                     }
                     else if (!_currentEntityChoice.SourceGrantsOrdinaryDiscover)
                         return null;
@@ -1285,6 +1321,7 @@ namespace BobCoach.Engine
             public string SourceName;
             public int SourcePlayerId;
             public bool SourceGrantsOrdinaryDiscover;
+            public bool IsHeroPowerDiscover;
             public bool ShowMarkerReceived;
             public DateTime Timestamp;
             public List<DiscoverCandidate> Candidates = new List<DiscoverCandidate>();
@@ -1736,6 +1773,16 @@ namespace BobCoach.Engine
         private static bool IsPassiveHeroPowerChoiceSource(string sourceCardId)
         {
             return sourceCardId == "BG22_HERO_201p";
+        }
+
+        /// <summary>R1.2.1: "发现新英雄技能"来源 — 身份揭晓(EBG_Spell_037)等酒馆法术。
+        /// 这类 choice 的候选是英雄技能卡(TB_BaconShop_HP_xxx / *_HERO_*p), 普通发现通道会过滤, 需单独放行。</summary>
+        private static bool IsHeroPowerDiscoverSource(string sourceCardId)
+        {
+            if (string.IsNullOrEmpty(sourceCardId)) return false;
+            if (sourceCardId == "EBG_Spell_037") return true; // 身份揭晓
+            // 兜底: 任何"技能相关"的 tavern spell 施放来源也放行候选HP(由候选块二次确认全为HP时发射)
+            return false;
         }
 
         internal static bool IsDarkGiftSource(string sourceCardId)

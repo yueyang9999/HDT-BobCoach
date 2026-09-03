@@ -2,6 +2,13 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.1 - 2026-09-03
+
+- Fixed hero-power discovery UI (identity reveal EBG_Spell_037 / swap-skill discovers): Power.log choice candidates that are hero powers (TB_BaconShop_HP_* / *_HERO_*p) are now recognized and offered as a HeroPowerDiscover choice batch instead of being filtered out; recorded replay-local as heroPowerDiscover.
+- Fixed shop UI starvation under Replenishing Shop (Glowing Gauntlet / Felbat Portrait, tavern always has 7 cards): high-frequency auto-refill dispatches raced the render version counter and every queued UI callback was dropped, so no buy markers appeared until a manual refresh. DispatchRender now coalesces to the latest pending snapshot on version expiry.
+- Kept legacy-v1.1.0 as the deterministic visible fallback.
+
+
 ## 1.2.0 - 2026-09-02
 
 - Promoted the Season14 live decision chain to production: hero skill, dark gift, hero playbook, activate, and live-gold safety wired into the visible recommendation path; legacy-v1.1.0 remains the deterministic fallback.

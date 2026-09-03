@@ -3,8 +3,8 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const expected = {
-  packageVersion: '1.2.0',
-  assemblyVersion: '1.2.0.0',
+  packageVersion: '1.2.1',
+  assemblyVersion: '1.2.1.0',
   targetFramework: 'net472',
   runtimeIdentifier: 'win-x64',
   hdtBaselineVersion: '1.57.1.0',
@@ -86,4 +86,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('PASS release identity package=1.2.0 assembly=1.2.0.0 framework=net472 rid=win-x64 hdt=1.57.1.0');
+console.log('PASS release identity package=1.2.1 assembly=1.2.1.0 framework=net472 rid=win-x64 hdt=1.57.1.0');

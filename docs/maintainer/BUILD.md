@@ -147,7 +147,7 @@ node .\tools\model\evaluate_policy.js `
   --output "reports\linear-v1-acceptance.json"
 ```
 
-当前缺少合格真实证据，因此效果状态保持 `blocked-by-season-data`、`metrics: null`。evaluator 仅在至少 300 个真实、可信、版本匹配标注场景、代表性 Shadow 对比和人工 severe-error review 全部具备后计算指标；无论结果如何都不返回 activation decision。新策略继续保持 Shadow，`legacy-v1.2.0` 保持玩家可见推荐和回退。未来即使效果门禁通过，嵌入模型和切换玩家可见策略也分别需要新的所有者批准与发布变更。
+当前缺少合格真实证据，因此效果状态保持 `blocked-by-season-data`、`metrics: null`。evaluator 仅在至少 300 个真实、可信、版本匹配标注场景、代表性 Shadow 对比和人工 severe-error review 全部具备后计算指标；无论结果如何都不返回 activation decision。新策略继续保持 Shadow，`legacy-v1.1.0` 保持玩家可见推荐和回退。未来即使效果门禁通过，嵌入模型和切换玩家可见策略也分别需要新的所有者批准与发布变更。
 
 ### 新赛季清单
 
@@ -162,7 +162,7 @@ node .\tools\model\evaluate_policy.js `
 8. Roll back by selecting LegacyOnly and retaining the last approved model.
 ```
 
-新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.2.0 承担可见推荐和回退。
+新算法基础设施已完成或正在完善，但由于目前没有可靠途径获取新赛季完整内容，存在关键数据缺失，实际决策提升尚未得到验证，新策略继续保持 Shadow，并由 legacy-v1.1.0 承担可见推荐和回退。
 
 ## 离线包
 
