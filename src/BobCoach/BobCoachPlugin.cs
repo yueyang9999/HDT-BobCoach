@@ -1936,7 +1936,8 @@ namespace BobCoach
             var heroStrategy = _heroPowerEngine.GetStrategyForPower(
                 state.HeroCardId, state.HeroPowerCardId);
             bool heroPowerLockedByTier = heroStrategy.PowerType != HeroPowerType.Passive
-                && state.TavernTier < heroStrategy.UnlockTier;
+                && (state.TavernTier < heroStrategy.UnlockTier
+                    || (heroStrategy.UnlockTurn > 1 && state.Turn < heroStrategy.UnlockTurn));
             string heroHint = heroStrategy.PowerType == HeroPowerType.Passive
                 ? "" : HeroPowerDisplayTextResolver.Resolve(state.HeroPowerCardId);
             if (heroPowerLockedByTier && !string.IsNullOrEmpty(heroHint))
@@ -2055,7 +2056,9 @@ namespace BobCoach
                 if (heroShouldUse && heroPowerLockedByTier)
                 {
                     heroShouldUse = false;
-                    heroDecisionReason = "酒馆等级" + heroStrategy.UnlockTier + "解锁";
+                    heroDecisionReason = heroStrategy.UnlockTurn > 1 && state.Turn < heroStrategy.UnlockTurn
+                        ? ("第" + heroStrategy.UnlockTurn + "回合解锁")
+                        : ("酒馆等级" + heroStrategy.UnlockTier + "解锁");
                 }
                 // P3 2026-08(用户实测: 回合4板面无怪仍提示用雷诺技能/无优质随从乱用点金):
                 // 点金类(one_time_golden/变为金色)需要友方随从目标, 商店随从不是合法目标;
