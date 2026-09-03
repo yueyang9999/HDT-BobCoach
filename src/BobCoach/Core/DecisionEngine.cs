@@ -115,6 +115,19 @@ namespace BobCoach.Engine
             catch { }
             return 0.20;
         }
+
+        // 1.2.5 D1 A/B: 升本回合尾金刷新豁免开关 (BOBCOACH_UPGRADE_TAIL_REFRESH=1 启用)
+        private static readonly bool UPGRADE_TAIL_REFRESH_ENABLED = ReadUpgradeTailRefreshFlag();
+
+        private static bool ReadUpgradeTailRefreshFlag()
+        {
+            try
+            {
+                var s = Environment.GetEnvironmentVariable("BOBCOACH_UPGRADE_TAIL_REFRESH");
+                return !string.IsNullOrEmpty(s) && s.Trim() == "1";
+            }
+            catch { return false; }
+        }
         private ProfileEngine _profile;
         private MCTSSearch _mcts;
         public int LookaheadDepth { get; set; }
@@ -1184,13 +1197,20 @@ namespace BobCoach.Engine
                 // ── 早期刷新惩罚: T1-T5每块钱都关键, T1-T2绝对不刷 ──
                 if (action.Type == ActionType.Refresh && state.Turn <= 2 && state.FreeRefreshCount == 0)
                     value *= 0.0;       // T1-T2: 绝对禁止付费刷新
+                // 1.2.5 D1(A/B候选): 升本回合尾金刷新豁免 — 玩家在本回合升过本且商店无可买时,
+                // 花尾金(1-2)刷新换店是真实打法(大帝T3/吉恩T6-7 跨局证据), 非"刷后买不起浪费"。
+                // 仅 BOBCOACH_UPGRADE_TAIL_REFRESH=1 时豁免(供模拟器 A/B; 默认关闭不改变现行为)。
+                bool upgradeTailRefresh = UPGRADE_TAIL_REFRESH_ENABLED
+                    && state.LastUpgradeTurn == state.Turn && state.Gold < 3
+                    && (state.ShopMinions == null || state.ShopMinions.Count == 0
+                        || state.ShopMinions.All(sc => sc == null || sc.IsSpell || sc.Cost > state.Gold));
                 if (action.Type == ActionType.Refresh && state.Turn == 3
-                    && state.Gold - 1 < 3 && state.FreeRefreshCount == 0)
-                    value *= 0.05f;     // T3: 刷后买不起=几乎禁止
+                    && state.Gold - 1 < 3 && state.FreeRefreshCount == 0 && !upgradeTailRefresh)
+                    value *= 0.05f;     // T3: 刷后买不起=几乎禁止(升本尾金刷新豁免)
                 if (action.Type == ActionType.Refresh && state.Turn >= 3 && state.Turn <= 5
-                    && state.FreeRefreshCount == 0
+                    && state.FreeRefreshCount == 0 && !upgradeTailRefresh
                     && !IsVardenRefreshHero(state))   // R220: 瓦尔登刷新=技能复制最高级随从(免费+冻结), 不受这个惩罚
-                    value *= 0.15f;     // T3-T5: 强惩罚(only free refresh acceptable)
+                    value *= 0.15f;     // T3-T5: 强惩罚(only free refresh acceptable; 升本尾金豁免)
                 // T1-T2 额外防护: 如果还有可买的随从且金币≥3, 加倍抑制Refresh
                 if (action.Type == ActionType.Refresh && state.Turn <= 2 && state.Gold >= 3
                     && state.ShopMinions.Count > 0 && state.BoardMinions.Count < state.MaxBoardSlots)
