@@ -102,6 +102,12 @@ namespace BobCoach
             new Engine.TrinketChoiceBatchLifecycle();
         private Engine.Season14RulesEvaluator _season14RulesEvaluator;
         private int _prevDiscoverCount = -1; // 上帧发现选项数, 仅用于诊断
+        // 1.2.4 希尔瓦娜斯反馈: 技能"重拾灵魂"需发现"上一场战斗死亡的随从" —
+        // 战斗阶段无我方随从阵亡时技能不可用, UI 不应提示使用。
+        private readonly HashSet<int> _combatDeathThisBattle = new HashSet<int>();   // 本场战斗中我方死亡实体
+        private readonly HashSet<string> _combatDeathCardIdsThisBattle = new HashSet<string>();
+        private readonly HashSet<int> _lastCombatFriendlyDeaths = new HashSet<int>(); // 上一场战斗我方死亡实体(冻结)
+        private readonly HashSet<string> _lastCombatFriendlyDeathCards = new HashSet<string>();
         // v2 事件驱动标志位: Power.log ChoiceList 事件直接控制面板显隐, 替代TTL帧计数
         private bool _discoverPanelActive = false;
         private bool _trinketPanelActive = false;
@@ -2066,6 +2072,26 @@ namespace BobCoach
                     {
                         heroShouldUse = false;
                         heroDecisionReason = "板面无优质随从, 点金性价比低";
+                    }
+                }
+                // 1.2.4 希尔瓦娜斯反馈(严重): 技能"重拾灵魂"= 发现上一场战斗中死亡的随从。
+                // 上一场战斗我方无随从阵亡时, 技能无候选 = 游戏内按钮置灰不可用, 但旧逻辑只查
+                // 金币/已使用 → 每回合都提示"使用技能"(实测多局)。按 SpecialRule=SYLVANAS 门控:
+                // 无死亡则不推荐; 附上诊断日志便于回放核验。
+                if (heroShouldUse && (heroStrategy.SpecialRule == "SYLVANAS"
+                    || (heroSkill != null && heroSkill.TextCn != null
+                        && heroSkill.TextCn.Contains("上一场战斗")
+                        && heroSkill.TextCn.Contains("死亡"))))
+                {
+                    if (_lastCombatFriendlyDeaths.Count == 0)
+                    {
+                        heroShouldUse = false;
+                        heroDecisionReason = "上回合无随从阵亡, 技能无候选";
+                    }
+                    else
+                    {
+                        heroDecisionReason = "复活上回合阵亡: " + (_lastCombatFriendlyDeathCards.Count)
+                            + "种 (" + string.Join(",", _lastCombatFriendlyDeathCards) + ")";
                     }
                 }
                 Log(string.Format(
@@ -5733,6 +5759,20 @@ return current + "\n" + line;
                 _renderVersion++;
                 _suggestionsActive = false;
                 _persistentDirty = true;
+                // 1.2.4: 新战斗开始, 清空本场死亡计数(希尔瓦娜斯技能可用性用上一场数据)
+                _combatDeathThisBattle.Clear();
+                _combatDeathCardIdsThisBattle.Clear();
+            }
+            if (phase == "MAIN_ACTION")
+            {
+                // 1.2.4: 招募开始 = 上一场战斗结束, 冻结"上一场战斗我方死亡"供技能门控。
+                // 死亡实体在下回合可能被重用于其他(如暗月奖品), 故按 CardId+EntityId 双存, 只做计数。
+                _lastCombatFriendlyDeaths.Clear();
+                _lastCombatFriendlyDeathCards.Clear();
+                foreach (var id in _combatDeathThisBattle)
+                    _lastCombatFriendlyDeaths.Add(id);
+                foreach (var cid in _combatDeathCardIdsThisBattle)
+                    _lastCombatFriendlyDeathCards.Add(cid);
             }
             // 自学习招募时长: MAIN_ACTION=招募开始(重置计时) → MAIN_COMBAT=战斗开始(计算时长)
             if (phase == "MAIN_ACTION")
@@ -6134,6 +6174,18 @@ return current + "\n" + line;
                 _globalReplayRecorder.RecordCombatEvent(
                     "death", 0, "", 0, evt.EntityId, evt.CardId, evt.PlayerId,
                     0, 0, turn, phase);
+                // 1.2.4 希尔瓦娜斯: 追踪我方战斗死亡(技能需发现上回合阵亡随从)。
+                // 战斗阶段(MAIN_COMBAT)才累计; PlayerId 为我方或未知(<=0)时记录。
+                if (phase.IndexOf("MAIN_COMBAT", StringComparison.Ordinal) >= 0
+                    && IsLocalPowerPlayer(evt.PlayerId)
+                    && evt.EntityId > 0)
+                {
+                    if (_combatDeathThisBattle.Add(evt.EntityId))
+                    {
+                        if (!string.IsNullOrEmpty(evt.CardId))
+                            _combatDeathCardIdsThisBattle.Add(evt.CardId);
+                    }
+                }
                 return;
             }
             if (evt.Type == Engine.PLEventType.HeroPowerUsed)
