@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.5 - 2026-09-03
+
+- Fixed Sylvanas's Reclaimed Souls availability: the skill is only usable when a friendly minion died in the last combat (it discovers a copy of one), so the UI no longer suggests using it after a deathless combat; it also now respects the turn-3 unlock (previously T1/T2 suggestions appeared because only the tavern-tier gate was checked).
+- Fixed contradictory status text during trinket picks: when the best action is PickTrinket the status strip no longer shows buy-minion suggestions that contradict the trinket panel (cross-game scan of 15 replays).
+
 ## 1.2.4 - 2026-09-03
 
 - Fixed Akazamzarak's Prestidigitation (magic secret pick): hero-power discovers from four secrets are now recognized as a discover source (TB_BaconShop_HP_020 explicitly trusted) and the candidate cap is widened to four, so the discover panel shows instead of recording only the completed choice.
