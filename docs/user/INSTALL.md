@@ -1,6 +1,6 @@
 # Bob Coach 中文安装教程
 
-不熟悉终端也能完成。当前 `1.2.3` 为尚未发布的候选包，请下载 [`BobCoach-1.2.3-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.3/BobCoach-1.2.3-win-x64.zip)。完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
+不熟悉终端也能完成。当前 `1.2.4` 为尚未发布的候选包，请下载 [`BobCoach-1.2.4-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.4/BobCoach-1.2.4-win-x64.zip)。完整解压应同时看到 `BobCoach.dll` 和 `BobCoach.dll.sha256`。
 
 [下载或离线打开 HTML 图文教程](INSTALL.html)
 
@@ -24,7 +24,7 @@
 
 ### 第 3 步：复制 DLL 和校验文件
 
-回到完整解压后的 `BobCoach-1.2.3-win-x64.zip`，将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个文件必须来自同一个安装包；缺少校验文件或哈希不匹配时，插件会拒绝启动。升级时同时替换两个文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
+回到完整解压后的 `BobCoach-1.2.4-win-x64.zip`，将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制到刚打开的 `Plugins` 根目录。两个文件必须来自同一个安装包；缺少校验文件或哈希不匹配时，插件会拒绝启动。升级时同时替换两个文件。不要再创建 `BobCoach` 子文件夹，也不要复制到 HDT 程序安装目录。
 
 ![将 BobCoach.dll 复制到 Plugins 根目录](images/install/install-03-copy-bobcoach-dll.png)
 
@@ -40,7 +40,7 @@
 
 ## 下载时注意
 
-当前 `1.2.3` 为尚未发布的候选包，文件名是 [`BobCoach-1.2.3-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.3/BobCoach-1.2.3-win-x64.zip)。正式安装包只会通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；可用同页的 [`BobCoach-1.2.3-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.3/BobCoach-1.2.3-win-x64.zip.sha256) 核对完整性。Windows 11 24H2 最终实机 smoke 尚未完成。
+当前 `1.2.4` 为尚未发布的候选包，文件名是 [`BobCoach-1.2.4-win-x64.zip`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.4/BobCoach-1.2.4-win-x64.zip)。正式安装包只会通过本仓库的 [GitHub Releases](https://github.com/yueyang9999/HDT-BobCoach/releases) 提供；可用同页的 [`BobCoach-1.2.4-win-x64.zip.sha256`](https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.4/BobCoach-1.2.4-win-x64.zip.sha256) 核对完整性。Windows 11 24H2 最终实机 smoke 尚未完成。
 
 - `Windows 11 24H2 x64` 与 `Windows 10 22H2 x64` 使用同一个 64 位安装包。
 - 不要下载 Release 页面底部的 `Source code (zip)` 或 `Source code (tar.gz)`；它们是源码快照，不是安装包。

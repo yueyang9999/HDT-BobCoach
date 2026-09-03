@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.4 - 2026-09-03
+
+- Fixed Akazamzarak's Prestidigitation (magic secret pick): hero-power discovers from four secrets are now recognized as a discover source (TB_BaconShop_HP_020 explicitly trusted) and the candidate cap is widened to four, so the discover panel shows instead of recording only the completed choice.
+- Fixed over-wide status text for long card names: after a level-up filtered rebuild the turn-chain override is re-applied (visualizer's full-name HintLine no longer leaks), and the short-name helper truncates by display width (CJK≈2, ASCII≈1) with trailing whitespace trimmed, so names like "Decoy Conjurer" render as "Decoy Conj…" instead of a full-width row.
+
 ## 1.2.3 - 2026-09-03
 
 - Tavern-upgrade guidance now comes first: when the current gold covers the upgrade cost (and the shop has no immediate triple ready), the turn chain opens with the upgrade instead of spending gold on minions first and silently hiding the upgrade at the end (e.g. a T7 gold=9 E.T.C. board previously saw "buy two" while an affordable level-to-4 + hero-power line existed).

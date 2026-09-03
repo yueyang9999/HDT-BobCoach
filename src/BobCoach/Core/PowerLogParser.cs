@@ -1187,7 +1187,10 @@ namespace BobCoach.Engine
             foreach (var candidate in _discoverBuffer)
                 AddOrdinaryDiscoverCandidate(candidates, candidate);
 
-            if (candidates.Count < 2 || candidates.Count > 3) return;
+            // 1.2.3 阿卡扎曼扎拉克反馈: 神奇魔术奥秘选择为 4 选 1(非标准 3 选1),
+            // 候选上限放宽到 4(超 4 仍拒绝, 防商店扫描污染)。Candidates 均来自
+            // DebugPrintEntityChoices 的 Entities[N] 权威行, 非 zone6 扫描, 无污染面。
+            if (candidates.Count < 2 || candidates.Count > 4) return;
 
             entityChoice.Fired = true;
             DiagLog(string.Format("Discover via WaitThenShowChoices: {0} candidates [{1}]",
@@ -1229,7 +1232,8 @@ namespace BobCoach.Engine
             var candidates = new List<DiscoverCandidate>();
             foreach (var candidate in _discoverBuffer)
                 AddOrdinaryDiscoverCandidate(candidates, candidate);
-            if (candidates.Count < 2 || candidates.Count > 3) return;
+            // 1.2.3: 与 TryEmitOrdinaryDiscover 一致, 候选上限放宽到 4(神奇魔术奥秘 4 选1)。
+            if (candidates.Count < 2 || candidates.Count > 4) return;
             _newFormatFired = true;
             DiagLog(string.Format("Discover via ChoiceCardMgr(36.2.x): {0} candidates [{1}]",
                 candidates.Count,
@@ -1477,6 +1481,9 @@ namespace BobCoach.Engine
                 "BG32_MagicItem_361",
                 "BG34_Treasure_606pe",
                 "BG27_Anomaly_716",
+                // 1.2.3 阿卡扎曼扎拉克反馈: 神奇魔术(HP_020)从4个奥秘中选1 — 奥秘候选是 TB_Bacon_Secrets_*,
+                // 无"发现"卡面文本, 必须显式授权为发现源, 否则 choice 只有 completed 无 discover offered → 无UI。
+                "TB_BaconShop_HP_020",
             };
 
         private static bool IsTrustedOrdinaryDiscoverSource(string sourceCardId)

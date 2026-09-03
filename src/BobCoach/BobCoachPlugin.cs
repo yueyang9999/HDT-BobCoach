@@ -2312,6 +2312,7 @@ namespace BobCoach
             }
             var plan = _visualizer.CreateVisualPlan(state, bestAction, levelResult, cardScores, _heroPowerEngine, _fe, compGuidance,
                 secondStep, secondStepState, trinketScores);
+
             // 2026-08-19 阶段规划行（长链路分点式思考）：把 MainlinePlan 的阶段/
             // 模式 + StrategySequencePlanner 的跨回合步骤 + 本回合预算整合为
             // "阶段·模式 | ①本回合 ②下回合 ③阶段目标" 分点式指导。
@@ -2381,6 +2382,18 @@ namespace BobCoach
                     cardScores = afterUpgrade;
                     plan = _visualizer.CreateVisualPlan(state, bestAction, levelResult, cardScores, _heroPowerEngine, _fe, compGuidance,
                         secondStep, secondStepState, trinketScores);
+                    // 1.2.3 Akazamzarak feedback: LEVEL_UP filtered rebuild replaces plan with the
+                    // visualizer's HintLine (full, untruncated card names + action arrows), which
+                    // overflows the status row. Re-apply the BuildTurnActionChain override and
+                    // refresh the cache signature so later frames rebuild with the new cardScores.
+                    if (state != null && plan != null && plan.Status != null)
+                    {
+                        _turnPlanTurn = state.Turn;
+                        _turnPlanShopSig = ShopSignature(state);
+                        _turnPlanGold = GetLiveGold(state);
+                        _turnPlanChain = BuildTurnActionChain(state, cardScores, GetLiveGold(state));
+                        plan.Status.HintLine = _turnPlanChain;
+                    }
                 }
             }
             if (levelResult.Suggestion == "LEVEL_UP"
@@ -3041,7 +3054,19 @@ namespace BobCoach
                 ? m.CardName
                 : BobCoachPlugin.GetCardNameCn(m.CardId);
             if (string.IsNullOrEmpty(name)) return "";
-            return name.Length > 6 ? name.Substring(0, 6) + "…" : name;
+            // 1.2.3 反馈: 卡名过长时按"显示宽度"截断(中/全角≈2, ASCII≈1)而非字符数 —
+            // 旧逻辑 Substring(0,6) 对英文名 Decoy Conjurer 截成 "Decoy "(留尾空格)+… 且
+            // 14 个 ASCII 字符视觉宽度≈7 汉字, 单行文字仍超宽被遮挡。宽度上限≈10单位(5汉字)。
+            if (DisplayWidth(name) <= 10) return name.TrimEnd();
+            int cut = 0, w = 0;
+            foreach (char ch in name)
+            {
+                int cw = (ch >= 0x2E80 && ch <= 0x9FFF) || ch == '→' || ch == '—' || ch == '·' || ch == '…' ? 2 : 1;
+                if (w + cw > 10) break;
+                w += cw; cut++;
+            }
+            string shortName = name.Substring(0, cut).TrimEnd();
+            return shortName + "…";
         }
 
         private static string StageGoalText(Engine.MainlinePlan mainline, GameState state)

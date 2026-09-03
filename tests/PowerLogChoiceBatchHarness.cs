@@ -185,6 +185,30 @@ public static class PowerLogChoiceBatchHarness
             || heroDiscover.Candidates.Count != 2)
             return Fail("Hooktusk two-choice hero-power discover was not emitted");
 
+        // 1.2.3 阿卡扎曼扎拉克反馈: 神奇魔术(TB_BaconShop_HP_020)从 4 个奥秘中选 1 —
+        // 奥秘候选 TB_Bacon_Secrets_* 需显式授权(无"发现"卡面文本)且候选上限放宽到 4。
+        var akazamzarakParser = new PowerLogParser();
+        PowerLogChoiceBatch akazamzarakDiscover = null;
+        akazamzarakParser.DiscoverOffered += batch => akazamzarakDiscover = batch;
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.4737010 GameState.DebugPrintEntityChoices() - id=21 Player=Local TaskList=5039 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.4737010 GameState.DebugPrintEntityChoices() -   Source=[entityName=神奇魔术 id=225 zone=PLAY zonePos=0 cardId=TB_BaconShop_HP_020 player=7]");
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.4737010 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=救赎 id=14945 zone=SETASIDE zonePos=0 cardId=TB_Bacon_Secrets_10 player=7]");
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.4737010 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=自动防御矩阵 id=14946 zone=SETASIDE zonePos=0 cardId=TB_Bacon_Secrets_07 player=7]");
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.4737010 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=眼镜蛇陷阱 id=14947 zone=SETASIDE zonePos=0 cardId=TB_Bacon_Secrets_01 player=7]");
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.4737010 GameState.DebugPrintEntityChoices() -   Entities[3]=[entityName=集群战术 id=14948 zone=SETASIDE zonePos=0 cardId=TB_Bacon_Secrets_15 player=7]");
+        akazamzarakParser.ParseLine(
+            "D 11:35:06.7402464 ChoiceCardMgr.WaitThenShowChoices() - id=21 WAIT for taskList 5039");
+        if (akazamzarakDiscover == null || akazamzarakDiscover.ChoiceId != 21
+            || akazamzarakDiscover.SourceCardId != "TB_BaconShop_HP_020"
+            || akazamzarakDiscover.Candidates.Count != 4)
+            return Fail("Akazamzarak magic-secret four-choice discover was not emitted");
+
         parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() - id=30 Player=Local TaskList=5866 ChoiceType=GENERAL CountMin=1 CountMax=1");
         parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Source=[entityName=Timewarp id=14959 zone=PLAY zonePos=0 cardId=BG34_HERO_004p player=2]");
         parser.ParseLine("D 11:09:05.5203600 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Timewarp A id=15010 zone=SETASIDE zonePos=0 cardId=BG34_Treasure_601 player=2]");

@@ -73,7 +73,7 @@ passed. Final physical smoke validation on Windows 11 24H2 x64 was not
 completed; publication was explicitly authorized by the project owner. The
 beta.1 preview builder is retired and cannot recreate a historical package
 from 1.0.0 inputs.
-The `v1.2.3` package is a release candidate and is not published. Dedicated
+The `v1.2.4` package is a release candidate and is not published. Dedicated
 physical smoke validation on Windows 11 24H2 x64 remains incomplete. Any
 future publication still requires separate explicit owner authorization.
 Every future GitHub Release, upload, or public distribution still
