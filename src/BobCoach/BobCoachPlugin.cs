@@ -6059,6 +6059,10 @@ return current + "\n" + line;
                 _cachedState != null ? _cachedState.Turn : -1);
             Log("Passive choice: completed choice=" + completion.ChoiceId
                 + " selected=" + completion.SelectedCardId);
+            // 1.2.9 I-20260905-04: 身份揭晓(EBG_Spell_037)第二级选择=换主技能 —
+            // 玩家选新技能(如被动战刃飞旋)后设为 primary, 引擎按新技能判断(被动不再提示使用)
+            if (_extractor != null && !string.IsNullOrEmpty(completion.SelectedCardId))
+                _extractor.SetIdentityRevealSelectedCardId(completion.SelectedCardId);
             OnPowerLogStateChanged();
         }
 

@@ -42,6 +42,9 @@ namespace BobCoach
             new SharedCardVoteTracker();
         private readonly SecondHeroPowerDiscoverTracker _secondHeroPowerDiscoverTracker =
             new SecondHeroPowerDiscoverTracker();
+        // 1.2.9 I-20260905-04: 身份揭晓(EBG_Spell_037 5星法术)换主技能后选中卡 —
+        // 玩家换到新技能(如曲奇换被动战刃飞旋)后, 该技能应成为 primary(替代默认英雄技能)
+        private string _identityRevealSelectedCardId = null;
         private readonly TeammateGoldTransferTracker _teammateGoldTransferTracker =
             new TeammateGoldTransferTracker();
         private readonly UnknownTrinketDiagnosticTracker _unknownTrinketDiagnosticTracker =
@@ -113,6 +116,11 @@ namespace BobCoach
         {
             return _secondHeroPowerDiscoverTracker.ObserveSelection(
                 choiceId, selectedCardId, evidenceSource);
+        }
+        /// <summary>1.2.9 I-20260905-04: 身份揭晓(EBG_Spell_037)完成后记录选中的主技能卡。</summary>
+        public void SetIdentityRevealSelectedCardId(string selectedCardId)
+        {
+            _identityRevealSelectedCardId = string.IsNullOrEmpty(selectedCardId) ? null : selectedCardId;
         }
         public bool ObserveTeammateGoldTransfer(
             TeammateGoldTransferRule rule, int turn, string actionCardId,
@@ -861,6 +869,10 @@ namespace BobCoach
                     && e.CardId.StartsWith(heroCardId.Substring(0, Math.Min(10, heroCardId.Length))))
                     score += 2000;
 
+                // 1.2.9 I-20260905-04: 身份揭晓选中的新技能优先(覆盖默认英雄技能)
+                if (!string.IsNullOrEmpty(_identityRevealSelectedCardId)
+                    && e.CardId == _identityRevealSelectedCardId)
+                    score += 20000;
                 if (score > bestScore || (score == bestScore && best != null && e.Id < best.Id))
                 {
                     bestScore = score;
