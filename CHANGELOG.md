@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.8 - 2026-09-04
+
+- fix: HINTGUARD take-skip 日志节流(ISSUE I-20260904-08): 同 turn/gold/top/hint 每帧重复打 10-20 次(实测 09-04 晚 100+ 条刷屏淹没真实信号); 新增 _lastHintGuardSig 节流, 同签名只打 1 次(纯日志, 不改决策)
+
 ## 1.2.7 - 2026-09-04
 
 - fix: 状态条最终上屏文字留痕(ISSUE I-20260904-03): UISTATUS 帧打印点早于 DispatchRender 内 "拿→X/卖→X/发动→" 追加, 用户实见的两行建议无日志帧; 新增 UIFINAL 帧在 ShowStatusStrip 前记录追加完成后真正上屏的 hint/plan/pick/upgrade/combat 全文(节流同 sig), 此后每帧实际上屏内容可回溯

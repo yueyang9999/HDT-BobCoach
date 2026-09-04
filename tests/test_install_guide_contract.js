@@ -41,7 +41,7 @@ const featuresHtml = read('docs/user/FEATURES.html');
 const chineseReadme = read('README.md');
 const englishReadme = read('README.en.md');
 const offlineReadme = read('tools/release/README_OFFLINE.md');
-const stableAssetBase = 'https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.7/';
+const stableAssetBase = 'https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.8/';
 
 for (const imagePath of expectedGuideImages) {
   if (!fs.existsSync(path.join(root, imagePath))) errors.push(`missing ${imagePath}`);
@@ -100,9 +100,9 @@ for (const [source, label] of [
   [chineseReadme, 'Chinese README'],
   [englishReadme, 'English README'],
 ]) {
-  requireText(source, 'BobCoach-1.2.7-win-x64.zip', `${label}: current package name`);
-  requireText(source, `${stableAssetBase}BobCoach-1.2.7-win-x64.zip`, `${label}: official installer link`);
-  requireText(source, `${stableAssetBase}BobCoach-1.2.7-win-x64.zip.sha256`, `${label}: official checksum link`);
+  requireText(source, 'BobCoach-1.2.8-win-x64.zip', `${label}: current package name`);
+  requireText(source, `${stableAssetBase}BobCoach-1.2.8-win-x64.zip`, `${label}: official installer link`);
+  requireText(source, `${stableAssetBase}BobCoach-1.2.8-win-x64.zip.sha256`, `${label}: official checksum link`);
   forbid(source, /releases\/download\/v0\.2\.0-beta\.1\//, `${label}: retired beta.1 package link`);
 }
 requireText(markdown, '将 `BobCoach.dll` 和 `BobCoach.dll.sha256` 一起复制', 'Markdown 1.0.0 two-file install');
