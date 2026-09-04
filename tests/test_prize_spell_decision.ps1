@@ -23,7 +23,7 @@ if (!$hdtDir) {
         $exe = Join-Path $candidate "HearthstoneDeckTracker.exe"
         if ((Test-Path (Join-Path $candidate "HearthDb.dll")) -and (Test-Path $exe)) {
             try {
-        if ([Reflection.AssemblyName]::GetAssemblyName($exe).Version.ToString() -eq "1.57.1.0") {
+        if ([Reflection.AssemblyName]::GetAssemblyName($exe).Version.ToString() -eq "1.57.6.0") {
                     $candidate
                 }
             } catch { }

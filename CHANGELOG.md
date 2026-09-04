@@ -2,6 +2,12 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.6 - 2026-09-04
+
+- fix: 状态条 "拿→X" 追加缺失剩余金币守卫(克罗米 T1 实测: 买3金随从后再叠 1 金拿取, gold3 不够仍两行上屏; 1.2.2 同类反馈回归) — 仅当 HintLine 为空且实时金币>=拿取费才追加, 拦截打 HINTGUARD 日志
+- chore: HDT 构建基线 1.57.1.0 -> 1.57.6.0(HDT 升级); manifest/测试断言改由 release_identity.json 派生, 防版本漏同步
+- chore: tools/release/README_OFFLINE.md 候选包模板同步 1.2.6 / HDT 1.57.6.0(修复 package 测试 "release README identifies the unpublished release candidate")
+
 ## 1.2.5 - 2026-09-03
 
 - Fixed Sylvanas's Reclaimed Souls availability: the skill is only usable when a friendly minion died in the last combat (it discovers a copy of one), so the UI no longer suggests using it after a deathless combat; it also now respects the turn-3 unlock (previously T1/T2 suggestions appeared because only the tavern-tier gate was checked).
@@ -81,3 +87,4 @@ All notable changes are recorded here. The project follows Semantic Versioning f
 - Added consent-gated `log.config` updates and local-only diagnostic storage.
 - Added the strict 11-file offline package, checksums, install, upgrade, rollback, uninstall, and reinstall flows.
 - Removed embedded JSON data resources from the formal plugin DLL.
+
