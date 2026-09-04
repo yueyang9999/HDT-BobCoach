@@ -76,8 +76,8 @@ function Assert-HdtBaseline([string]$Path) {
         throw "HDT executable missing: $executable"
     }
     $version = [Reflection.AssemblyName]::GetAssemblyName($executable).Version.ToString()
-    if ($version -ne "1.57.1.0") {
-        throw "HDT baseline mismatch: expected 1.57.1.0, got $version"
+    if ($version -ne "1.57.6.0") {
+        throw "HDT baseline mismatch: expected 1.57.6.0, got $version"
     }
 }
 

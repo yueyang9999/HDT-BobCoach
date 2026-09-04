@@ -201,15 +201,16 @@ function New-TestOfflinePackage([string]$Root, [string]$Name = "Package") {
 
     $pluginHash = (Get-FileHash -LiteralPath (Join-Path $packageRoot "BobCoach.dll") -Algorithm SHA256).Hash
     $pluginSize = (Get-Item -LiteralPath (Join-Path $packageRoot "BobCoach.dll")).Length
+    $identityJson = Get-Content -LiteralPath (Join-Path $repoRoot "release_identity.json") -Raw | ConvertFrom-Json
     $manifest = [ordered]@{
         schemaVersion = 2
-        packageVersion = "1.2.5"
-        assemblyVersion = "1.2.5.0"
-        fileVersion = "1.2.5.0"
-        informationalVersion = "1.2.5"
+        packageVersion = $identityJson.packageVersion
+        assemblyVersion = $identityJson.assemblyVersion
+        fileVersion = $identityJson.assemblyVersion
+        informationalVersion = $identityJson.packageVersion
         targetFramework = ".NETFramework,Version=v4.7.2"
-        runtimeIdentifier = "win-x64"
-        hdtBaselineVersion = "1.57.1.0"
+        runtimeIdentifier = $identityJson.runtimeIdentifier
+        hdtBaselineVersion = $identityJson.hdtBaselineVersion
         pluginFile = "BobCoach.dll"
         pluginChecksumFile = "BobCoach.dll.sha256"
         pluginSize = $pluginSize

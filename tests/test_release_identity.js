@@ -3,11 +3,11 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const expected = {
-  packageVersion: '1.2.5',
-  assemblyVersion: '1.2.5.0',
+  packageVersion: '1.2.6',
+  assemblyVersion: '1.2.6.0',
   targetFramework: 'net472',
   runtimeIdentifier: 'win-x64',
-  hdtBaselineVersion: '1.57.1.0',
+  hdtBaselineVersion: '1.57.6.0',
 };
 
 const errors = [];

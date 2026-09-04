@@ -184,9 +184,9 @@ if ($hasApprovedCandidate) {
 } elseif (!(Test-Path -LiteralPath $releaseBuilder -PathType Leaf)) {
     throw "Release builder missing: $releaseBuilder"
 }
-if ($identity.packageVersion -ne "1.2.5" -or $identity.assemblyVersion -ne "1.2.5.0" -or
+if ($identity.packageVersion -ne "1.2.6" -or $identity.assemblyVersion -ne "1.2.6.0" -or
     $identity.targetFramework -ne "net472" -or $identity.runtimeIdentifier -ne "win-x64" -or
-    $identity.hdtBaselineVersion -ne "1.57.1.0") {
+    $identity.hdtBaselineVersion -ne "1.57.6.0") {
     throw "Unsupported release identity"
 }
 

@@ -4715,8 +4715,28 @@ return current + "\n" + line;
                         else if (string.IsNullOrEmpty(plan.Status.HintLine)
                             || !plan.Status.HintLine.Contains(topName))
                         {
-                            plan.Status.HintLine = AppendActionHint(
-                                plan.Status.HintLine, "拿→" + topName, topName);
+                            // 1.2.5 克罗米T1回归修复(2026-09-04, ISSUE I-20260904-01):
+                            // "拿→X"追加无剩余金币守卫 → 已有"买爆裂飓风"(花3) 再叠"拿→酒馆币",
+                            // gold=3 不够仍两行上屏(用户实测乱建议)。守卫: 主推荐已花钱则不追加
+                            // (次要由商店标签表达); 无花钱主推且预算够才追加"拿→X"。
+                            int takeCost = 3;
+                            try {
+                                if (topShopCard != null)
+                                    takeCost = Engine.GameRuleEvaluator.GetPurchaseCost(
+                                        state, topShopCard, state.HeroCardId,
+                                        state.EffectiveRules ?? Engine.EffectiveGameRules.Default);
+                            } catch { takeCost = 3; }
+                            if (liveGold >= takeCost && string.IsNullOrEmpty(plan.Status.HintLine))
+                            {
+                                plan.Status.HintLine = AppendActionHint(
+                                    plan.Status.HintLine, "拿→" + topName, topName);
+                            }
+                            else if (!string.IsNullOrEmpty(plan.Status.HintLine))
+                            {
+                                Log(string.Format("HINTGUARD take-skip turn={0} gold={1} top={2} cost={3} hint=[{4}]",
+                                    state != null ? state.Turn : -1, liveGold, topName, takeCost,
+                                    plan.Status.HintLine));
+                            }
                         }
                         if (plan.ShopMarkers.Count > 3)
                             plan.ShopMarkers = plan.ShopMarkers.OrderByDescending(m => m.Score).Take(3).ToList();
