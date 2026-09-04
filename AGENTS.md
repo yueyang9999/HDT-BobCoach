@@ -149,6 +149,14 @@ For release candidates, additionally verify offline install, upgrade, rollback, 
   powershell -File tools/read_file.ps1 兜底(需 FullLanguage, 受限沙箱下 [System.IO.File]:: 被拒)。
 - 编辑: 先 read/Get-Content 确认锚点再 edit(old_string 精确匹配); 搜索 grep; 写文件 write。
 
+## Information & Tool-First Discipline (2026-09-04 用户指令固化, 全局规则见 DSH .dsh/AGENTS.md)
+- 信息缺口先覆盖多源(国内外官方+社区博主+数据源+GitHub 工具), 不把问题抛回用户
+- 抓取/解析难题**先到 GitHub 找现成工具**(MediaCrawler/xhs-api 等开源抓取器), 有则用, 没有再自建;
+  禁止瞎猜端点/反复试错
+- 善用可用能力: 视觉模型读卡图文本 / headless Chrome 抓 SPA / agent-reach 社交平台通道;
+  抓取通道登记 WORKFLOWS.md(WF)复用, 不每次从头造
+- 攻略/改动/动态标注 来源+日期+游戏补丁版本; 不混用未标注数据
+
 ## Deployment Discipline (2026-08-21 固化, 用户投诉: 部署时强杀运行中的 HDT 干扰对局)
 
 - **HDT 正在运行时, 严禁自动 Stop-Process + 自动重启 HDT。** 用户可能正在对局中, 强杀 = 直接打断游戏。这是用户明确投诉过的错误(R230/R232/R233 部署时犯过)。
