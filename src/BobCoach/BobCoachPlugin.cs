@@ -2211,6 +2211,24 @@ namespace BobCoach
                 bestAction = null;
             }
             var t0 = DateTime.UtcNow;
+            // 1.2.9 I-20260905-01: 塞纳留斯(铸币上限+1)经济技能优先于升本——
+            // 高手 T2 先技能(花3金铸币上限+1 全局收益)而非升本(花4金); 引擎技能决策
+            // use=True 但 LEVEL_UP 编排(L2217)无条件覆盖为 Upgrade → 技能被吞。
+            bool econSkillPriority = Engine.HeroPowerRuleCatalog.AdvancePermanentGoldCap(
+                state.HeroPowerCardId ?? "", state.MaxGold) > state.MaxGold;
+            if (econSkillPriority)
+            {
+                int skillCost = state.HeroPowerCost >= 0 ? state.HeroPowerCost : 3;
+                int liveGoldEcon = GetLiveGold(state);
+                int? upCostEcon = GameRuleEvaluator.GetUpgradeCost(
+                    state, state.EffectiveRules ?? EffectiveGameRules.Default);
+                // 铸币上限技能只要可负担且未耗尽就应优先(每回合多1金=全局收益, 越早用收益越大)
+                if (liveGoldEcon >= skillCost && !state.HeroPowerExhausted)
+                {
+                    if (bestAction == null || bestAction.Type != Engine.ActionType.UseHeroPower)
+                        bestAction = new Engine.GameAction { Type = Engine.ActionType.UseHeroPower };
+                }
+            }
             var levelResult = SafeCall(() => _engine.GetLevelUpSuggestion(state), "GetLevelUpSuggestion");
             int? liveUpgradeCost = GameRuleEvaluator.GetUpgradeCost(
                 state, state.EffectiveRules ?? EffectiveGameRules.Default);
@@ -2218,7 +2236,8 @@ namespace BobCoach
                 && liveUpgradeCost.HasValue
                 && GetLiveGold(state) >= liveUpgradeCost.Value
                 && !liveSafety.SuppressUpgrade
-                && (bestAction == null || bestAction.Type != Engine.ActionType.Upgrade))
+                && (bestAction == null || bestAction.Type != Engine.ActionType.Upgrade)
+                && bestAction?.Type != Engine.ActionType.UseHeroPower) // 1.2.9: 经济技能优先(塞纳留斯)不覆盖
             {
                 bool keepBuyThenUpgrade = bestAction != null
                     && (bestAction.Type == Engine.ActionType.BuyMinion
