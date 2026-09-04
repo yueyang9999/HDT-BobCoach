@@ -166,6 +166,7 @@ namespace BobCoach
         private int _lastUiDiagTurn = -1;
         private int _lastUiDiagGold = -1;
         private string _lastUiDiagSig = "";   // 1.2.2 T1状态条文字诊断节流
+        private string _lastFinalUiSig = "";  // 1.2.7 I-20260904-03: 最终上屏文字帧节流(追加完成后)
         private DateTime _lastRenderTime = DateTime.MinValue;
         private string _lastShopIdStr = "";
         private int _lastShopCount = 0;                    // 商店实体数稳定性跟踪
@@ -4209,6 +4210,23 @@ return current + "\n" + line;
             return false;
         }
 
+        // 1.2.7 I-20260904-03: 最终上屏文字帧 — ShowStatusStrip 前调用, 记录追加(拿→X/卖→X/发动→)
+        // 与裁剪完成后的真正上屏内容(此前 UISTATUS 打印点 L2488 早于追加, 两行最终文字无帧)。
+        private void LogFinalUiStatus(GameState state, VisualPlan plan, int liveGold)
+        {
+            if (state == null || plan == null || plan.Status == null) return;
+            string sig = (plan.Status.HintLine ?? "") + "|" + (plan.Status.PlanLine ?? "")
+                + "|" + (plan.Status.PickLine ?? "") + "|" + (plan.Status.UpgradeLine ?? "")
+                + "|" + (plan.Status.CombatLine ?? "");
+            if (_lastFinalUiSig == sig) return;
+            _lastFinalUiSig = sig;
+            Log(string.Format("UIFINAL turn={0} gold={1} best={2} | hint=[{3}] plan=[{4}] pick=[{5}] stage={6} mode={7} upgrade=[{8}] combat=[{9}]",
+                state.Turn, liveGold, plan.RecommendedActionType ?? "",
+                plan.Status.HintLine ?? "", plan.Status.PlanLine ?? "", plan.Status.PickLine ?? "",
+                plan.Status.StageLabel ?? "", plan.Status.ModeLabel ?? "",
+                plan.Status.UpgradeLine ?? "", plan.Status.CombatLine ?? ""));
+        }
+
         private void DispatchRender(GameState state, string heroHint, VisualPlan plan, string heroUseSuggestion = null)
         {
             if (state == null || plan == null) return;
@@ -4538,6 +4556,7 @@ return current + "\n" + line;
                     // 特殊界面/等待状态：只显示状态条+英雄+手牌，不显示商店策略
                     if (isWaiting || specialScreen)
                     {
+                        LogFinalUiStatus(state, plan, liveGold);
                         _renderer.ShowStatusStrip(status);
                         _suggestionsActive = true;
                         return;
@@ -4800,6 +4819,7 @@ return current + "\n" + line;
                         plan.RecommendedActionType = "";
                     }
 
+                    LogFinalUiStatus(state, plan, liveGold); // 1.2.7 I-20260904-03: 最终上屏帧(追加后)
                     // 状态条必须在所有门控/裁剪完成后渲染，避免文字建议与实际UI不一致。
                     _renderer.ShowStatusStrip(status);
 

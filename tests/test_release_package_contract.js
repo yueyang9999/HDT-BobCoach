@@ -142,7 +142,7 @@ forbid(
   /\.FullName\.Substring\(/i,
   'offline package builder test absolute-path substring enumeration',
 );
-for (const token of ['1.2.6', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
+for (const token of ['1.2.7', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
 

@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.7 - 2026-09-04
+
+- fix: 状态条最终上屏文字留痕(ISSUE I-20260904-03): UISTATUS 帧打印点早于 DispatchRender 内 "拿→X/卖→X/发动→" 追加, 用户实见的两行建议无日志帧; 新增 UIFINAL 帧在 ShowStatusStrip 前记录追加完成后真正上屏的 hint/plan/pick/upgrade/combat 全文(节流同 sig), 此后每帧实际上屏内容可回溯
+
 ## 1.2.6 - 2026-09-04
 
 - fix: 状态条 "拿→X" 追加缺失剩余金币守卫(克罗米 T1 实测: 买3金随从后再叠 1 金拿取, gold3 不够仍两行上屏; 1.2.2 同类反馈回归) — 仅当 HintLine 为空且实时金币>=拿取费才追加, 拦截打 HINTGUARD 日志
