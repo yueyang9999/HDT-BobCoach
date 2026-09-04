@@ -88,6 +88,12 @@ Before effect acceptance passes, the required conclusion is: `新算法基础设
 - Before the 2026-08-05 content refresh, do not read or migrate production data files under `%APPDATA%\bob-coach\data\`; generate and test only against explicit synthetic data roots (e.g. `BOB_COACH_DATA_ROOT` in disposable temp directories).
 ## Simulator Environment Patch Version Control (2026-08-28 固化, 用户明确要求, 违反即投诉)
 
+### 0. 标准版本状态注记 (2026-09-04)
+- 客户端已更新 36.4.0.0/36.4.2 (Data 36401, 2026-09-04); 官方 36.4.2 = 战棋平衡补丁(数值/护甲/调级)
+- season14-data 现为 249896 卡集 + 36.4.2 官方数值/护甲补丁(来源: 官方36.4.2 notes + 官网快照,
+  见 STANDARD_DATASOURCE_GAMERHUB.md 迁移状态); 权威 36.4.2 全量卡表仍缺失(hearthstonejson 36401=404)
+- 卡池成员新卡(36.3 duos 27张等)未入模拟器(单人+权威表缺失); 36.4.2 环境 legacy 参考 avg 2.70(6seed×10)
+
 > 背景: R588 曾用旧补丁回放（firestone build 248348/231720）的卡牌出现频率修改模拟池
 > （cards.json 的 is_battlegrounds_pool/tier flag），被用户否决——**非本赛季回放数据会污染模拟池**。
 > 此规则为不可违反的硬约束。
