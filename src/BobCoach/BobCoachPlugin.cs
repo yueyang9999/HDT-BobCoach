@@ -167,6 +167,7 @@ namespace BobCoach
         private int _lastUiDiagGold = -1;
         private string _lastUiDiagSig = "";   // 1.2.2 T1状态条文字诊断节流
         private string _lastFinalUiSig = "";  // 1.2.7 I-20260904-03: 最终上屏文字帧节流(追加完成后)
+        private string _lastHintGuardSig = "";  // 1.2.8 I-20260904-08: HINTGUARD 帧节流
         private DateTime _lastRenderTime = DateTime.MinValue;
         private string _lastShopIdStr = "";
         private int _lastShopCount = 0;                    // 商店实体数稳定性跟踪
@@ -4752,9 +4753,15 @@ return current + "\n" + line;
                             }
                             else if (!string.IsNullOrEmpty(plan.Status.HintLine))
                             {
-                                Log(string.Format("HINTGUARD take-skip turn={0} gold={1} top={2} cost={3} hint=[{4}]",
-                                    state != null ? state.Turn : -1, liveGold, topName, takeCost,
-                                    plan.Status.HintLine));
+                                // 1.2.8 I-20260904-08: 节流——同 turn/gold/top/hint 只打一次(此前每帧刷屏 100+ 条)
+                                string hgSig = (state != null ? state.Turn : -1) + "|" + liveGold + "|" + topName + "|" + plan.Status.HintLine;
+                                if (_lastHintGuardSig != hgSig)
+                                {
+                                    _lastHintGuardSig = hgSig;
+                                    Log(string.Format("HINTGUARD take-skip turn={0} gold={1} top={2} cost={3} hint=[{4}]",
+                                        state != null ? state.Turn : -1, liveGold, topName, takeCost,
+                                        plan.Status.HintLine));
+                                }
                             }
                         }
                         if (plan.ShopMarkers.Count > 3)
