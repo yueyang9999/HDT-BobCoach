@@ -128,6 +128,19 @@ namespace BobCoach.Engine
             }
             catch { return false; }
         }
+        // 候选② A/B (2026-09-04): 连续升本抑制(B4)血量语境化——健康(>=25)时允许连升
+        // 速本线(真实速本 47 例中引擎当回合未推荐 43-56%; 因葛 rank1 连升局); env =1 启用
+        private static readonly bool UPGRADE_CONSECUTIVE_RELAX_ENABLED = ReadUpgradeConsecutiveRelaxFlag();
+
+        private static bool ReadUpgradeConsecutiveRelaxFlag()
+        {
+            try
+            {
+                var s = Environment.GetEnvironmentVariable("BOBCOACH_UPGRADE_CONSECUTIVE");
+                return !string.IsNullOrEmpty(s) && s.Trim() == "1";
+            }
+            catch { return false; }
+        }
         private ProfileEngine _profile;
         private MCTSSearch _mcts;
         public int LookaheadDepth { get; set; }
@@ -3745,8 +3758,13 @@ namespace BobCoach.Engine
                     "当前血量过低，升本被斩杀风险过大");
             // 2026-08-19 实测修复(B4): 连续升本抑制——上一回合刚升过本且已3本+,
             // 本回合不再推荐升本(升完吃光金币→被迫卖牌/买不起, 用户实测牛头人T4场景)
+            // 候选②(2026-09-04, env BOBCOACH_UPGRADE_CONSECUTIVE=1): 血量健康(>=25)时
+            // 豁免 B4, 放行速本线让后续标准回合/危险线/价值 diff 规则继续把关。
+            // 真实证据: 用户升4/5/6本 47 例引擎当回合未推荐 43-56%(to5 最差 44%),
+            // 分歧上下文均为满血(30)连升(因葛 rank1: T5-T7 逐回合升本)。
             if (state.TavernTier >= 3
-                && state.LastUpgradeTurn == state.Turn - 1)
+                && state.LastUpgradeTurn == state.Turn - 1
+                && !(UPGRADE_CONSECUTIVE_RELAX_ENABLED && state.Health >= 25))
                 return new LevelUpSuggestion("STABILIZE",
                     "刚升过本，先补战力再考虑升本");
             var heroStrat = _heroPower.GetStrategyForPower(
