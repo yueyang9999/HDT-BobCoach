@@ -6059,10 +6059,9 @@ return current + "\n" + line;
                 _cachedState != null ? _cachedState.Turn : -1);
             Log("Passive choice: completed choice=" + completion.ChoiceId
                 + " selected=" + completion.SelectedCardId);
-            // 1.2.9 I-20260905-04: 身份揭晓(EBG_Spell_037)第二级选择=换主技能 —
-            // 玩家选新技能(如被动战刃飞旋)后设为 primary, 引擎按新技能判断(被动不再提示使用)
-            if (_extractor != null && !string.IsNullOrEmpty(completion.SelectedCardId))
-                _extractor.SetIdentityRevealSelectedCardId(completion.SelectedCardId);
+            // 1.2.9-fix I-20260905-04: 此 PassiveChoiceCompleted 仅费林(BG22_HERO_201p)随从发现触发(候选=minion),
+            // 不是身份揭晓(EBG_Spell_037)完成路径 — 原 04e8351 挂此处的 setter 永不触发且会把 minion 当技能。
+            // 正确同步点在 OnPowerLogChoiceCompleted(EBG_Spell_037 完成走 generic ChoiceCompleted), 见该方法。
             OnPowerLogStateChanged();
         }
 
@@ -6143,6 +6142,11 @@ return current + "\n" + line;
             if (_discoverPanelActive && _discoverBatchFromLog != null
                 && _discoverBatchFromLog.ChoiceId == completion.ChoiceId)
             {
+                // 1.2.9-fix I-20260905-04: 身份揭晓(EBG_Spell_037)完成时, 选中的英雄技能应成为主技能。
+                // EBG_Spell_037 完成走 generic ChoiceCompleted(实测大帝/芬利/费林/曲奇/尤朵拉局, 全程 0 条
+                // Passive choice), 不走 PassiveChoiceCompleted(仅费林 BG22_HERO_201p 随从发现触发)
+                // → 04e8351 的 setter 挂错事件永不触发; 在此(choice 匹配 HP-discover offer batch)置正。
+                bool identityRevealComplete = _discoverBatchFromLog.SourceCardId == "EBG_Spell_037";
                 _discoverPanelActive = false; _discoverPanelActivatedAt = DateTime.MinValue;
                 _discoverBatchFromLog = null;
                 _discoverTargetState.CompleteChoice();
@@ -6151,8 +6155,12 @@ return current + "\n" + line;
                     completion.ChoiceId,
                     completion.SelectedCardId,
                     _cachedState != null ? _cachedState.Turn : -1);
-                Log(string.Format("Discover panel: choice={0} completed selected={1}",
-                    completion.ChoiceId, completion.SelectedCardId));
+                Log(string.Format("Discover panel: choice={0} completed selected={1}{2}",
+                    completion.ChoiceId, completion.SelectedCardId,
+                    identityRevealComplete ? " (identity-reveal -> new primary hero power)" : ""));
+                if (identityRevealComplete && _extractor != null
+                    && !string.IsNullOrEmpty(completion.SelectedCardId))
+                    _extractor.SetIdentityRevealSelectedCardId(completion.SelectedCardId);
             }
             if (_timewarpPurchaseBatchFromLog != null
                 && _timewarpPurchaseBatchFromLog.ChoiceId == completion.ChoiceId)
