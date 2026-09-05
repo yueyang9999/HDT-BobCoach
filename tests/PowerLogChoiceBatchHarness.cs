@@ -238,6 +238,21 @@ public static class PowerLogChoiceBatchHarness
             }, true))
             return Fail("single-candidate residue was allowed during combat");
 
+        // 1.2.11 I-20260905-11: 真战斗阶段(MAIN_COMBAT)不渲染发现 UI(等招募路径);
+        // 招募/lagging(非 MAIN_COMBAT)保留渲染(08-07 lagging-flag 保护)。
+        if (!CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
+            lastDiscover, true, "MAIN_READY"))
+            return Fail("recruit-phase authoritative discover was blocked");
+        if (!CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
+            lastDiscover, true, "MAIN_START_TRIGGERS"))
+            return Fail("turn-start-trigger authoritative discover was blocked");
+        if (CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
+            lastDiscover, true, "MAIN_COMBAT"))
+            return Fail("true-combat discover was rendered (user rule: combat must not show)");
+        if (!CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
+            lastDiscover, true, ""))
+            return Fail("unknown-phase discover should stay lagging-safe (render allowed)");
+
         var timewarpParser = new PowerLogParser();
         PowerLogChoiceBatch timewarpPurchase = null;
         int timewarpPurchaseEvents = 0;

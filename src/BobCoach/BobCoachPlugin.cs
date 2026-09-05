@@ -1486,7 +1486,7 @@ namespace BobCoach
                             _renderer.ClearTimewarpPurchaseHint();
                         }
                         else if (CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
-                            _discoverBatchFromLog, _discoverPanelActive))
+                            _discoverBatchFromLog, _discoverPanelActive, _powerLogPhase))
                         {
                             _eventEvalRequested = false;
                             RenderAuthoritativeDiscoverDuringCombat();
@@ -2212,17 +2212,18 @@ namespace BobCoach
             }
             var t0 = DateTime.UtcNow;
             // 1.2.9 I-20260905-01: 塞纳留斯(铸币上限+1)经济技能优先于升本——
-            // 高手 T2 先技能(花3金铸币上限+1 全局收益)而非升本(花4金); 引擎技能决策
-            // use=True 但 LEVEL_UP 编排(L2217)无条件覆盖为 Upgrade → 技能被吞。
+            // 引擎技能决策 use=True 但 LEVEL_UP 编排(L2217)无条件覆盖为 Upgrade → 技能被吞。
+            // 1.2.11 I-20260905-13: 蛇眼(好运当投)同型——掷骰(1费)期望+3.5铸币=严格正EV,
+            // T1 起可负担即应先用技能再买(玩家 rank2 局实测 T1 自用技能, 引擎两层都推但
+            // bestAction=BuyMinion 覆盖); 与塞纳留斯共用经济技能优先编排。
             bool econSkillPriority = Engine.HeroPowerRuleCatalog.AdvancePermanentGoldCap(
-                state.HeroPowerCardId ?? "", state.MaxGold) > state.MaxGold;
+                state.HeroPowerCardId ?? "", state.MaxGold) > state.MaxGold
+                || Engine.HeroPowerRuleCatalog.IsLuckyRollPower(state.HeroPowerCardId ?? "");
             if (econSkillPriority)
             {
-                int skillCost = state.HeroPowerCost >= 0 ? state.HeroPowerCost : 3;
+                int skillCost = state.HeroPowerCost >= 0 ? state.HeroPowerCost : 1;
                 int liveGoldEcon = GetLiveGold(state);
-                int? upCostEcon = GameRuleEvaluator.GetUpgradeCost(
-                    state, state.EffectiveRules ?? EffectiveGameRules.Default);
-                // 铸币上限技能只要可负担且未耗尽就应优先(每回合多1金=全局收益, 越早用收益越大)
+                // 经济技能只要可负担且未耗尽就应优先(铸币上限=全局收益/掷骰=正EV铸币, 越早用收益越大)
                 if (liveGoldEcon >= skillCost && !state.HeroPowerExhausted)
                 {
                     if (bestAction == null || bestAction.Type != Engine.ActionType.UseHeroPower)
@@ -5020,7 +5021,7 @@ return current + "\n" + line;
         {
             var batch = _discoverBatchFromLog;
             if (!CombatChoiceRenderPolicy.CanRenderDiscoverDuringCombat(
-                batch, _discoverPanelActive)) return;
+                batch, _discoverPanelActive, _powerLogPhase)) return;
 
             var options = batch.Candidates.Select(candidate => new Engine.TrinketOption
             {
