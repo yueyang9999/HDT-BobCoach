@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.9 - 2026-09-05
+
+- fix: 塞纳留斯 T2 铸币上限经济技能优先(ISSUE I-20260905-01): 引擎技能决策 use=True 但 LEVEL_UP 编排无条件覆盖为升本 → 技能被吞(实测 09-05 塞纳留斯 T2 只见升酒馆提示不见主动技能); 新增 econSkillPriority 分支 — 铸币上限技能(AdvancePermanentGoldCap)可负担且未耗尽时优先于升本, 且升本不再覆盖已选技能
+- fix: 身份揭晓(EBG_Spell_037 5星酒馆法术)换技能后同步(ISSUE I-20260905-04): EBG_Spell_037 选择完成走 generic ChoiceCompleted(非 PassiveChoiceCompleted — 后者仅费林随从发现), 原修复挂错事件永不触发; 改挂 OnPowerLogChoiceCompleted 捕获 SelectedCardId → SetIdentityRevealSelectedCardId, 选新技能后 state.heroPower 不再沿用旧技能
+
 ## 1.2.8 - 2026-09-04
 
 - fix: HINTGUARD take-skip 日志节流(ISSUE I-20260904-08): 同 turn/gold/top/hint 每帧重复打 10-20 次(实测 09-04 晚 100+ 条刷屏淹没真实信号); 新增 _lastHintGuardSig 节流, 同签名只打 1 次(纯日志, 不改决策)
