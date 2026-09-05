@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.10 - 2026-09-05
+
+- fix: 吉恩(狼人国王)黑暗之赐提示UI常驻(ISSUE I-20260905-08): 打开黑暗之赐3选1后未选/被放弃时, Power.log 无 SendChoices 完成但游戏端清理源实体 → parser 原无 fail-close, 插件 _choiceActive/_darkGiftBatchFromLog 永不复位, "暗赐选择中" 提示条+候选条跨回合/跨局常驻(实测 07:33→07:45 12+ 分钟); 新增 parser fail-close: 源实体(BG36_MidGameEffect_010)被移出且未完成选择 → 发空选择完成(SelectedCardId=""), 插件只复位 UI/coordinator、不累计 usedCount; backfill 同步不再复活未完成 choice
+
 ## 1.2.9 - 2026-09-05
 
 - fix: 塞纳留斯 T2 铸币上限经济技能优先(ISSUE I-20260905-01): 引擎技能决策 use=True 但 LEVEL_UP 编排无条件覆盖为升本 → 技能被吞(实测 09-05 塞纳留斯 T2 只见升酒馆提示不见主动技能); 新增 econSkillPriority 分支 — 铸币上限技能(AdvancePermanentGoldCap)可负担且未耗尽时优先于升本, 且升本不再覆盖已选技能

@@ -491,6 +491,8 @@ public static class PowerLogChoiceBatchHarness
         if (lateStartLiveCompletionExit != 0) return lateStartLiveCompletionExit;
         var pressableExit = RunDarkGiftPressableTest();
         if (pressableExit != 0) return pressableExit;
+        var failCloseExit = RunDarkGiftFailCloseOnEntityRemovalTest();
+        if (failCloseExit != 0) return failCloseExit;
         var darkGiftTipGateExit = RunDarkGiftTipGateTest();
         if (darkGiftTipGateExit != 0) return darkGiftTipGateExit;
         var darkGiftTipCoordinatorExit = RunDarkGiftTipRenderCoordinatorTest();
@@ -781,6 +783,49 @@ public static class PowerLogChoiceBatchHarness
             return Fail("dark gift completion changed the pressable event stream");
 
         Console.WriteLine("PASS dark gift pressable stays independent from choice state");
+        return 0;
+    }
+
+    /// <summary>1.2.10 I-20260905-08: 吉恩黑暗之赐3选1打开后玩家未完成(无 SendChoices),
+    /// 游戏端清理源实体 → parser fail-close 发空完成, 不留永久挂起上下文。</summary>
+    private static int RunDarkGiftFailCloseOnEntityRemovalTest()
+    {
+        var parser = new PowerLogParser();
+        PowerLogChoiceBatch offer = null;
+        PowerLogChoiceCompletion done = null;
+        int activeEvents = 0;
+        int completedEvents = 0;
+        int leaks = 0;
+        parser.DarkGiftChoiceActive += b => { offer = b; activeEvents++; };
+        parser.DarkGiftCompleted += c => { done = c; completedEvents++; };
+        parser.DiscoverOffered += b => leaks++;
+        parser.TrinketChoiceActive += b => leaks++;
+        parser.TimewarpPurchaseOffered += b => leaks++;
+        parser.ChoiceCompleted += c => leaks++;
+
+        // offer: 源实体=BG36_MidGameEffect_010 (entity 341), 3 候选, marker 已到 → active fired
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() - id=303 Player=Local TaskList=9330 ChoiceType=GENERAL CountMin=1 CountMax=1");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Source=[entityName=Dark Gift id=341 zone=PLAY zonePos=0 cardId=BG36_MidGameEffect_010 player=1]");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[0]=[entityName=Gift A id=3301 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_001 player=1]");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[1]=[entityName=Gift B id=3302 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_002 player=1]");
+        parser.ParseLine("D 18:30:00.0000000 GameState.DebugPrintEntityChoices() -   Entities[2]=[entityName=Gift C id=3303 zone=SETASIDE zonePos=0 cardId=BG36_SyntheticDarkGift_003 player=1]");
+        parser.ParseLine("D 18:30:01.0000000 ChoiceCardMgr.WaitThenShowChoices() - id=303 WAIT for taskList 9330");
+        if (activeEvents != 1 || offer == null || offer.ChoiceId != 303 || offer.Candidates.Count != 3)
+            return Fail("fail-close test: dark gift offer was not emitted");
+
+        // 玩家未 SendChoices; 游戏端把源实体移出 PLAY(zone→GRAVEYARD→REMOVEDFROMGAME)
+        parser.ParseLine("D 18:30:06.0000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift id=341 zone=PLAY zonePos=0 cardId=BG36_MidGameEffect_010 player=1] tag=ZONE value=GRAVEYARD");
+        parser.ParseLine("D 18:30:06.5000000 GameState.DebugPrintPower() - TAG_CHANGE Entity=[entityName=Dark Gift id=341 zone=GRAVEYARD zonePos=0 cardId=BG36_MidGameEffect_010 player=1] tag=ZONE value=REMOVEDFROMGAME");
+        if (completedEvents != 1 || done == null)
+            return Fail("fail-close test: entity removal without SendChoices did not emit completion");
+        if (done.ChoiceId != 303 || !string.IsNullOrEmpty(done.SelectedCardId))
+            return Fail("fail-close test: completion identity/empty-selection wrong: choice=" + done.ChoiceId + " sel=[" + done.SelectedCardId + "]");
+        if (leaks != 0)
+            return Fail("fail-close test: leaked into ordinary choice events");
+        if (parser.IsChoiceListActive())
+            return Fail("fail-close test: choice context still active after entity removal");
+
+        Console.WriteLine("PASS dark gift fail-closes when source entity is removed without SendChoices");
         return 0;
     }
 

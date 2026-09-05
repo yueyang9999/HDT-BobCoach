@@ -49,6 +49,7 @@ namespace BobCoach.Engine
         public string SourceCardId = "";
         public string SourceName = "";
         public int SourcePlayerId;
+        public int SourceEntityId = -1;
         public int TimeCoinCount;
         public DateTime Timestamp;
         public List<DiscoverCandidate> Candidates = new List<DiscoverCandidate>();
@@ -515,6 +516,18 @@ namespace BobCoach.Engine
                     // 饰品被选中: 饰品实体进入玩家区域
                     if (evt.Value == "PLAY" || evt.Value == "HAND")
                         if (IsTrinketEntity(entity)) evt.Type = PLEventType.TrinketSelected;
+                    // 1.2.10 I-20260905-08(吉恩黑暗之赐UI常驻): 黑暗之赐 offer 源实体(BG36_MidGameEffect_010)
+                    // 被游戏端移出(未 SendChoices 完成) = 选择被关闭/放弃 → fail-close, 防 _darkGiftChoice 永久挂起。
+                    // 对照: 正常完成路径 SendChoices 先触发 DarkGiftCompleted 清上下文, 此处不再重复。
+                    if (_darkGiftChoice != null && _darkGiftChoiceFired
+                        && _darkGiftPendingChoiceId < 0
+                        && evt.Value != "PLAY" && evt.Value != "SETASIDE" && evt.Value != "HAND"
+                        && (entity.CardId == "BG36_MidGameEffect_010"
+                            || entity.CardId == "BG36_MidGameEffect_000"
+                            || evt.EntityId == _darkGiftChoice.SourceEntityId))
+                    {
+                        FailCloseDarkGiftChoice(ts);
+                    }
                     break;
                 case "ATK": entity.Attack = evt.NumericValue; break;
                 case "HEALTH":
@@ -847,6 +860,7 @@ namespace BobCoach.Engine
                 _currentEntityChoice.SourceCardId = sourceMatch.Groups[5].Value;
                 _currentEntityChoice.SourceName = sourceMatch.Groups[1].Value;
                 int.TryParse(sourceMatch.Groups[6].Value, out _currentEntityChoice.SourcePlayerId);
+                int.TryParse(sourceMatch.Groups[2].Value, out _currentEntityChoice.SourceEntityId);
                 _currentEntityChoice.SourceGrantsOrdinaryDiscover =
                     IsTrustedOrdinaryDiscoverSource(_currentEntityChoice.SourceCardId);
                 // R1.2.1: 身份揭晓(EBG_Spell_037)等"发现新英雄技能" — 候选是英雄技能卡,
@@ -865,6 +879,7 @@ namespace BobCoach.Engine
                         SourceCardId = _currentEntityChoice.SourceCardId,
                         SourceName = _currentEntityChoice.SourceName,
                         SourcePlayerId = _currentEntityChoice.SourcePlayerId,
+                        SourceEntityId = _currentEntityChoice.SourceEntityId,
                         Timestamp = _currentEntityChoice.Timestamp,
                         Candidates = new List<DiscoverCandidate>(),
                     };
@@ -1324,6 +1339,7 @@ namespace BobCoach.Engine
             public string SourceCardId;
             public string SourceName;
             public int SourcePlayerId;
+            public int SourceEntityId = -1;
             public bool SourceGrantsOrdinaryDiscover;
             public bool IsHeroPowerDiscover;
             public bool ShowMarkerReceived;
@@ -1733,6 +1749,7 @@ namespace BobCoach.Engine
                 SourceCardId = _darkGiftChoice.SourceCardId,
                 SourceName = _darkGiftChoice.SourceName,
                 SourcePlayerId = _darkGiftChoice.SourcePlayerId,
+                SourceEntityId = _darkGiftChoice.SourceEntityId,
                 Timestamp = _darkGiftChoice.Timestamp,
                 Candidates = _darkGiftChoice.Candidates
                     .Where(c => c != null)
@@ -1754,6 +1771,33 @@ namespace BobCoach.Engine
             _darkGiftChoiceFired = true;
             _darkGiftChoiceShowMarkerReceived = true;
             ClearOrdinaryChoiceContext();
+        }
+
+        /// <summary>
+        /// 1.2.10 I-20260905-08(吉恩黑暗之赐UI常驻): 黑暗之赐选择未完成(无 SendChoices)但
+        /// 源实体被游戏端移出(zone→GRAVEYARD/REMOVEDFROMGAME)= 选择被关闭/放弃 → 发空完成
+        /// (SelectedCardId="") 让插件清 UI。空选择语义: 插件只复位不累计 usedCount。
+        /// 正常完成路径 SendChoices 已先触发 DarkGiftCompleted, 此处不会重复(上下文已清)。
+        /// </summary>
+        private void FailCloseDarkGiftChoice(DateTime ts)
+        {
+            if (_darkGiftChoice == null) return;
+            int choiceId = _darkGiftChoice.ChoiceId;
+            if (_darkGiftChoiceFired)
+            {
+                try
+                {
+                    DarkGiftCompleted?.Invoke(new PowerLogChoiceCompletion
+                    {
+                        ChoiceId = choiceId,
+                        ChoiceType = _darkGiftChoice.ChoiceType,
+                        SelectedCardId = "",
+                        Timestamp = ts,
+                    });
+                }
+                catch { }
+            }
+            ClearDarkGiftContext();
         }
 
         private void ClearDarkGiftContext()

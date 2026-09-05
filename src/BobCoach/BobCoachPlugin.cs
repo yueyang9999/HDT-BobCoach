@@ -5972,6 +5972,17 @@ return current + "\n" + line;
             if (DispatchToUiThread(() => OnPowerLogDarkGiftCompleted(completion))) return;
             if (completion == null || _darkGiftBatchFromLog == null
                 || _darkGiftBatchFromLog.ChoiceId != completion.ChoiceId) return;
+            // 1.2.10 I-20260905-08(吉恩黑暗之赐UI常驻): parser fail-close 发空选择完成
+            // (SelectedCardId="") = 选择被游戏端关闭/放弃(未 SendChoices) → 只复位 UI,
+            // 不累计 usedCount(未实际获得赐福)也不落完成记录(回放留 choice 无完成=取消)。
+            if (string.IsNullOrEmpty(completion.SelectedCardId))
+            {
+                _darkGiftBatchFromLog = null;
+                _darkGiftTipCoordinator.OnDarkGiftCompleted(DateTime.Now);
+                Log("Dark Gift: choice=" + completion.ChoiceId + " closed without selection (UI reset)");
+                OnPowerLogStateChanged();
+                return;
+            }
             _darkGiftBatchFromLog = null;
             _darkGiftUsedCount = Math.Min(3, _darkGiftUsedCount + 1);
             _darkGiftUsedTurn = _cachedState != null ? _cachedState.Turn : -1;
