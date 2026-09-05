@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.11 - 2026-09-05
+
+- fix: 战斗阶段出现发现UI(ISSUE I-20260905-11): 回合8/9 战斗结算画面出现麦迪文之书等"回合开始发现"提示 — CombatEnter 后 0.4s 批次到达(MAIN_START_TRIGGERS)而 HDT combat flag 未翻 → 走 authoritative-combat 渲染; 新增 Power.log 阶段守卫: 真战斗(MAIN_COMBAT)不渲染发现 UI(批次保留, 招募路径渲染, 与时空扭曲 C1 同理念), 招募/lagging(非 MAIN_COMBAT)保留渲染(08-07 lagging-flag 保护不破坏)
+- fix: 蛇眼 T1 无主动技能提示(ISSUE I-20260905-13): 好运当投(掷骰得铸币, 1费期望+3.5=严格正EV)引擎两层都推(HeroSkill use=True + actionScores top1)但 bestAction=BuyMinion 覆盖 → 与塞纳留斯共用经济技能优先编排(IsLuckyRollPower), T1 起可负担且未耗尽即 bestAction=UseHeroPower
+
 ## 1.2.10 - 2026-09-05
 
 - fix: 吉恩(狼人国王)黑暗之赐提示UI常驻(ISSUE I-20260905-08): 打开黑暗之赐3选1后未选/被放弃时, Power.log 无 SendChoices 完成但游戏端清理源实体 → parser 原无 fail-close, 插件 _choiceActive/_darkGiftBatchFromLog 永不复位, "暗赐选择中" 提示条+候选条跨回合/跨局常驻(实测 07:33→07:45 12+ 分钟); 新增 parser fail-close: 源实体(BG36_MidGameEffect_010)被移出且未完成选择 → 发空选择完成(SelectedCardId=""), 插件只复位 UI/coordinator、不累计 usedCount; backfill 同步不再复活未完成 choice
