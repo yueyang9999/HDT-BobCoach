@@ -2189,6 +2189,32 @@ const calibSrc   = readFile("src/BobCoach/Core/CalibrationOverlay.cs");
             return "DecisionEngine must allow sell-to-triple when current gold is one short";
     });
 
+    test("[Bug3] passive hero power must not produce use-suggestion (skill replaced to passive)", () => {
+        const pluginSrc = readFile("src/BobCoach/BobCoachPlugin.cs");
+        // heroHint channel: state.HeroPowerType=Passive authority short-circuits hint text
+        if (!pluginSrc.includes("heroIsActuallyPassive"))
+            return "plugin must compute passive-authority flag from state.HeroPowerType";
+        if (!pluginSrc.includes("string heroHint = heroIsActuallyPassive"))
+            return "heroHint must be empty when hero power is actually passive";
+        // heroShouldUse channel: passive must null-out heroSkill so no use-chain fires
+        if (!pluginSrc.includes("if (heroIsActuallyPassive)"))
+            return "plugin must short-circuit heroSkill when passive (Bug3)";
+        if (!pluginSrc.includes("heroSkill = null;"))
+            return "passive must null heroSkill to block use-suggestion chain";
+    });
+
+    test("[O1] 5-tier shaped-flow upgrade suppression hook exists and defaults off", () => {
+        const engineSrc = readFile("src/BobCoach/Core/DecisionEngine.cs");
+        if (!engineSrc.includes("BOBCOACH_O1_SUPPRESS"))
+            return "engine must read BOBCOACH_O1_SUPPRESS env hook";
+        if (!engineSrc.includes("o1ShapedFlow"))
+            return "engine must compute o1ShapedFlow (5-tier shaped quality-flow context)";
+        if (!engineSrc.includes("return false; // 默认关闭(零影响)"))
+            return "O1 hook must default OFF (zero production impact until A/B proves benefit)";
+        if (!engineSrc.includes("actions.RemoveAll(a => a.Type == ActionType.Upgrade)"))
+            return "shaped-flow suppression must remove Upgrade from candidates when active";
+    });
+
     test("[Meta] environment baseline overrides guide tier and core card ids", () => {
         const baselineSrc = readFile("src/BobCoach/Core/SeasonMetaBaseline.cs");
         const catalogSrc = readFile("src/BobCoach/Core/CompGuideCatalog.cs");
