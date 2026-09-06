@@ -192,6 +192,89 @@ function main() {
         sources: [officialPatch, "user-replay-20260905"],
     });
 
+    // ===== 节奏扩展 round68 (数据: decision-data 97局 per-turn powerAction 使用率 + 机制) =====
+    // 只选: 主动技能 + 用户实玩(使用率清晰) + 机制可从文本/注册表核验的英雄。
+
+    // 迦拉克隆·渴望进化(1费): 把商店随从替换为更高等级 — 前期追核心/高星, 可用即用。
+    // 用户实测: T1-10 每回合 100%(金币≥1 即用)。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_02",
+        heroPowerCardIds: ["TB_BaconShop_HP_011"],
+        usePurpose: "Resource",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 99, priority: "High", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "galakrond-upgrade" },
+        ],
+        sources: [officialPatch, "user-replay-20260906"],
+    });
+
+    // 斯卡布斯·刀油(2费): 从下一位对手战队发现随从原始复制 — 中前期节奏/针对牌。
+    // 用户实测: T2 起可用即用(金币≥2), T4/T6 让位买牌/升本。
+    heroes.push({
+        heroCardId: "BG21_HERO_010",
+        heroPowerCardIds: ["BG21_HERO_010p"],
+        usePurpose: "Resource",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 2, maxTurn: 99, priority: "High", goldAtLeast: 2, healthAtLeast: 0, targetRequired: false, reason: "scabbs-discover" },
+        ],
+        sources: [officialPatch, "user-replay-20260906"],
+    });
+
+    // 摩洛克·福尔摩斯(0费): 检视2随从, 猜中下一位对手上一场战斗随从得酒馆币 — 免费EV。
+    // T1 无上一场战斗可猜; 用户实测 T2-14 每回合 100%。
+    heroes.push({
+        heroCardId: "BG23_HERO_303",
+        heroPowerCardIds: ["BG23_HERO_303p2"],
+        usePurpose: "Economy",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 2, maxTurn: 99, priority: "High", goldAtLeast: 0, healthAtLeast: 0, targetRequired: false, reason: "holmes-guess" },
+        ],
+        sources: [officialPatch, "user-replay-20260906"],
+    });
+
+    // 伟大的阿卡扎曼扎拉克(0费): 选奥秘置入战场 — 免费奥秘, 每回合早用早生效。
+    // 用户实测: T1-10 每回合 100%。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_21",
+        heroPowerCardIds: ["TB_BaconShop_HP_020"],
+        usePurpose: "Resource",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 99, priority: "High", goldAtLeast: 0, healthAtLeast: 0, targetRequired: false, reason: "akazamzarak-secret" },
+        ],
+        sources: [officialPatch, "user-replay-20260906"],
+    });
+
+    // 大主教奥萨尔(0费, 第3回合解锁): 下一张酒馆法术-1 — 有法术节奏时前置激活。
+    // 用户实测: T7 起每回合激活(前期未买酒馆法术)。
+    heroes.push({
+        heroCardId: "BG31_HERO_006",
+        heroPowerCardIds: ["BG31_HERO_006p"],
+        usePurpose: "Economy",
+        unlockTurn: 3,
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 3, maxTurn: 99, priority: "High", goldAtLeast: 0, healthAtLeast: 0, targetRequired: false, reason: "othaar-spell-discount" },
+        ],
+        sources: [officialPatch, "user-replay-20260906"],
+    });
+
+    // 米尔菲丝·法力风暴(1费, 等级4解锁): 发现磁力机械 — 机械流到4本后持续补磁力。
+    // 用户实测: T6(到4本)起, T6-9/T11 100%。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_17",
+        heroPowerCardIds: ["TB_BaconShop_HP_015"],
+        usePurpose: "Resource",
+        unlockTier: 4,
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 99, priority: "High", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "millificent-magnetic" },
+        ],
+        sources: [officialPatch, "user-replay-20260906"],
+    });
+
     const output = {
         _meta: {
             schemaVersion: 1,
