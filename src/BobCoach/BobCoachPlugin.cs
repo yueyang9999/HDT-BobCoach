@@ -1946,6 +1946,9 @@ namespace BobCoach
                 heroHint = heroHint + " (酒馆等级" + heroStrategy.UnlockTier + "解锁)";
             // 动态技能使用建议: 根据当前金币+场面判断是否该用技能
             string heroUseSuggestion = "";
+            // 1.2.12: 节奏窗口 — playbook 命中 Critical/High 相位或经济技能时,
+            // 编排层让 UseHeroPower 优先于买/升本(把"何时用技能"的节奏落到主推荐)。
+            bool heroSkillPriorityWindow = false;
             HeroSkillFact heroSkill;
             bool heroSkillFound = _heroSkillCatalog.TryGet(
                 state.HeroCardId, state.HeroPowerCardId, out heroSkill);
@@ -2007,6 +2010,10 @@ namespace BobCoach
                     heroShouldUse = playbookDecision.ShouldUse;
                     heroDecisionCost = playbookDecision.Cost;
                     heroDecisionReason = playbookDecision.Reason;
+                    // 1.2.12: Critical/High 相位 = 该英雄节奏窗口 → 主推荐优先技能
+                    heroSkillPriorityWindow = heroShouldUse
+                        && (string.Equals(playbookDecision.PhasePriority, "Critical", System.StringComparison.Ordinal)
+                            || string.Equals(playbookDecision.PhasePriority, "High", System.StringComparison.Ordinal));
                 }
                 else if (state.HeroCardId == "BG32_HERO_001")
                 {
@@ -2019,6 +2026,7 @@ namespace BobCoach
                     heroDecisionReason = heroShouldUse
                         ? "铸币上限+1(长期收益,前期优先)"
                         : (liveGoldForSkill < heroPowerCost ? "金币不足" : "已使用");
+                    heroSkillPriorityWindow = heroShouldUse; // 塞纳留斯前6回合=节奏窗口(见 340f6c1)
                 }
                 else
                 {
@@ -2039,6 +2047,7 @@ namespace BobCoach
                     heroShouldUse = heroSkillDecision.ShouldUse;
                     heroDecisionCost = heroSkillDecision.Cost;
                     heroDecisionReason = heroSkillDecision.Reason;
+                    heroSkillPriorityWindow = heroShouldUse; // 通用技能决策(含 R236 每英雄节奏)命中=窗口
                 }
                 if (state.HeroCardId != null
                     && state.HeroCardId.Contains("BG31_HERO_003"))
@@ -2216,14 +2225,17 @@ namespace BobCoach
             // 1.2.11 I-20260905-13: 蛇眼(好运当投)同型——掷骰(1费)期望+3.5铸币=严格正EV,
             // T1 起可负担即应先用技能再买(玩家 rank2 局实测 T1 自用技能, 引擎两层都推但
             // bestAction=BuyMinion 覆盖); 与塞纳留斯共用经济技能优先编排。
+            // 1.2.12: 技能节奏窗口(playbook Critical/High 相位 或 经济技能)时,
+            // 主推荐优先 UseHeroPower — 把"何时用技能"按英雄专属节奏落到可见 bestAction。
+            // 前置 340f6c1(塞纳留斯)/f01f2ef(蛇眼)经济技能特判已并入 heroSkillPriorityWindow。
             bool econSkillPriority = Engine.HeroPowerRuleCatalog.AdvancePermanentGoldCap(
                 state.HeroPowerCardId ?? "", state.MaxGold) > state.MaxGold
                 || Engine.HeroPowerRuleCatalog.IsLuckyRollPower(state.HeroPowerCardId ?? "");
-            if (econSkillPriority)
+            if (econSkillPriority || heroSkillPriorityWindow)
             {
                 int skillCost = state.HeroPowerCost >= 0 ? state.HeroPowerCost : 1;
                 int liveGoldEcon = GetLiveGold(state);
-                // 经济技能只要可负担且未耗尽就应优先(铸币上限=全局收益/掷骰=正EV铸币, 越早用收益越大)
+                // 技能只要可负担且未耗尽就应优先(节奏窗口/经济收益, 越早用收益越大)
                 if (liveGoldEcon >= skillCost && !state.HeroPowerExhausted)
                 {
                     if (bestAction == null || bestAction.Type != Engine.ActionType.UseHeroPower)

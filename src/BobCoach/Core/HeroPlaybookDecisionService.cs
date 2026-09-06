@@ -7,6 +7,7 @@ namespace BobCoach.Engine
         public bool ShouldUse;
         public int Cost;
         public double ActionValueBias;
+        public string PhasePriority = "";
         public string Reason = "";
     }
 
@@ -120,6 +121,7 @@ namespace BobCoach.Engine
                 ShouldUse = true,
                 Cost = cost,
                 ActionValueBias = bias,
+                PhasePriority = phase.Priority,
                 Reason = string.IsNullOrWhiteSpace(phase.Reason)
                     ? profile.UsePurpose
                     : phase.Reason,
