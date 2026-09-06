@@ -48,6 +48,8 @@ namespace BobCoach.Engine.Decision
                         && !currentBoard.Contains(candidate.EntityId)
                         && !Items(current.HandMinions)
                             .Any(item => item.EntityId == candidate.EntityId);
+                case ActionType.PlayMinion:
+                    return MatchesPlayedFromHand(candidate, previous, current, currentBoard);
                 case ActionType.Refresh:
                     return MatchesRefresh(candidate, previous, current);
                 case ActionType.Upgrade:
@@ -59,6 +61,18 @@ namespace BobCoach.Engine.Decision
                 default:
                     return false;
             }
+        }
+
+        private static bool MatchesPlayedFromHand(ActionDescriptor candidate,
+            GameState previous, GameState current, ISet<int> currentBoard)
+        {
+            if (candidate.EntityId <= 0 || previous.Turn != current.Turn)
+                return false;
+            bool wasInHand = Items(previous.HandMinions)
+                .Any(item => item.EntityId == candidate.EntityId);
+            bool wasOnBoard = Items(previous.BoardMinions)
+                .Any(item => item.EntityId == candidate.EntityId);
+            return wasInHand && !wasOnBoard && currentBoard.Contains(candidate.EntityId);
         }
 
         private static bool MatchesPurchasedEntity(ActionDescriptor candidate, GameState current,

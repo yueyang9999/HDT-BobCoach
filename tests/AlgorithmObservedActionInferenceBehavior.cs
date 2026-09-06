@@ -25,6 +25,8 @@ internal static class AlgorithmObservedActionInferenceBehavior
             DoesNotRecommendHandCombatMinionForPlay();
             DoesNotRecommendFrozenHandCardForPlayOrSpell();
             TreatsHandCombatDerivedCardIdsAsHandHeld();
+            InfersPlayMinionFromHandToBoard();
+            RejectsPlayMinionWithoutBoardMove();
             Console.WriteLine("PASS observed actions require unique player-action evidence");
             return 0;
         }
@@ -258,6 +260,45 @@ internal static class AlgorithmObservedActionInferenceBehavior
                 (action.Type == ActionType.PlayMinion || action.Type == ActionType.UseSpell)
                 && (action.CardId == "BG36_TEST" || action.CardId == "BG36_TEST_SPELL")),
             "frozen hand cards are not enumerated for play or spell use");
+    }
+
+    // PlayMinion 推断: 手牌随从在同回合内放到场面(修复 09-06 M0#3: 引擎 3879 次 PlayMinion 推荐此前不可观测采纳)
+    private static void InfersPlayMinionFromHandToBoard()
+    {
+        var previous = State(5, 3, 0);
+        previous.HandMinions.Add(new MinionData
+        {
+            EntityId = 700,
+            CardId = "BG36_HAND_A",
+            IsSpell = false,
+            Cost = 0,
+        });
+        var current = State(5, 3, 0);
+        current.BoardMinions.Add(new MinionData { EntityId = 700, CardId = "BG36_HAND_A" });
+        var playCandidate = Candidate(previous, ActionType.PlayMinion, 0, "BG36_HAND_A", "");
+
+        var inferred = Infer(previous, current, playCandidate);
+        AssertTrue(inferred.Count == 1 && inferred[0].StartsWith("PlayMinion"),
+            "play-from-hand is inferred as PlayMinion adoption");
+    }
+
+    // 反向保护: 手牌未动但候选存在 → 不推断
+    private static void RejectsPlayMinionWithoutBoardMove()
+    {
+        var previous = State(5, 3, 0);
+        previous.HandMinions.Add(new MinionData
+        {
+            EntityId = 701,
+            CardId = "BG36_HAND_B",
+            IsSpell = false,
+            Cost = 0,
+        });
+        var current = State(5, 3, 0);
+        current.HandMinions.Add(new MinionData { EntityId = 701, CardId = "BG36_HAND_B" });
+        var playCandidate = Candidate(previous, ActionType.PlayMinion, 0, "BG36_HAND_B", "");
+
+        AssertActions(new string[0], Infer(previous, current, playCandidate),
+            "no board move means no PlayMinion inference");
     }
 
     private static void TreatsHandCombatDerivedCardIdsAsHandHeld()
