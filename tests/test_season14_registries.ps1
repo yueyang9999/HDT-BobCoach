@@ -10,6 +10,22 @@ if (!(Test-Path (Join-Path $registryDir "season14_meta_baseline.json"))) {
     throw "Season14 meta baseline not found: $registryDir"
 }
 
+# 1.2.12 数据部署契约: 运行时数据根(BOB_COACH_DATA_ROOT=decision-data)必须含
+# 直接读取根目录的直接型注册表(activate/lockbox/fishbait/dark_gift/trinket)。
+# Season14CardRegistry 族(无 selector 回退)只读 <root>/generated/registries;
+# 缺失会导致 Season14RulesEvaluator.IsLoaded=false → 发动/锁箱/鱼饵/暗赐机制实机失效
+# (实测: 迷诱咒术师"买→发动"链静默, I-20260905-10)。同步源: season14/generated/registries。
+$runtimeRoot = $env:BOB_COACH_DATA_ROOT
+if ([string]::IsNullOrWhiteSpace($runtimeRoot)) {
+    $runtimeRoot = "E:\HDT-BobCoach-evidence\decision-data"
+}
+$runtimeRegDir = Join-Path $runtimeRoot "generated\registries"
+foreach ($direct in @("activate_registry.json", "lockbox_registry.json", "fishbait_registry.json", "dark_gift_registry.json", "trinket_registry.json")) {
+    if (!(Test-Path (Join-Path $runtimeRegDir $direct))) {
+        throw "Runtime data root missing direct registry $direct : $runtimeRegDir (BOB_COACH_DATA_ROOT=$runtimeRoot)"
+    }
+}
+
 $candidates = @()
 if ($env:BOBCOACH_CSC) { $candidates += $env:BOBCOACH_CSC }
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
