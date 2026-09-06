@@ -25,7 +25,11 @@ function advance(ps, active, turn, enforceMaxActive, nowMs) {
             if (active) { transition(ps, ACTIVE, nowMs); ps.createdTurn = turn; }
             break;
         case ACTIVE:
-            if (!active) {
+            // Bug2(2026-09-06): 跨回合强制收尾 — 面板创建于上回合仍 Active(招募超时
+            // 自动选后无 CHOSEN) → 直接 Expired(一次性清除; Fading 会被 active 拉回, 无法清)
+            if (turn > ps.createdTurn) {
+                transition(ps, EXPIRED, nowMs);
+            } else if (!active) {
                 transition(ps, FADING, nowMs);
             } else if (enforceMaxActive && (nowMs - ps.phaseEnteredMs) > MAX_ACTIVE_MS) {
                 transition(ps, FADING, nowMs);
@@ -200,6 +204,36 @@ test("[SM] 饰品面板最大驻留兜底: Active 超 8s → Fading", () => {
     advance(ps, true, 5, true, t);  // enforceMaxActive=true (饰品面板)
     t += 8001; advance(ps, true, 5, true, t);
     if (ps.phase !== FADING) return "饰品最大驻留超时应 Fading, 实际 " + ps.phase;
+});
+
+// ============================================================================
+// Bug2 回归(2026-09-06 钩牙实测): 招募超时自动选后无 CHOSEN → 面板跨回合卡死
+// ============================================================================
+test("[Bug2] 跨回合残留: Active 面板 turn>createdTurn 即使内容仍在 → 强制 Fading", () => {
+    let t = 0;
+    const ps = newPanel(1500, t);
+    advance(ps, true, 7, false, t);  // T7 显示发现面板(enforceMaxActive=false=权威)
+    t += 100; advance(ps, true, 7, false, t); // 仍在 T7
+    if (ps.phase !== ACTIVE) return "同回合应保持 Active";
+    // 招募超时系统自动选后无 CHOSEN, 候选残留 → 进入 T8 内容仍 active
+    t += 100; advance(ps, true, 8, false, t); // T8 候选残留
+    if (ps.phase !== EXPIRED) return "跨回合残留必须 Expired(根治钩牙卡死), 实际 " + ps.phase;
+});
+
+test("[Bug2] 跨回合残留直接 Expired(一次性清除信号), 下一帧自闭环", () => {
+    let t = 0;
+    const ps = newPanel(500, t);
+    advance(ps, true, 7, false, t);
+    if (ps.phase !== ACTIVE) return "前置: T7 应 Active";
+    // 进入 T8 内容仍残留(招募超时自动选后无 CHOSEN) → 直接 Expired(不走 Fading)
+    t += 100; advance(ps, true, 8, false, t);
+    if (ps.phase !== EXPIRED) return "跨回合残留应直接 Expired, 实际 " + ps.phase;
+    // 下一帧自闭环: 内容仍 active 会重入 Active(createdTurn 更新为 T8)
+    t += 100; advance(ps, true, 8, false, t);
+    if (ps.phase !== ACTIVE) return "Expired 自闭环+active 应重入 Active, 实际 " + ps.phase;
+    // 再跨回合(T9)又触发 → 每回合都有一次 Expired 清除窗口, 消费端读到即清 UI
+    t += 100; advance(ps, true, 9, false, t);
+    if (ps.phase !== EXPIRED) return "T9 跨回合应再 Expired, 实际 " + ps.phase;
 });
 
 // ============================================================================

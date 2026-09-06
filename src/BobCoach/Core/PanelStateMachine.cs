@@ -36,7 +36,16 @@ namespace BobCoach.Engine
                     break;
 
                 case PanelPhase.Active:
-                    if (!active)
+                    // Bug2(2026-09-06 钩牙实测): 招募超时系统自动选后若无 CHOSEN 事件送达,
+                    // 候选残留 → active 恒 true → 面板永远卡 Active(权威发现不强制8s超时)。
+                    // 根治: 跨回合强制收尾 — 面板创建于上回合(招募超时已过/进入新招募或战斗)
+                    // 无论内容是否仍在, 直接 Expired(一次性清除信号, 不走 Fading 滞回 —
+                    // Fading 在 active 残留时会立即拉回 Active, 无法清除)。
+                    if (turn > ps.CreatedTurn)
+                    {
+                        ps.Transition(PanelPhase.Expired);
+                    }
+                    else if (!active)
                     {
                         // 内容消失 → 进入 Fading 滞回
                         ps.Transition(PanelPhase.Fading);
