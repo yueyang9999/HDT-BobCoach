@@ -100,6 +100,23 @@ namespace BobCoach.Engine
         private static readonly double EFFECT_BONUS_LAMBDA = ReadEffectLambda();
         private const double EFFECT_BONUS_CAP = 0.6;      // 硬上界=15%典型VF分(median≈3.95)
         private const double COMP_GUIDE_WEIGHT_LAMBDA = 0.02;
+        // S3(2026-09-06): R0 期望升本曲线平移(回合数)。默认 0=现行为零影响;
+        // 模拟器 A/B 用 env BOBCOACH_UPGRADE_LV_SHIFT(如 1=整体晚 1 回合升) 验证 H2(升级过速)。
+        private static readonly int UPGRADE_LV_SHIFT = ReadUpgradeLvShift();
+
+        private static int ReadUpgradeLvShift()
+        {
+            try
+            {
+                var s = Environment.GetEnvironmentVariable("BOBCOACH_UPGRADE_LV_SHIFT");
+                int v;
+                if (!string.IsNullOrWhiteSpace(s) && int.TryParse(s.Trim(), out v)
+                    && v >= -2 && v <= 2)
+                    return v;
+            }
+            catch { }
+            return 0;
+        }
 
         private static double ReadEffectLambda()
         {
@@ -541,6 +558,7 @@ namespace BobCoach.Engine
             // (T7升5本名次5.32 vs 未升4.14); 维持 T8→5本。
             int expectedLv = state.Turn <= 1 ? 1 : state.Turn <= 3 ? 2 : state.Turn <= 5 ? 3
                 : state.Turn <= 7 ? 4 : state.Turn <= 8 ? 5 : 6;
+            expectedLv = Math.Max(1, Math.Min(6, expectedLv + UPGRADE_LV_SHIFT));
             int tierGap = expectedLv - state.TavernTier;
             bool boardFullR0 = state.BoardMinions.Count >= state.MaxBoardSlots;
             if (canUpgrade && state.TavernTier < maxTavernTier && tierGap >= 1)
