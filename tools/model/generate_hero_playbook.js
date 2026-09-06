@@ -74,6 +74,124 @@ function main() {
         sources: [officialPatch, cenariusGuide],
     });
 
+    // ===== 英雄专属玩法节奏 (round67, 数据: 用户真实对局 powerAction 技能回合 + 机制冷却) =====
+    // 原则: phases 全生命周期覆盖(1..99), 用 priority 表达"用/少用/不用"节奏;
+    // 落空窗口(未匹配 phase) = ShouldUse=false, 用于表达"此阶段不该用"。
+    // 每英雄注: 机制(费用/解锁/冷却) + 用户真实使用回合。
+
+    // 蛇眼·好运当投(1费掷骰得币, 掷出N则N回合冷却): T1 必用(正EV), 冷却结束即用。
+    // 用户实测: T1 100%, 后冷却回合 T4/7/8 再用。
+    heroes.push({
+        heroCardId: "BG28_HERO_400",
+        heroPowerCardIds: ["BG28_HERO_400p"],
+        usePurpose: "Economy",
+        specialRule: "SNAKE_EYES",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 1, priority: "Critical", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "snake-t1-open" },
+            { minTurn: 2, maxTurn: 99, priority: "High", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "snake-reuse-after-cooldown" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 尤朵拉·挖宝(1费挖金, 挖4次出金随从): 前期连挖出金, 中期挖金循环。
+    // 用户实测: T1-6 67-100%(每局), 挖到金后 T7-8 续挖。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_64",
+        heroPowerCardIds: ["TB_BaconShop_HP_074"],
+        usePurpose: "Resource",
+        specialRule: "DIG_GOLDEN",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 6, priority: "Critical", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "eudora-dig-early" },
+            { minTurn: 7, maxTurn: 99, priority: "High", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "eudora-dig-cycle" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 巴罗夫·猜胜者(1费, 猜对得3币): 前期低费猜(期望正), 中后期金币富余时继续。
+    // 用户实测: T2-4 80% 高, T5-6 60%, T8/10 80%(后期币多再猜)。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_72",
+        heroPowerCardIds: ["TB_BaconShop_HP_081"],
+        usePurpose: "Economy",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 6, priority: "High", goldAtLeast: 1, healthAtLeast: 0, targetRequired: false, reason: "barov-early-bet" },
+            { minTurn: 7, maxTurn: 99, priority: "Normal", goldAtLeast: 2, healthAtLeast: 0, targetRequired: false, reason: "barov-late-bet" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 牛头人酋长·发现伙伴(3费, T2解锁): 解锁后尽早发现伙伴(强场面), 持续补伙伴。
+    // 用户实测: T4 起 100% 连用至 T9+。
+    heroes.push({
+        heroCardId: "BG25_HERO_105",
+        heroPowerCardIds: ["BG25_HERO_105p"],
+        usePurpose: "Resource",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 2, maxTurn: 5, priority: "Critical", goldAtLeast: 3, healthAtLeast: 0, targetRequired: false, reason: "trh-early-buddy" },
+            { minTurn: 6, maxTurn: 99, priority: "High", goldAtLeast: 3, healthAtLeast: 0, targetRequired: false, reason: "trh-buddy-cycle" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 雷诺·点金(每局1次, 0费操作, 需友方随从): 前期不用(浪费), 板面成型后点核心。
+    // 用户实测: T6-11 区间, 集中 T9-11(板面≥5)。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_41",
+        heroPowerCardIds: ["TB_BaconShop_HP_046"],
+        usePurpose: "Buff",
+        specialRule: "RENO",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 7, maxTurn: 99, priority: "High", goldAtLeast: 0, healthAtLeast: 0, targetRequired: true, reason: "reno-goldenize" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 克罗米·刷新成法术(0费): 法术流核心, 几乎每回合刷(法术经济/发现)。
+    // 用户实测: T1-10 80-100% 每回合用。
+    heroes.push({
+        heroCardId: "BG34_HERO_001",
+        heroPowerCardIds: ["BG34_HERO_001p"],
+        usePurpose: "Resource",
+        specialRule: "CHROMIE",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 99, priority: "High", goldAtLeast: 0, healthAtLeast: 0, targetRequired: false, reason: "chromie-spell-refresh" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 曲奇·投锅(0费, 集3同族发现): 每回合投(低成本), 集齐即发现。
+    // 用户实测: T1-9 100% 每回合用。
+    heroes.push({
+        heroCardId: "BG21_HERO_020",
+        heroPowerCardIds: ["BG21_HERO_020p"],
+        usePurpose: "Resource",
+        specialRule: "COOKIE",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 99, priority: "High", goldAtLeast: 0, healthAtLeast: 0, targetRequired: true, reason: "cookie-pot" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
+    // 玛维·锁牌(1费, 2回合后入手): 商店有好牌即锁(预购), 前期(店牌便宜时)价值高。
+    // 用户实测: T1-8 100%(样本少但连续)。
+    heroes.push({
+        heroCardId: "TB_BaconShop_HERO_62",
+        heroPowerCardIds: ["TB_BaconShop_HP_068"],
+        usePurpose: "Resource",
+        strategyCoverage: "curated",
+        phases: [
+            { minTurn: 1, maxTurn: 99, priority: "High", goldAtLeast: 1, healthAtLeast: 0, targetRequired: true, reason: "maiev-lock" },
+        ],
+        sources: [officialPatch, "user-replay-20260905"],
+    });
+
     const output = {
         _meta: {
             schemaVersion: 1,

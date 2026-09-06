@@ -18,6 +18,9 @@ internal static class HeroPlaybookDecisionServiceBehavior
             DecreasingCostPowerStillBlockedWhenGoldBelowRuntimeCost();
             CostDecayBiasIncreasesWhenCheaper();
             TargetedPowerWithoutTargetIsBlocked();
+            RhythmRenoLateGoldenizeOnly();
+            RhythmSnakeT1OpenAndReuse();
+            RhythmTrhUnlockThenBuddy();
             Console.WriteLine("PASS hero playbook decision service assertions=" + _assertions);
             return 0;
         }
@@ -227,6 +230,84 @@ internal static class HeroPlaybookDecisionServiceBehavior
         AssertTrue(expensive.ShouldUse && cheap.ShouldUse, "both affordable");
         AssertTrue(cheap.ActionValueBias > expensive.ActionValueBias,
             "cheaper cost-decay power gets higher bias");
+    }
+
+    // ===== 英雄专属玩法节奏 (round67) =====
+    // 雷诺·点金: 每局限1次, 板面成型前(≤T6)即使可负担也不该用。
+    private static void RhythmRenoLateGoldenizeOnly()
+    {
+        var profile = new HeroPlaybookProfile
+        {
+            HeroCardId = "TB_BaconShop_HERO_41",
+            HeroPowerCardIds = new List<string> { "TB_BaconShop_HP_046" },
+            PowerType = "Active",
+            PowerCost = 0,
+            UsePurpose = "Buff",
+            SpecialRule = "RENO",
+            RequiresTarget = true,
+            StrategyCoverage = "curated",
+            Phases =
+            {
+                new HeroPlaybookPhase { MinTurn = 7, MaxTurn = 99, Priority = "High", GoldAtLeast = 0, TargetRequired = true },
+            },
+        };
+        // T5 板面成型前: 即使有目标也不该点金
+        var early = HeroPlaybookDecisionService.Decide(
+            profile, "Active", 0, 6, 5, 2, 30, 5, 3, false, true);
+        AssertFalse(early.ShouldUse, "Reno must not goldenize before turn 7");
+        // T9 板面成型: 应使用
+        var late = HeroPlaybookDecisionService.Decide(
+            profile, "Active", 0, 6, 9, 4, 30, 5, 3, false, true);
+        AssertTrue(late.ShouldUse, "Reno goldenizes once board matures (T9)");
+    }
+
+    // 蛇眼·好运当投: T1 开局必掷(正EV), 冷却后(>T1)金币够仍用。
+    private static void RhythmSnakeT1OpenAndReuse()
+    {
+        var profile = new HeroPlaybookProfile
+        {
+            HeroCardId = "BG28_HERO_400",
+            HeroPowerCardIds = new List<string> { "BG28_HERO_400p" },
+            PowerType = "Active",
+            PowerCost = 1,
+            UsePurpose = "Economy",
+            SpecialRule = "SNAKE_EYES",
+            StrategyCoverage = "curated",
+            Phases =
+            {
+                new HeroPlaybookPhase { MinTurn = 1, MaxTurn = 1, Priority = "Critical", GoldAtLeast = 1 },
+                new HeroPlaybookPhase { MinTurn = 2, MaxTurn = 99, Priority = "High", GoldAtLeast = 1 },
+            },
+        };
+        var t1 = HeroPlaybookDecisionService.Decide(
+            profile, "Active", 1, 3, 1, 1, 30, 0, 4, false, false);
+        AssertTrue(t1.ShouldUse, "snake eyes rolls on turn 1 (positive EV)");
+        AssertTrue(t1.ActionValueBias >= 1.2, "snake T1 open is Critical");
+        var t4 = HeroPlaybookDecisionService.Decide(
+            profile, "Active", 1, 4, 4, 2, 30, 2, 4, false, false);
+        AssertTrue(t4.ShouldUse, "snake eyes rerolls after cooldown when affordable");
+    }
+
+    // 牛头人酋长: T2 解锁后尽早发现伙伴, 持续补伙伴。
+    private static void RhythmTrhUnlockThenBuddy()
+    {
+        var profile = new HeroPlaybookProfile
+        {
+            HeroCardId = "BG25_HERO_105",
+            HeroPowerCardIds = new List<string> { "BG25_HERO_105p" },
+            PowerType = "Active",
+            PowerCost = 3,
+            UsePurpose = "Resource",
+            StrategyCoverage = "curated",
+            Phases =
+            {
+                new HeroPlaybookPhase { MinTurn = 2, MaxTurn = 5, Priority = "Critical", GoldAtLeast = 3 },
+                new HeroPlaybookPhase { MinTurn = 6, MaxTurn = 99, Priority = "High", GoldAtLeast = 3 },
+            },
+        };
+        var t3 = HeroPlaybookDecisionService.Decide(
+            profile, "Active", 3, 3, 3, 2, 30, 1, 4, false, false);
+        AssertTrue(t3.ShouldUse, "tribe-leader discovers buddy as soon as affordable after unlock");
     }
 
     private static HeroPlaybookProfile CenariusProfile()
