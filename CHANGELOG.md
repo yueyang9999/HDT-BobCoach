@@ -2,7 +2,13 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
-## 1.2.15 - 2026-09-06
+## 1.2.16 - 2026-09-06
+
+- fix(发现面板跨回合卡死, 钩牙实测): PanelStateMachine Active 相位加跨回合(turn>CreatedTurn)强制 Expired 时控门——招募超时系统自动选后无 CHOSEN 事件时面板不再卡死(fail-close, 不依赖 Power.log 事件); JS 镜像同步 + 2 回归, 14 单测全绿
+- fix(被动技能误提示, 曲奇实测): heroHint + heroShouldUse 双通道以 extractor 实测 HeroPowerType=Passive 为权威短路——技能被替换为被动(如曲奇后期换战刃飞旋)后不再提示使用
+- feat(分歧分析候选, 默认零行为影响): O1 5本成型升6抑制 A/B 钩子 BOBCOACH_O1_SUPPRESS(默认 0=现行为零影响)——回放分歧分析发现引擎 R4/R3/R-triple/R8 在 5本成型质量流语境过度推升6; harness 机制核验 + 真实帧验证; 转正待 200 局 CI
+
+## 1.2.16 - 2026-09-06
 
 - fix(铸币虚高误导, 阿凯实测): GoldTracker 回合基准不再把 HDT<满金 一律抬回满金——回合初已消费(HDT=真实剩余)时误抬导致整回合引擎金币虚高、收尾误导"卖随从买海盗"; 仅当 HDT=上回合满金(滞后)才抬; 含回归测试
 
