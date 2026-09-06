@@ -2,6 +2,12 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.12 - 2026-09-06
+
+- feat: 英雄专属玩法节奏(用户 09-06 反馈"几乎没有按我的玩法去调整节奏"): 14 位主动技能英雄按用户实玩数据建 phases(塞纳留斯/蛇眼/尤朵拉/巴罗夫/牛头人/雷诺/克罗米/曲奇/玛维 + 迦拉克隆/斯卡布斯/摩洛克/扎拉克/奥萨尔/米尔菲丝), 数据源=decision-data 97 局 per-turn 技能使用率 + hero_skill_registry 机制(费用/解锁回合/解锁酒馆等级)逐英雄核验; phases 全生命周期覆盖, 落空窗口表达"此阶段不该用"
+- feat: 节奏落到主推荐(与上条同批): playbook 命中 Critical/High 相位(或塞纳留斯/通用技能 ShouldUse)时置 heroSkillPriorityWindow → 编排 bestAction=UseHeroPower 优先于买/升本, 把"何时用技能"按英雄节奏落到可见主推荐; Normal 相位维持仅提示不抢占
+- feat: 运行时数据根守卫(test_season14_registries): 直接型注册表(activate/lockbox/fishbait/dark_gift/trinket)必须在 BOB_COACH_DATA_ROOT 就位, 防数据根迁移后发动机制静默失效
+
 ## 1.2.11 - 2026-09-05
 
 - fix: 战斗阶段出现发现UI(ISSUE I-20260905-11): 回合8/9 战斗结算画面出现麦迪文之书等"回合开始发现"提示 — CombatEnter 后 0.4s 批次到达(MAIN_START_TRIGGERS)而 HDT combat flag 未翻 → 走 authoritative-combat 渲染; 新增 Power.log 阶段守卫: 真战斗(MAIN_COMBAT)不渲染发现 UI(批次保留, 招募路径渲染, 与时空扭曲 C1 同理念), 招募/lagging(非 MAIN_COMBAT)保留渲染(08-07 lagging-flag 保护不破坏)
