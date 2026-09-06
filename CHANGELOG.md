@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.15 - 2026-09-06
+
+- fix(铸币虚高误导, 阿凯实测): GoldTracker 回合基准不再把 HDT<满金 一律抬回满金——回合初已消费(HDT=真实剩余)时误抬导致整回合引擎金币虚高、收尾误导"卖随从买海盗"; 仅当 HDT=上回合满金(滞后)才抬; 含回归测试
+
 ## 1.2.14 - 2026-09-06
 
 - feat(实验通道, 默认零行为影响): 升级曲线平移 env 钩子 BOBCOACH_UPGRADE_LV_SHIFT(默认 0) + 卖牌基础系数 env 钩子 BOBCOACH_SELL_MULT(默认 0.7) — 供模拟器同 seed A/B 校准引擎节奏; 生产不设 env = 行为不变, 版本与 1.2.13 明确区分便于回滚
