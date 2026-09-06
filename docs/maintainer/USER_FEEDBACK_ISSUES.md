@@ -208,15 +208,24 @@ Status: Active
   - `E:\HDT-BobCoach-evidence\dll-archive\20260812T142533642Z-e8ea5fa4`
   - `E:\HDT-BobCoach-evidence\dll-archive\20260812T142600000Z-generic-evidence-fix-pre-tuannzi-2C45`
 
-## 部署前检查表
+## 问题处理闭环与部署前检查表
+
+> 全局流程(2026-09-06 补充, 与 KB ISSUE_TRACKER.md 顶部规则 + AGENTS.md Release SOP 第 0 节一致):
+> 登记 → 定位 → 修复 → **修复后代码审查** → 单测 → **记录更新** → 部署 → 实机复验 → 回填状态。
 
 每次部署新 DLL 前必须执行：
 
-1. 检查本清单中 `Open`/`Partial` 项是否与本次改动相关。
+0. **修复后代码审查(2026-09-06 固化, 未审查不得部署)**: 对照改动目标逐条核对
+   ①启发式/门控类修复双向误判验证(留回放帧证据, 阿凯 GoldTracker 教训: 只跑测试不算审查)
+   ②C# 与 JS/测试镜像同步一致性 ③回归防线(单测/行为测试) ④部署完整性(SHA/5 目录/sidecar)。
+   审查证据+判定写入本条状态栏或正文。
+1. 检查本清单中 Open/Partial 项是否与本次改动相关。
 2. 记录本次 Release 构建的 bytes + SHA256，并归档旧 DLL。
-3. 运行 `npm run test:behavior`，确认 UI/算法/回放相关测试全绿。
+3. 运行 npm run test:behavior，确认 UI/算法/回放相关测试全绿。
 4. 若改动涉及 UI、动态铸币、出售、刷新、升本、发现、黑暗之赐、英雄技能，必须打 1 到 3 局真实对局复验。
-5. 复验后更新问题状态，并附回放文件、HDT 日志或触发版本 SHA256 证据。
+5. **记录更新(部署后必做)**: 本清单回填状态+修复版本+SHA+归档路径; 同步 ITERATION_LEARNINGS.md /
+   HANDOVER / 知识库(适用时) / CHANGELOG(用户可见行为); 禁止部署完就结束、不回填。
+6. 复验后更新问题状态，并附回放文件、HDT 日志或触发版本 SHA256 证据。
 
 ## 2026-08-13 三局实战复盘
 

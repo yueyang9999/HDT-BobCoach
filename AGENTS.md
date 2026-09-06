@@ -175,8 +175,14 @@ For release candidates, additionally verify offline install, upgrade, rollback, 
 ## Release Deployment SOP（2026-09-03 固化, 用户要求: 部署流程固定成规则文档, 每次自动执行不需要提醒; 重点固化 SHA 文件对应关系）
 
 ### 0. 前置: 用户实测反馈闭环
-- 用户实测 → 给具体反馈(回合/卡牌/UI现象) → 证据定位根因(回放+Power.log) → 修复 → 单测 → 才部署。
+- 用户实测 → 给具体反馈(回合/卡牌/UI现象) → 证据定位根因(回放+Power.log) → 修复 → **修复后代码审查** → 单测 → **记录更新** → 才部署。
 - 没有反馈, 禁止盲目调权重/重构; 所有行为改动必须有回放/Power.log 证据支撑。
+- **修复后代码审查为硬环节(2026-09-06 固化, 用户要求; 全局通用)**: 每项修复部署前必须做代码级 review——
+  ①启发式/门控类修复须双向验证误判(真滞后 vs 真实消费等, 留回放帧证据, 阿凯 GoldTracker 教训)
+  ②C# 与 JS/测试镜像同步一致性 ③回归防线(单测/行为测试) ④部署完整性(SHA/5 目录/sidecar)。
+  只跑测试跑绿 ≠ 审查; 审查证据与结论留痕到问题清单条目(ISSUE_TRACKER/USER_FEEDBACK_ISSUES)。
+- **记录更新为硬环节**: 部署后同步问题清单(状态/版本/SHA/归档) + ITERATION_LEARNINGS.md + HANDOVER +
+  知识库(适用时) + CHANGELOG(用户可见行为); 禁止部署完就结束、不回填。
 
 ### 1. HDT 进程纪律（不可违反）
 - HDT 运行时严禁自动杀进程/自动重启; 部署前 Get-Process HearthstoneDeckTracker 必须为空。
