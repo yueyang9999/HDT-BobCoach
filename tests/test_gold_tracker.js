@@ -32,6 +32,7 @@ function newTracker() {
         freeCardsUsedThisTurn: 0, freeRefreshUsed: false, firstBuyUsed: false,
         bonusGoldApplied: false, trackedLastUpgradeTurn: 1,
         pendingStaleBuyCharges: 0,
+        prevTurnMaxGold: -1,
     };
 }
 
@@ -78,7 +79,13 @@ function advance(g, p) {
         g.prevShopEntityIds = [];
         g.pendingStaleBuyCharges = 0;
         let hdtBase = (p.hdtTag == null || p.hdtTag < 0 || p.hdtTag > 20) ? maxGold : p.hdtTag;
-        if (hdtBase < maxGold) hdtBase = maxGold;
+        // Bug1 同步(2026-09-06): hdt<maxGold 不一律抬满金; 仅当 hdt==上回合满金(滞后)才抬
+        const hdtLooksStale = p.hdtTag != null && p.hdtTag >= 0 && p.hdtTag <= 20
+            && g.prevTurnMaxGold != null && g.prevTurnMaxGold >= 0
+            && p.hdtTag === g.prevTurnMaxGold && p.hdtTag < maxGold;
+        if (hdtBase < maxGold && !hdtLooksStale) hdtBase = Math.max(0, Math.min(maxGoldWithBonus, p.hdtTag));
+        else if (hdtBase < maxGold) hdtBase = maxGold;
+        g.prevTurnMaxGold = maxGold;
         g.selfTrackedGold = Math.max(0, Math.min(maxGoldWithBonus, hdtBase + effBonus));
         if (effBonus > 0) g.bonusGoldApplied = true;
         g.freeCardsUsedThisTurn = 0;
@@ -443,6 +450,26 @@ test("[GT-T32] 新回合先处于非招募期，之后恢复招募必须重算�
         normalRecruitAvailable: true,
     }));
     if (availableTurn2 !== 4) return "恢复招募后T2应为4，实际 " + availableTurn2;
+});
+
+// ============================================================================
+// Bug1 回归(2026-09-06 阿凯): 回合首帧 HDT 已消费(0)不得抬回满金; 仅滞后旧回合满金才抬
+// ============================================================================
+test("[Bug1] T3 首帧 HDT=0(玩家已花完): self=0 不虚高抬满金5", () => {
+    const g = newTracker();
+    advance(g, frame(1, 4, [1, 2, 3, 4], 0, 0, { hdtTag: 3 })); // T1 基准 3
+    advance(g, frame(2, 4, [1, 2, 3, 4], 0, 0, { hdtTag: 4 })); // T2 基准 4 (满)
+    // T3 首帧: HDT=0 玩家已买2张花完 → 必须 self=0, 不能抬到 5
+    const t3 = advance(g, frame(3, 3, [1, 2, 3, 4], 2, 0, { hdtTag: 0 }));
+    if (t3 !== 0) return "Bug1: T3 首帧 HDT=0 应 self=0, 实际 " + t3;
+});
+
+test("[Bug1] T3 首帧 HDT=旧回合满金(4, 滞后): 抬到本回合满金5", () => {
+    const g = newTracker();
+    advance(g, frame(1, 4, [1, 2, 3, 4], 0, 0, { hdtTag: 3 }));
+    advance(g, frame(2, 4, [1, 2, 3, 4], 0, 0, { hdtTag: 4 })); // T2 maxGold=4
+    const t3 = advance(g, frame(3, 3, [1, 2, 3, 4], 0, 0, { hdtTag: 4 })); // hdt=4==上回合满金 → 滞后 → 抬 5
+    if (t3 !== 5) return "Bug1: T3 hdt=上回合满金应抬到 5, 实际 " + t3;
 });
 
 // ============================================================================

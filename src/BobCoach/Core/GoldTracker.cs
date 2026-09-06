@@ -22,6 +22,7 @@ namespace BobCoach.Engine
     {
         private int _selfTrackedGold = -1;
         private int _selfTrackedTurn = -1;
+        private int _prevTurnMaxGold = -1;   // 上回合满金(识别 HDT RESOURCES 滞后旧回合值)
         private int _prevShopCount = -1;
         private int _prevBoardCount = -1;
         private int _prevHandCount = -1;
@@ -125,8 +126,16 @@ namespace BobCoach.Engine
                 _prevShopEntityIds.Clear();
                 _pendingStaleBuyCharges = 0;
                 int hdtBase = (hdtResourceTag < 0 || hdtResourceTag > 20) ? maxGold : hdtResourceTag;
-                // 回合切换时若HDT标签未更新(仍为旧回合值), 则用回合最大值为基准
-                if (hdtBase < maxGold) hdtBase = maxGold;
+                // Bug1(2026-09-06 阿凯实测): 不能把 hdt<maxGold 一律抬回满金 —
+                // 玩家回合初已消费(买牌/升本)时 HDT RESOURCES 是真实剩余(如 0), 误抬导致整回合 self 虚高 → 收尾误导购买。
+                // 仅当 hdt 恰等于"上回合满金"(RESOURCES 滞后未刷新)时才视为旧值抬到本回合满金;
+                // 其余 0<=hdt<maxGold 均为真实已消费(消费步长 1/2/3, 与上回合满金碰撞需同时满足多条件, 概率极低且仅差1金)。
+                bool hdtLooksStale = hdtResourceTag >= 0 && hdtResourceTag <= 20
+                    && _prevTurnMaxGold >= 0 && hdtResourceTag == _prevTurnMaxGold
+                    && hdtResourceTag < maxGold;
+                if (hdtBase < maxGold && !hdtLooksStale) hdtBase = Math.Max(0, Math.Min(maxGoldWithBonus, hdtResourceTag));
+                else if (hdtBase < maxGold) hdtBase = maxGold;
+                _prevTurnMaxGold = maxGold;
                 // 开局一次性加金: 仅首个有效回合加一次
                 _selfTrackedGold = Math.Max(0, Math.Min(maxGoldWithBonus, hdtBase + effBonus));
                 if (effBonus > 0) _bonusGoldApplied = true;
