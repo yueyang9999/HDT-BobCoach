@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.13 - 2026-09-06
+
+- fix(记录层, 数据飞轮地基): 决策快照补 LiveGold(schema v3)——引擎候选生成用 LiveGold 而快照只记 Gold(回合初/上限), 导致离线 affordability 判定失真(203/737 例"引擎推荐买不起"实为伪差)
+- fix(记录层): PlayMinion(手牌随从放场面)采纳可观测化——此前推断器无该分支, 引擎相关推荐永远无法验证采纳与否
+
 ## 1.2.12 - 2026-09-06
 
 - feat: 英雄专属玩法节奏(用户 09-06 反馈"几乎没有按我的玩法去调整节奏"): 14 位主动技能英雄按用户实玩数据建 phases(塞纳留斯/蛇眼/尤朵拉/巴罗夫/牛头人/雷诺/克罗米/曲奇/玛维 + 迦拉克隆/斯卡布斯/摩洛克/扎拉克/奥萨尔/米尔菲丝), 数据源=decision-data 97 局 per-turn 技能使用率 + hero_skill_registry 机制(费用/解锁回合/解锁酒馆等级)逐英雄核验; phases 全生命周期覆盖, 落空窗口表达"此阶段不该用"
