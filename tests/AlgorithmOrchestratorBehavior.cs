@@ -43,6 +43,7 @@ namespace BobCoach.Engine
         public string HeroCardId = "";
         public string AnomalyId = "";
         public int Gold;
+        public int LiveGold = -1;
         public int MaxGold;
         public int TavernTier;
         public int TavernUpgradeCost;
