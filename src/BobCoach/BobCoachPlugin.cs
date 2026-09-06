@@ -1940,7 +1940,12 @@ namespace BobCoach
             bool heroPowerLockedByTier = heroStrategy.PowerType != HeroPowerType.Passive
                 && (state.TavernTier < heroStrategy.UnlockTier
                     || (heroStrategy.UnlockTurn > 1 && state.Turn < heroStrategy.UnlockTurn));
-            string heroHint = heroStrategy.PowerType == HeroPowerType.Passive
+            // Bug3(2026-09-06): 被动硬守卫 — 技能被替换为被动(如曲奇后期换战刃飞旋)后
+            // catalog 查 HeroCardId 的旧技能可能误判 Active。以 extractor 实测 state.HeroPowerType
+            // 为权威: Passive → 无提示文字(heroHint 空), 防"仍提示使用被动"。
+            bool heroIsActuallyPassive = string.Equals(state.HeroPowerType, "Passive", System.StringComparison.OrdinalIgnoreCase)
+                || heroStrategy.PowerType == HeroPowerType.Passive;
+            string heroHint = heroIsActuallyPassive
                 ? "" : HeroPowerDisplayTextResolver.Resolve(state.HeroPowerCardId);
             if (heroPowerLockedByTier && !string.IsNullOrEmpty(heroHint))
                 heroHint = heroHint + " (酒馆等级" + heroStrategy.UnlockTier + "解锁)";
@@ -1971,6 +1976,16 @@ namespace BobCoach
                         IsActive = fallbackStrategy.PowerType == HeroPowerType.Active
                             || fallbackStrategy.PowerType == HeroPowerType.Conditional,
                     };
+                }
+            }
+            if (heroSkill != null)
+            {
+                // Bug3(2026-09-06): 被动硬守卫 - 技能替换为被动后(任何途径)不得产生使用建议。
+                // extractor 实测 state.HeroPowerType 为权威(比 catalog 查 HeroCardId 可靠,
+                // 后者在"换到他人被动技能"时会因 catalog 无记录而 fallback 误判 Active)。
+                if (heroIsActuallyPassive)
+                {
+                    heroSkill = null;  // 被动不产生 heroShouldUse 链
                 }
             }
             if (heroSkill != null)
