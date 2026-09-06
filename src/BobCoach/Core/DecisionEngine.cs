@@ -103,6 +103,22 @@ namespace BobCoach.Engine
         // S3(2026-09-06): R0 期望升本曲线平移(回合数)。默认 0=现行为零影响;
         // 模拟器 A/B 用 env BOBCOACH_UPGRADE_LV_SHIFT(如 1=整体晚 1 回合升) 验证 H2(升级过速)。
         private static readonly int UPGRADE_LV_SHIFT = ReadUpgradeLvShift();
+        // H1(2026-09-06): 卖牌基础惩罚系数 env 钩子(默认 0.7=现行为零影响; BOBCOACH_SELL_MULT 可调, A/B 验证周转假设)
+        private static readonly double SELL_MULT_BASE = ReadSellMult();
+
+        private static double ReadSellMult()
+        {
+            try
+            {
+                var s = Environment.GetEnvironmentVariable("BOBCOACH_SELL_MULT");
+                double v;
+                if (!string.IsNullOrWhiteSpace(s) && double.TryParse(s.Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out v) && v >= 0.3 && v <= 1.5)
+                    return v;
+            }
+            catch { }
+            return 0.7;
+        }
 
         private static int ReadUpgradeLvShift()
         {
@@ -1139,8 +1155,8 @@ namespace BobCoach.Engine
                 // ── 出售惩罚 (22局实测: Top4卖26.2%Bot4卖10.3%, 换血是优势策略) ──
                 if (action.Type == ActionType.SellMinion && action.CardId != null)
                 {
-                    // 基础惩罚: 0.7(原0.5) — 提升卖牌意愿, 配合shouldSell质量门控
-                    double sellMultiplier = 0.7;
+                    // 基础惩罚: 0.7(原0.5) — 提升卖牌意愿, 配合shouldSell质量门控; H1: env BOBCOACH_SELL_MULT 可调
+                    double sellMultiplier = SELL_MULT_BASE;
 
                     if (!boardFull)
                         sellMultiplier *= 0.5;  // 板面未满: 卖弱买强是合理策略
