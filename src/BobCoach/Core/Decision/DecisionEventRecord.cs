@@ -12,7 +12,7 @@ namespace BobCoach.Engine.Decision
 {
     public sealed class DecisionEventRecord
     {
-        public const int SchemaVersion = 2;
+        public const int SchemaVersion = 3;
 
         public string DecisionId { get; private set; }
         public string GameId { get; private set; }
@@ -69,6 +69,7 @@ namespace BobCoach.Engine.Decision
         public string HeroCardId { get; private set; }
         public string AnomalyId { get; private set; }
         public int Gold { get; private set; }
+        public int LiveGold { get; private set; }
         public int MaxGold { get; private set; }
         public int TavernTier { get; private set; }
         public int TavernUpgradeCost { get; private set; }
@@ -103,6 +104,7 @@ namespace BobCoach.Engine.Decision
                 HeroCardId = state.HeroCardId ?? "",
                 AnomalyId = state.AnomalyId ?? "",
                 Gold = state.Gold,
+                LiveGold = state.LiveGold,
                 MaxGold = state.MaxGold,
                 TavernTier = state.TavernTier,
                 TavernUpgradeCost = state.TavernUpgradeCost,
@@ -254,6 +256,7 @@ namespace BobCoach.Engine.Decision
             WriteProperty(builder, "heroCardId", state.HeroCardId);
             WriteProperty(builder, "anomalyId", state.AnomalyId);
             WriteProperty(builder, "gold", state.Gold);
+            WriteProperty(builder, "liveGold", state.LiveGold);
             WriteProperty(builder, "maxGold", state.MaxGold);
             WriteProperty(builder, "tavernTier", state.TavernTier);
             WriteProperty(builder, "tavernUpgradeCost", state.TavernUpgradeCost);

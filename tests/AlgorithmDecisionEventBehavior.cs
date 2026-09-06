@@ -20,6 +20,7 @@ namespace BobCoach.Engine
         public string HeroCardId = "";
         public string AnomalyId = "";
         public int Gold;
+        public int LiveGold = -1;
         public int MaxGold;
         public int TavernTier;
         public int TavernUpgradeCost;
@@ -215,6 +216,7 @@ internal static class AlgorithmDecisionEventBehavior
     private static void PreservesDetachedPreActionStateAndFingerprints()
     {
         var before = State(5, 4);
+        before.LiveGold = 4;
         before.BoardMinions.Add(new MinionData { CardId = "BOARD_A", Attack = 3, Health = 4 });
         before.AvailableTribes.Add("Beast");
         var candidates = Candidates();
@@ -223,12 +225,16 @@ internal static class AlgorithmDecisionEventBehavior
         var stateFingerprint = record.StateFingerprint;
         var candidateFingerprint = record.CandidateFingerprint;
         before.Gold = 2;
+        before.LiveGold = 1;
         before.BoardMinions[0].Attack = 99;
         before.BoardMinions.Add(new MinionData { CardId = "BOARD_B" });
         before.AvailableTribes.Add("Dragon");
         candidates[0].ActionKey = "Mutated|0||";
 
         AssertEqual(5, record.State.Gold, "snapshot must detach scalar state");
+        AssertEqual(4, record.State.LiveGold, "snapshot captures live gold");
+        AssertEqual(1, record.State.LiveGold == 4 ? 1 : 0,
+            "live gold snapshot detaches from later state mutation");
         AssertEqual(3, record.State.BoardMinions[0].Attack, "snapshot must detach minions");
         AssertEqual(1, record.State.BoardMinions.Count, "snapshot must detach lists");
         AssertEqual(1, record.State.AvailableTribes.Count, "snapshot must detach sets");
@@ -352,7 +358,7 @@ internal static class AlgorithmDecisionEventBehavior
         });
 
         var record = DecisionEventRecord.Create("season-mechanic", "game-1", state, Candidates());
-        AssertEqual(2, DecisionEventRecord.SchemaVersion,
+        AssertEqual(3, DecisionEventRecord.SchemaVersion,
             "decision snapshot schema version must advance with season mechanics");
         AssertEqual("T1", record.State.CurrentCompGuideTier,
             "snapshot captures current comp guide tier");
