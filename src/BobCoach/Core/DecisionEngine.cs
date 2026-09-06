@@ -105,6 +105,9 @@ namespace BobCoach.Engine
         private static readonly int UPGRADE_LV_SHIFT = ReadUpgradeLvShift();
         // H1(2026-09-06): 卖牌基础惩罚系数 env 钩子(默认 0.7=现行为零影响; BOBCOACH_SELL_MULT 可调, A/B 验证周转假设)
         private static readonly double SELL_MULT_BASE = ReadSellMult();
+        // O1(2026-09-06 分歧分析): R3 满场升"成型质量流"抑制开关(默认 1=启用修复;
+        // 模拟器 A/B 可设 BOBCOACH_O1_SUPPRESS=0 对照旧行为=引擎满场即推升6)
+        private static readonly bool O1_SUPPRESS = ReadO1Suppress();
 
         private static double ReadSellMult()
         {
@@ -132,6 +135,21 @@ namespace BobCoach.Engine
             }
             catch { }
             return 0;
+        }
+
+        private static bool ReadO1Suppress()
+        {
+            // O1 分歧候选(2026-09-06): 默认关闭=现行为零影响(A/B 用 env BOBCOACH_O1_SUPPRESS=1 启用)。
+            // 回放分歧是玩家偏好观测非正确性证明(执行升6 avg2.80 < 跳过3.11, 引擎推升未证错);
+            // 转正需模拟器 A/B 裁决: 5本成型质量流抑制 vs 现状 200 局对比。
+            try
+            {
+                var s = Environment.GetEnvironmentVariable("BOBCOACH_O1_SUPPRESS");
+                if (string.IsNullOrWhiteSpace(s)) return false; // 默认关闭(零影响)
+                return s.Trim() == "1";
+            }
+            catch { }
+            return false;
         }
 
         private static double ReadEffectLambda()
@@ -503,6 +521,21 @@ namespace BobCoach.Engine
             int maxTavernTier = state.EffectiveRules != null
                 ? state.EffectiveRules.MaxTavernTier : 6;
             float boardPwr = _fe.ComputeBoardPower(state.BoardMinions);
+            // O1(2026-09-06 分歧分析): 刚升本冷却 — 真实玩家 166 次跳过升6观测
+            // (巴罗夫rank1局 T7升5本后 T8-T10 引擎仍推升6, 玩家做三连/buff/换牌)。
+            // 机制: R3(满场+店无高星)不看 LastUpgradeTurn, 刚升过本(<2回合)就推下一级
+            // 大升本(9-10金连花两回合=经济断裂, D12教训)。冷却=刚升本+5本+Mid/Late 时
+            // 移除升本候选给补强窗口。战力不限(刚升完补强是普适节奏)。env BOBCOACH_O1_SUPPRESS=0 可关。
+            bool o1ShapedFlow = O1_SUPPRESS
+                && (state.Turn - state.LastUpgradeTurn) < 2
+                && state.TavernTier >= 5
+                && mainlinePlan != null && mainlinePlan.Stage != "Early";
+            // O1: 成型质量流激活时从候选移除升本(规则层+评分层一致抑制);
+            // 仅抑制 5本→6本质量流场景; 落后追赶(desperate)分支仍保留(见 R0/R1)。
+            if (o1ShapedFlow && actions != null)
+            {
+                actions.RemoveAll(a => a.Type == ActionType.Upgrade);
+            }
             // R227 战力速率: 本回合相对上回合的板面战力增量(仅同一酒馆等级内有效,
             // 跨等级回合因牌池变化速率失真, 仅作方向参考: <0 = 战力在倒退)
             // R238 对抗性审查修复: 原实现无条件覆盖 _lastTurnBoardPower——实机一回合
@@ -849,9 +882,15 @@ namespace BobCoach.Engine
             }
 
             // R3: 满场+店无高本 → 升本
+            // O1(2026-09-06 分歧分析): 5本成型质量流被 R3 反复推升6 —
+            // 真实玩家在成型5本(满板+战力足+核心在场)用9-10金做三连/buff/换牌,
+            // 而非升6本找6星(166次跳升观测, 巴罗夫rank1局T7升5本后T8-T10 R3 仍推升6)。
+            // 守卫: 刚升过本(<2回合)+5本成型质量流 → 不推(给质量操作窗口);
+            // 其余情况维持原 R3(满场且店无更高星才升, 是必要通道, 勿误伤)。
             if (state.BoardMinions.Count >= state.MaxBoardSlots
                 && shopMax <= state.TavernTier
-                && !MainlineBlocksUpgrade())
+                && !MainlineBlocksUpgrade()
+                && !o1ShapedFlow)
             {
                 foreach (var a in actions)
                     if (canUpgrade && a.Type == ActionType.Upgrade) return a;
@@ -892,7 +931,8 @@ namespace BobCoach.Engine
                     ? FeatureExtractor.LevelUpSafeBoardSize[state.TavernTier + 1] : 3;
                 if (boardPwr >= r4Threshold && state.BoardMinions.Count >= r4BoardNeed
                     && shopMax <= state.TavernTier
-                    && !MainlineBlocksUpgrade())
+                    && !MainlineBlocksUpgrade()
+                    && !o1ShapedFlow)  // O1: 刚升过本+5本成型质量流不抢早升窗口
                 {
                     foreach (var a in actions)
                         if (canUpgrade && a.Type == ActionType.Upgrade) return a;
@@ -973,7 +1013,8 @@ namespace BobCoach.Engine
             // 主线思考覆盖: 如果三连是当前主线大节点且可凑钱拿牌, 不再强行“先升本再合金”
             int tripleIdx = FindTripleInShop(state);
             if (tripleIdx >= 0 && canUpgrade && state.TavernTier < maxTavernTier
-                && !MainlineBlocksUpgrade())
+                && !MainlineBlocksUpgrade()
+                && !o1ShapedFlow)  // O1: 成型质量流中三连是操作本身, 不应以升本为前提
             {
                 foreach (var a in actions)
                     if (a.Type == ActionType.Upgrade) return a;
@@ -1046,7 +1087,8 @@ namespace BobCoach.Engine
             // 板面不足时升本=速败(失败局高发模式), 升4本+需板面达标。
             if (shopMax > 0 && shopMax <= state.TavernTier
                 && state.Health > 15 && (state.Gold - upCost) >= 1 && !shopGood
-                && !MainlineBlocksUpgrade())
+                && !MainlineBlocksUpgrade()
+                && !o1ShapedFlow)  // O1: 刚升过本+5本成型质量流店差也不急着升
             {
                 bool r8Safe = true;
                 if (state.TavernTier + 1 >= 4
