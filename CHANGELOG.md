@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.14 - 2026-09-06
+
+- feat(实验通道, 默认零行为影响): 升级曲线平移 env 钩子 BOBCOACH_UPGRADE_LV_SHIFT(默认 0) + 卖牌基础系数 env 钩子 BOBCOACH_SELL_MULT(默认 0.7) — 供模拟器同 seed A/B 校准引擎节奏; 生产不设 env = 行为不变, 版本与 1.2.13 明确区分便于回滚
+
 ## 1.2.13 - 2026-09-06
 
 - fix(记录层, 数据飞轮地基): 决策快照补 LiveGold(schema v3)——引擎候选生成用 LiveGold 而快照只记 Gold(回合初/上限), 导致离线 affordability 判定失真(203/737 例"引擎推荐买不起"实为伪差)
