@@ -616,6 +616,14 @@ namespace BobCoach.Engine
                 };
             }
 
+            // I-20260907-23: Activate 目标在视觉构建时失效(引擎缓存帧 vs 当前板面竞态, 随从
+            // 死亡/售出/买入致 TargetIndex 越界) → ActivateHint 未建。此时不得保留
+            // RecommendedActionType=Activate: 否则 Validate 报 "activate action requires
+            // activate hint"(122 处/09-06 晚至今) 且状态条退化为无目标裸"发动"(A2 反馈同族)。
+            // 降级为空 → UI 不显示无意义的发动建议, 下一帧新评估会重建。
+            if (plan.RecommendedActionType == "Activate" && plan.ActivateHint == null)
+                plan.RecommendedActionType = "";
+
             // ── 手牌标记：流派匹配 + 打出售卖评估 ──
             EvaluateHandCards(state, bestAction, plan);
 
