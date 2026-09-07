@@ -248,3 +248,9 @@ Get-Content '<目录>\BobCoach.dll.sha256'   # 应输出: <同一SHA256>  BobCoa
    HDT 运行禁部署/杀进程; 禁读进行中文件; 引擎改动先走 ISSUE_TRACKER 闭环+代码审查+单测。
 5. **分析纪律补充(2026-09-07 方法教训)**: 全样本结局相关须警惕 截断混杂(存活偏置)与状态混杂 →
    优先 条件化(到某阶段才比该阶段指标) 与 逐状态反事实对照; 朴素帧级配对仅作筛选不作结论。
+6. **回放数据登记册纪律(2026-09-08 固化, 用户要求: 防"每次会话对回放数据失忆考古")**:
+   凡涉及回放/对局/账本数据, 第一步先读
+   `E:/HDT-BobCoach-evidence/knowledge-base/REPLAY_DATA_REGISTRY.md`(语料表: 路径/数量/build/日期窗/用途/边界),
+   禁止重新扫描目录考古、禁止凭记忆报语料数。要点: 14 赛季起点 2026-08-04(官方 36.2);
+   新环境 build=250339; 1888 XML 是 2025-08~2026-08 跨赛季历史导出非 S14 语料(S14 窗 ~317 局、新环境 57 局);
+   firestone-check/xml(1338) 与 replays/xml 重叠勿重复计数; 新环境主数据 = decision-data/replays/global_*.jsonl + firestone-games-*.jsonl。
