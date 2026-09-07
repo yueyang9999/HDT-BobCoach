@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.18 - 2026-09-07
+
+- fix(发动提示管控, 日志诊断+实机帧): 引擎推荐"发动"但目标随从在渲染构建时已离场(板面变化竞态: 死亡/售出/买入)时, 不再保留无目标的裸"发动"建议并消除一致性告警——推荐与实际可执行动作保持一致
+
 ## 1.2.17 - 2026-09-07
 
 - fix(战斗翻转滞后窗口, 塞纳留斯 090858 实机): 渲染/评估 gate 从单信 HDT combat flag 升级为双信号(CombatPhaseSignal: Power.log MAIN_COMBAT 权威阶段 ∥ HDT flag)并应用到 OnUpdate/combatWatchTimer/EvaluateAndRender/DispatchRender/Dispatcher 回调 5 处——招募→战斗翻转滞后(~1.4s)期间的招募尾声推荐(含技能/发现类)不再残留进战斗画面; 无 Power.log 环境退化为原行为(零回归)
