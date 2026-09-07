@@ -2683,6 +2683,31 @@ namespace BobCoach
                 string actionScoresJson = SerializeActionScores(state, bestAction, cardScores);
                 string shadowScoresJson = SerializeShadowActionScores(state);
                 string mainlinePlanJson = SerializeMainlinePlan(_engine.LastMainlinePlan);
+                // I-20260907-22 C1 Shadow would-be 探针(仅记录, 不改变可见推荐):
+                // 升级在案(引擎 best=Upgrade 或 UpgradeHint 存在)时标记 c1a先买/c1b后期冷却/c1c质量语境,
+                // 供 300 场景效果门禁的离线 would-be vs legacy 对比(C1 spec §7)。
+                string shadowC1Json = "";
+                {
+                    bool upgradeOnTable = (bestAction != null
+                            && bestAction.Type == Engine.ActionType.Upgrade)
+                        || (plan != null && plan.UpgradeHint != null);
+                    if (upgradeOnTable)
+                    {
+                        bool c1a = plan != null && plan.ShopMarkers != null
+                            && plan.ShopMarkers.Count > 0;
+                        bool c1b = state.Turn >= 8 && state.TavernTier >= 5
+                            && state.LastUpgradeTurn > 0
+                            && (state.Turn - state.LastUpgradeTurn) < 2;
+                        bool c1c = state.Turn >= 8 && state.TavernTier >= 5
+                            && state.BoardMinions != null && state.BoardMinions.Count >= 6
+                            && state.Gold >= 10;
+                        shadowC1Json = "{\"upgradeOnTable\":true"
+                            + ",\"c1aBuyFirst\":" + (c1a ? "true" : "false")
+                            + ",\"c1bCooldown\":" + (c1b ? "true" : "false")
+                            + ",\"c1cQuality\":" + (c1c ? "true" : "false")
+                            + ",\"lastUpgradeTurn\":" + state.LastUpgradeTurn + "}";
+                    }
+                }
                 var globalState = ToGlobalReplayState(state);
                 if (_globalReplayRecorder != null)
                 {
@@ -2690,7 +2715,7 @@ namespace BobCoach
                     _globalReplayRecorder.RecordState(globalState, "hdt");
                     _globalReplayRecorder.RecordRecommendation(
                         bestActionJson, actionScoresJson, shadowScoresJson, featureVector,
-                        mainlinePlanJson, state.Turn);
+                        mainlinePlanJson, state.Turn, shadowC1Json);
                 }
 
                 var snap = new TurnSnapshot

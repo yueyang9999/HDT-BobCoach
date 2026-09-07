@@ -294,7 +294,8 @@ namespace BobCoach.Engine
             string shadowScoresJson,
             string featureVector,
             string mainlinePlanJson,
-            int turn)
+            int turn,
+            string shadowC1Json = null)
         {
             if (!_started) return;
             string signature = (bestActionJson ?? "") + "|" + (actionScoresJson ?? "")
@@ -307,7 +308,8 @@ namespace BobCoach.Engine
                 + ",\"actionScores\":" + (string.IsNullOrEmpty(actionScoresJson) ? "[]" : actionScoresJson)
                 + ",\"shadowActionScores\":" + (string.IsNullOrEmpty(shadowScoresJson) ? "[]" : shadowScoresJson)
                 + ",\"featureVector\":\"" + Escape(featureVector ?? "") + "\""
-                + ",\"mainlinePlan\":" + (string.IsNullOrEmpty(mainlinePlanJson) ? "null" : mainlinePlanJson));
+                + ",\"mainlinePlan\":" + (string.IsNullOrEmpty(mainlinePlanJson) ? "null" : mainlinePlanJson)
+                + ",\"shadowC1\":" + (string.IsNullOrEmpty(shadowC1Json) ? "null" : shadowC1Json));
             FlushIfNeeded();
         }
 
