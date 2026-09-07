@@ -96,9 +96,9 @@ assert.ok(compileItems.includes("Core\\DarkGiftCandidateAdvisor.cs"),
         "hero playbook decision service must be compiled into BobCoach.dll");
     assert.ok(compileItems.includes("Core\\DeterministicRng.cs"),
         "deterministic rng for decision pipeline must be compiled into BobCoach.dll");
-    assert.strictEqual(compileItems.length, 246, "unexpected compile item count");
+    assert.strictEqual(compileItems.length, 248, "unexpected compile item count");
     assert.strictEqual(compileDigest,
-        "7f689ed5c5aed9f853bb55fbf5347f1e75fc4257dd84a7138ae27b6d9539346e",
+        "cc3bb959c5021ffcc18cb4379f8d5a5c62ecf030b79e0bb1f94e5f5a65559d3e",
         "compile set changed");
 
 for (const token of [

@@ -611,8 +611,7 @@ namespace BobCoach
                 // 注: 曾加 STEP>=10 启发式想"提前1帧清UI", 但 STEP 枚举 MAIN_ACTION=10 是招募主操作
                 // 阶段(非战斗), 导致招募全程误判为战斗、面板渲染后立即被清(0610 回归)。已移除。
                 // "防战斗残留"由 DispatchRender 内的 combat 检查 + capturedVersion 检查兜底。
-                bool inCombat = false;
-                try { inCombat = Core.Game.IsBattlegroundsCombatPhase; } catch { }
+                bool inCombat = IsInCombatNow();
                 if (inCombat || !_renderer.CanRender)
                 {
                     if (!_wasInCombat)
@@ -1441,6 +1440,33 @@ namespace BobCoach
 
         // ── Decision evaluation & render ──
 
+        /// <summary>
+        /// 战斗判定(1.2.16-fix I-20260907-18): Power.log 权威阶段(MAIN_COMBAT) 或 HDT combat
+        /// flag。HDT flag 在招募→战斗翻转滞后(~1.4s)期间为 false, 单信 flag 会把招募尾声推荐
+        /// 渲染进战斗画面; Power.log 阶段更早到达, OR 组合提前拦截(与 BuildDarkGiftTipContext
+        /// 同理念)。Power.log 缺失时退化为仅 flag(不破坏无日志环境)。
+        /// </summary>
+        private bool IsInCombatNow()
+        {
+            bool hdtFlag = false;
+            try { hdtFlag = Core.Game != null && Core.Game.IsBattlegroundsCombatPhase; } catch { }
+            return Engine.CombatPhaseSignal.IsInCombat(_powerLogPhase, hdtFlag);
+        }
+
+        /// <summary>
+        /// 板面是否存在含战吼描述的友方随从(1.2.16-fix I-20260907-19 沙德沃克 HP_022 目标)。
+        /// </summary>
+        private static bool BoardHasBattlecry(Engine.GameState state)
+        {
+            if (state == null || state.BoardMinions == null) return false;
+            foreach (var m in state.BoardMinions)
+            {
+                if (m == null) continue;
+                if (Engine.MinionTextUtil.TextHasBattlecry(m.CardText)) return true;
+            }
+            return false;
+        }
+
         private void EnsureCombatWatchTimer()
         {
             if (_combatWatchTimer != null) return;
@@ -1464,7 +1490,7 @@ namespace BobCoach
                         _renderer.ClearDarkGiftCandidates();
                     }
 
-                    bool nowInCombat = Core.Game.IsBattlegroundsCombatPhase;
+                    bool nowInCombat = IsInCombatNow();
                     if (darkGiftStatus != null)
                     {
                         _eventEvalRequested = false;
@@ -1716,7 +1742,7 @@ namespace BobCoach
             _renderer.ClearDarkGiftCandidates();
 
             // 战斗阶段不评估
-            try { if (Core.Game.IsBattlegroundsCombatPhase) return; } catch { }
+            if (IsInCombatNow()) return;
 
             if (_timewarpPurchaseBatchFromLog != null)
             {
@@ -2001,6 +2027,15 @@ namespace BobCoach
                     || state.ShopMinions.Count > 0
                     || heroSkill.UsePurpose == "Economy"
                     || heroSkill.UsePurpose == "Resource";
+                // 1.2.16-fix I-20260907-19: 沙德沃克(HP_022 奇诡尖啸=触发友方战吼随从) —
+                // 通用 hasValidTarget 只查板面/商店非空; 无战吼随从在板时技能不可施放,
+                // 必须拦下"使用技能"提示(实机 105334 反馈: 无合适目标仍在提示)。
+                if (string.Equals(state.HeroPowerCardId, "TB_BaconShop_HP_022",
+                        System.StringComparison.Ordinal)
+                    && !BoardHasBattlecry(state))
+                {
+                    hasValidTarget = false;
+                }
                 bool heroShouldUse;
                 int heroDecisionCost = heroPowerCost;
                 string heroDecisionReason;
@@ -4327,8 +4362,7 @@ return current + "\n" + line;
             // 07062107修复: hash已在上方记录, 此处return意味着本plan从未上屏 —
             // 必须清hash让下一帧同plan重试, 否则HDT combat标志翻转滞后期间(回合开始~1.5s)
             // 产生的建议(如T2升本LEVEL_UP)会被hash去重永久吞掉。
-            bool combatNow = false;
-            try { combatNow = Core.Game.IsBattlegroundsCombatPhase; } catch { }
+            bool combatNow = IsInCombatNow();
             if (combatNow) { _lastRenderedPlanHash = null; try { _renderer.Clear(); } catch { } return; }
             // 过渡期安全网: 商店实体已消失+非饰品/英雄选择→即将进战斗, 跳过渲染
             if (state.ShopMinions.Count == 0 && state.BoardMinions.Count == 0
@@ -4358,8 +4392,7 @@ return current + "\n" + line;
                 {
                     // 现场重读金币: Dispatcher回调可能延迟执行, state.Gold已过时
                     int liveGold = GetLiveGold(state);
-                    bool inCombat = false;
-                    try { inCombat = Core.Game.IsBattlegroundsCombatPhase; } catch { }
+                    bool inCombat = IsInCombatNow();
                     // 07062107修复: 回调被拦截=本plan未上屏, 清hash让同plan下帧重试(见DispatchRender头部注释)
                     if (inCombat) { _lastRenderedPlanHash = null; return; }
                     if (capturedVersion != _renderVersion)

@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.17 - 2026-09-07
+
+- fix(战斗翻转滞后窗口, 塞纳留斯 090858 实机): 渲染/评估 gate 从单信 HDT combat flag 升级为双信号(CombatPhaseSignal: Power.log MAIN_COMBAT 权威阶段 ∥ HDT flag)并应用到 OnUpdate/combatWatchTimer/EvaluateAndRender/DispatchRender/Dispatcher 回调 5 处——招募→战斗翻转滞后(~1.4s)期间的招募尾声推荐(含技能/发现类)不再残留进战斗画面; 无 Power.log 环境退化为原行为(零回归)
+- fix(技能目标管控, 沙德沃克 105334 实机): HP_022 奇诡尖啸需友方战吼随从——hasValidTarget 按目标类型校验(MinionTextUtil.TextHasBattlecry), 板上无战吼随从时不再提示"使用技能"
+
 ## 1.2.16 - 2026-09-06
 
 - fix(发现面板跨回合卡死, 钩牙实测): PanelStateMachine Active 相位加跨回合(turn>CreatedTurn)强制 Expired 时控门——招募超时系统自动选后无 CHOSEN 事件时面板不再卡死(fail-close, 不依赖 Power.log 事件); JS 镜像同步 + 2 回归, 14 单测全绿

@@ -242,6 +242,8 @@
     <Compile Include="Core\CardPoolFilter.cs" />
     <Compile Include="Core\CardQuality.cs" />
     <Compile Include="Core\CombatChoiceRenderPolicy.cs" />
+    <Compile Include="Core\CombatPhaseSignal.cs" />
+    <Compile Include="Core\MinionTextUtil.cs" />
     <Compile Include="Core\CombatContext.cs" />
     <Compile Include="Core\CombatEffects.cs" />
     <Compile Include="Core\CombatEventQueue.cs" />

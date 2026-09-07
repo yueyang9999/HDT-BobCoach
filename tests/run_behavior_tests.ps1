@@ -92,7 +92,9 @@ foreach ($file in @(
     "test_phase1_live_decision.ps1",
     "test_phase2_decision_services.ps1",
     "test_phase3_recommendation_plan.ps1",
-    "test_t35_live_feedback.ps1"
+    "test_t35_live_feedback.ps1",
+    "test_combat_phase_signal.ps1",
+    "test_minion_text_util.ps1"
 )) {
     Invoke-Checked $file "powershell"
 }
