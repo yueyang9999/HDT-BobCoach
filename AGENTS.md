@@ -235,3 +235,16 @@ Get-Content '<目录>\BobCoach.dll.sha256'   # 应输出: <同一SHA256>  BobCoa
 - Validation evidence stays in the project evidence store, not Git.
 - Before adding a new top-level directory, update this file with its purpose, naming, and cleanup policy.
 
+
+## Task Execution Discipline (2026-09-07 固化, 用户明确要求: 每次任务自主开展)
+
+1. **自主全流程**: 每项任务由 agent 自主按 调研→规划→实施→测试验证→总结→回归测试 闭环推进,
+   不得把每一步拆解抛回用户等指示; 用户只给目标/方向, agent 自行决策与执行。
+2. **方法优先**: 遇到方法/工具缺口, 先自查既有 WORKFLOWS.md/知识库/仓库工具链, 再到 GitHub/学术
+   检索现成方法论(先例: BG 对局分析无现成逐决策审计 OSS → 采用 日志动作分类+局面预测ML 思路,
+   本地落地分层分析法: 层1经济/升本轨迹→层2战力血量→层3决策节点(引擎vs玩家+置信度)→层4阶段语义)。
+3. **每轮产出**: 可复核对比数据/报告 + 记录(ITERATION_LEARNINGS.md / VERIFY_*.md / 知识库), 简短汇报。
+4. **保留既有硬纪律**: 玩家动作=观测非标签; 证据先于断言; 300场景+Shadow+owner 门禁; 产物标版本;
+   HDT 运行禁部署/杀进程; 禁读进行中文件; 引擎改动先走 ISSUE_TRACKER 闭环+代码审查+单测。
+5. **分析纪律补充(2026-09-07 方法教训)**: 全样本结局相关须警惕 截断混杂(存活偏置)与状态混杂 →
+   优先 条件化(到某阶段才比该阶段指标) 与 逐状态反事实对照; 朴素帧级配对仅作筛选不作结论。
