@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -2687,6 +2687,7 @@ namespace BobCoach
                 // 升级在案(引擎 best=Upgrade 或 UpgradeHint 存在)时标记 c1a先买/c1b后期冷却/c1c质量语境,
                 // 供 300 场景效果门禁的离线 would-be vs legacy 对比(C1 spec §7)。
                 string shadowC1Json = "";
+                string shadowC6Json = null;
                 {
                     bool upgradeOnTable = (bestAction != null
                             && bestAction.Type == Engine.ActionType.Upgrade)
@@ -2706,6 +2707,19 @@ namespace BobCoach
                             + ",\"c1bCooldown\":" + (c1b ? "true" : "false")
                             + ",\"c1cQuality\":" + (c1c ? "true" : "false")
                             + ",\"lastUpgradeTurn\":" + state.LastUpgradeTurn + "}";
+                        if (state.TavernTier == 5)
+                        {
+                            double c6bp = 0.0;
+                            try { c6bp = _fe.ComputeBoardPower(state.BoardMinions); }
+                            catch { }
+                            bool c6turnOk = state.Turn >= 10;
+                            bool c6boardOk = c6bp >= 8.0;
+                            shadowC6Json = "{\"window\":\"5to6\",\"turn\":" + state.Turn
+                                + ",\"turnOk\":" + (c6turnOk ? "true" : "false")
+                                + ",\"boardPower\":" + c6bp.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                                + ",\"boardOk\":" + (c6boardOk ? "true" : "false")
+                                + ",\"gatePass\":" + ((c6turnOk && c6boardOk) ? "true" : "false") + "}";
+                        }
                     }
                 }
                 string shadowC7Json = null;
@@ -2735,7 +2749,7 @@ namespace BobCoach
                     _globalReplayRecorder.RecordState(globalState, "hdt");
                     _globalReplayRecorder.RecordRecommendation(
                         bestActionJson, actionScoresJson, shadowScoresJson, featureVector,
-                        mainlinePlanJson, state.Turn, shadowC1Json, shadowC7Json);
+                        mainlinePlanJson, state.Turn, shadowC1Json, shadowC7Json, shadowC6Json);
                 }
 
                 var snap = new TurnSnapshot
