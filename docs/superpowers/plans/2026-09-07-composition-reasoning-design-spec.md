@@ -223,3 +223,16 @@ C-12 插件实现(CompositionState/CeilingEstimator/CompositionPlanner)可作为
 - **双体制模型(V58/V59, D5/D6 输入)**: ① mid(T≤12): lowhp≥15 且 exp≥1 且商店可转体系 → 成功率高(mid clean 4/4);
   ② late(T≥13, ≤4人): 残局低血可翻盘, 无 lowhp 惩罚 → 争冠 steer; ③ lowhp 单维阈值不普适(V35 降级为 mid 方向提示)
 - **干净聚合(V60)**: 250339 5/14=36%, 跨源 9/28=32% → L2 Go/No-Go 依据: 缺口真实(~32%), rescue 决策=两体制门+体制内商店可用性
+**附3: V71-V98 证据刷新(2026-09-08 2026-09-08 05:49:56, round221-231, VERIFY V1-V98 连续; 详见 E:/HDT-BobCoach-evidence/knowledge-base/VERIFY_CONCLUSIONS_20260907.md)**
+- **模拟器高压场系统收敛(V71-V82, 250339 legacy 镜像)**: V71 修正(--imitation 只 Bob/--playbook 全局,
+  原"对手升级"误读撤销) → V72 分解(oppup 差异 100% playbook; imitation_rules 旧 build 0 命中=结构性无效)
+  → V73 首个干净对手压力场(--styles 仅改 heuristic): aggressive 对手压 Bob top4 -20.8pp(win 不变)
+  → V75 缓升否决 → V76 rescue 高压 +16.7pp win → V80 rescue×对手类型(aggr 最大/hyper 温和) →
+  V81 无节奏代价 → V82/V82b rescue 阈值 15/20 新 seed 复测撤回(阈值 15 维持)
+- **真实语料升级链全量(V83-V96)**: 行为帧 17 局入主表(6 匹配)+turn 口径校准(V85: Power.log turns=2×HDT 回合)
+  → 86 局升级链全覆盖 → 到 6 本=好名次(rank 2.74 vs 5.03) → 5 本停留 dwell≥3 更优(rho -0.27) →
+  rush 升 6 高风险(负分率 38% vs 0%, 板面 355 vs 6150) → 插件门实证一致(LevelUpSafePower[6]=10.0)
+  → 引擎 Upgrade 推荐集中 T9(V96)
+- **MMR 回落(V97/V98)**: 大输局=未到 6 或 rush 到 6; 全月净 +14, 最大回撤 873(09-03 11668→09-06 10795)
+- **对候选影响**: C-06 维持现门不改(三重证据); rescue 维持阈值 15; 无引擎改动; 升级节奏方向=执行端
+  "不 rush 升6/dwell≥3"(插件门已内置); 待办=shadow 300 场景门禁(用户打局自动采集已就绪)
