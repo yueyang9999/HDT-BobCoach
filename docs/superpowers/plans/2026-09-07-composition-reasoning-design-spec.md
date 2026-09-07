@@ -205,3 +205,13 @@ C-12 插件实现(CompositionState/CeilingEstimator/CompositionPlanner)可作为
 
 **引擎多局连跑边界**: rollout_probe/ceiling_gap 多局单进程连跑仍会卡死(sharedPool/模块单例残留, 非 Math.random);
 可靠采集 = 每局独立进程(已验证)。ISSUE I-20260907-25 已关(原疑引擎幂等, 实为工具缺种子化; 多局连跑残留另记)。
+
+**附2b: 证据增量刷新(2026-09-08 06:3x, round175, 回填 V31/V35/V41 至 §11 决策面)**
+- **V31 扩样(36 局, 6seed×6, 确定性修复后)**: rescue 成功率 ≈ 29%(4/14 崩盘局), 成功依赖崩盘时商店恰好可转该体系;
+  多数崩盘 steer 救不了 → §11 判定不变: L1 缺口真实但罕见/特定, 无 L2 全面启动依据
+- **V35 rescue 可行性判据(D5/D6 定量细化, 新增)**: 成功局低血线 ≥15@T11+ / 失败局 ≤11@T9-11 →
+  rescue 窗口 = expTurns≥1 且 lowhp≥~15(2回合缓冲) 才值得转向; 低血(<12)崩盘 → 放弃 rescue 转"保命苟前四"
+  → 早期识别 可救 vs 不可救 是 C-12 CompositionPlanner 的价值点(§6.3 rescue 语义补充输入)
+- **V41(C-06 侧, 引擎候选联动)**: shadowC6 门(gatePass) vs 实机引擎升6冲动 3 窗口局核对 — 违规 16 帧集中 rank3/4 中位局,
+  C6 采集 = would-be vs legacy 逐帧语料(与 C-12 rescue 语义同构: 门禁前评估素材) — 仅记录, 不改可见
+- 状态: L0/P1 完成状态不变; L2 仍待 扩样 + M2 路线排序 + D4/D6 细化(V35 判据已补); C-12 插件 Shadow 记录(P2)待实施
