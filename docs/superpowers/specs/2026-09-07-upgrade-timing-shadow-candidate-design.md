@@ -62,3 +62,7 @@
 - **C1b 冷却违规面**: 引擎 best=Upgrade 共 3117 帧, 其中 458(14.7%) 在刚升本后 <2 回合内; **后期(T≥8 且 tier=5) 1921 帧中 201 帧(10.5%)在冷却内**(≈1.6 帧/局) → C1b 命中面=后期 5本"连升压力"帧, 每局有限但持续存在
 - **细化(C1b 语境化)**: 早期(T≤7)连续升本=合法速本节奏, 冷却不适用; 冷却规则仅后期(T≥8/tier≥5)生效——与 O1(5本成型升6)同一目标帧面, 二者应合并评估(Shadow 同源采集)
 - 探针脚本: knowledge-check/_c1b_probe.js / _c1b_probe_late.js (证据侧, 可复用)
+## 7. 实施路径与暂缓理由(2026-09-07 round9 测绘)
+- 运行架构: EvaluateAndRender(L1728, 含回放录制点 L2686, 记录=编排前引擎 best) → DispatchRender(L4313, 升级编排 L4722-4748 覆盖 RecommendedActionType) → 渲染。Shadow would-be 应在 DispatchRender 同级(编排语境)计算或在 EvaluateAndRender 录制点用纯函数计算并旁路记录。
+- 最小实施=纯函数 ComputeC1Shadow(state, plan, liveGold) → would-be 标签[c1b-cooldown/c1a-buy-first/c1c-quality-context] → 经 recommend 事件新字段(如 shadowC1)旁路; 前置=recorder 签名扩展+下游 JS(alignment/labeler)容错审计。
+- **暂缓理由(2026-09-07)**: ①采集仅对部署后实机局有效, 当前无部署授权/无新局 → 零短期数据收益 ②recorder schema 改动需下游审计(避免破坏 129 局回放消费链) ③等 1.2.18 部署窗口与用户实机节奏就绪后再接入(代码已定路径, 约半日工作量)
