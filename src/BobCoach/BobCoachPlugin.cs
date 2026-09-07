@@ -2708,6 +2708,26 @@ namespace BobCoach
                             + ",\"lastUpgradeTurn\":" + state.LastUpgradeTurn + "}";
                     }
                 }
+                string shadowC7Json = null;
+                try
+                {
+                    if (!string.IsNullOrEmpty(actionScoresJson))
+                    {
+                        var c7arr = Newtonsoft.Json.Linq.JArray.Parse(actionScoresJson);
+                        if (c7arr != null && c7arr.Count >= 2)
+                        {
+                            double c7s0 = (double)c7arr[0]["score"];
+                            double c7s1 = (double)c7arr[1]["score"];
+                            double c7gap = c7s0 - c7s1;
+                            if (c7gap < 0.10)
+                            {
+                                shadowC7Json = "{\"nearTie\":true,\"tieGap\":" + c7gap.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)
+                                    + ",\"topType\":\"" + (string)c7arr[0]["type"] + "\"}";
+                            }
+                        }
+                    }
+                }
+                catch { }
                 var globalState = ToGlobalReplayState(state);
                 if (_globalReplayRecorder != null)
                 {
@@ -2715,7 +2735,7 @@ namespace BobCoach
                     _globalReplayRecorder.RecordState(globalState, "hdt");
                     _globalReplayRecorder.RecordRecommendation(
                         bestActionJson, actionScoresJson, shadowScoresJson, featureVector,
-                        mainlinePlanJson, state.Turn, shadowC1Json);
+                        mainlinePlanJson, state.Turn, shadowC1Json, shadowC7Json);
                 }
 
                 var snap = new TurnSnapshot
