@@ -185,3 +185,23 @@ L0（0.5–1 天：模板归一45真ID+校验、门禁固化、语料就绪）�
 2. 中文 23 体系的真实卡 ID 源 = guide_weight_reference.json（officialCardId）；comp_strategies 中文条目是占位。
 3. 崩盘定义从"血≤15"升格为 clock（D5）；血≤15 仅兜底。
 4. "全局 steer"已被可行性证伪 → 只做 rescue 语义。
+
+## 附2：实施进度记录（2026-09-08 01:1x, 实施会话回填）
+**L0 已完成**: composition_templates.json 对齐 §4.1 全 13 字段(45条; 中文23真卡ID来自 guide_weight_reference);
+生成器 tools/model/build_composition_templates.js(经 contracts.js 数据根/契约头校验); commit f96a205 + 716afad。
+并行会话的 tools/simulation/_build_composition_templates.js 曾产出 23 中文空 engine(占位ID bug)→ 已用正确实现覆盖, 坏文件备份 .bad-empty-23cn.json。
+
+**P1 已完成(工具+证据)**: 
+- 工具 tools/simulation/ceiling_gap.js(--ceiling [--game-idx N]): steer 全程替换购买决策(保留节奏项)+崩盘-clock(min-hp 口径)+crash 桶报告
+- **确定性修复(关键)**: 组装时曾丢失 rollout_probe 的 R146 Math.random 种子化块 → 引擎裸随机致特定局漂移;
+  补块后 seed7/42/111 × 6局 全确定。教训: 派生工具必须完整复制随机种子化加载骨架。
+- crash-clock 口径: expTurns 用历史最低血线(排除死亡快照); RESCUE 需 natural≥4(自然已差)
+- **证据(CEILING_GAP_EVIDENCE_P1_20260907.md)**: 3seed×6局 rescue 成功率 2/6(33%); 全局 steer 证伪(自然优局普遍劣化);
+  **pivot A/B 反直觉**: 崩盘局"卖旧换体系"全劣化(G4 无pivot=1→有pivot=8), rescue 应补强板面非激进转型
+
+**Go/No-Go 状态(§11)**: L1 证据显示 rescue 缺口真实但罕见且特定(33%, 依赖崩盘时商店可转该体系);
+多数崩盘局 steer 救不了(太晚)。L2 启动条件未完全满足(需更多 seed 扩样 + M2 路线排序 + rescue 动作语义细化[D4/D6])。
+C-12 插件实现(CompositionState/CeilingEstimator/CompositionPlanner)可作为 Shadow 记录先行(P2 §6), 300 场景门禁前不改变可见推荐。
+
+**引擎多局连跑边界**: rollout_probe/ceiling_gap 多局单进程连跑仍会卡死(sharedPool/模块单例残留, 非 Math.random);
+可靠采集 = 每局独立进程(已验证)。ISSUE I-20260907-25 已关(原疑引擎幂等, 实为工具缺种子化; 多局连跑残留另记)。
