@@ -176,3 +176,73 @@ reference.json` 的字段与 CeilingEstimator 复用方式; DivergentPlanner 对
 4. **CompGuideCatalog 加载依赖**: 需 guides + weights 两文件; weights 读 ConfiguredRoot/generated/season14_guide_weight_reference.json（非 registries 子目录）。decision-data root 下缺 weights → P0 后需同步该文件到 decision-data/generated/（I-20260905-10 同族教训）。
 5. **cardPoolIdentity**: comp_guides._meta 含 cardPoolIdentity=0bcc979ae21df891（36.2.248348 卡池快照）; guide_weight_reference 无 _meta（用 generatedAt/season）。P0 契约头用 comp_guides 的 meta 值, source 数组逐一标注。
 6. P0 归一主键 = guideId（中文23）与 comp_strategies.compId（英文22）→ 模板总数 45; 中文 23 从 guideReferences 取 engineCardIds, 英文 22 从 comp_strategies 取; 若合并数与预期不符则校验失败（报告差异, 不自动吞）。
+
+## 九、最小可行性研究（2026-09-07 实跑, 证据 → 方案走向修正）
+
+### 实验
+- 工具：`tools/simulation/ceiling_gap.js --ceiling`（确定性重放 + steer 全程替换购买决策, 保留节奏项）。
+- 模板：P0 生成器 `tools/simulation/_build_composition_templates.js` → `evidence/knowledge-base/composition_templates.json`
+  （45 套契约头；§八 勘误后占位 ID 已过滤, 22/45 有真实卡 ID；中文 23 待 guide_weight_reference 归一[P0 待办]）。
+- 运行：seed 42 × 6 局 × {自然 + steer: 元素球/野兽猛犸/鱼毒/亡灵溢出}（4 体系 engine 卡均为真实 ID, steer 真实生效）。
+- 原始报告：`evidence/simulation-season14/runs/ceiling-gap-mvr-seed42/ceiling-gap-42.md`。
+
+### 结果（名次越小越好）
+| G | 自然 | 元素球 | 猛犸 | 鱼毒 | 亡灵溢出 |
+|---|---|---|---|---|---|
+| 0 | 2 | 7 | 8 | 6 | 6 |
+| 1 | 1 | 1 | 4 | 4 | 3 |
+| 2 | 1 | 1 | 2 | 2 | 3 |
+| 3 | **8** | **3** | 8 | 7 | 8 |
+| 4 | 1 | 7 | 8 | 8 | 2 |
+| 5 | 1 | 3 | 1 | 4 | 4 |
+- 自然平均 2.33（6 局 4 次前二）→ **聚合缺口很小**；盲目全局 steer 大多劣化（发散/窄池有成本）。
+- **例外 = G3**：自然崩盘(8) → 元素球 steer=3、鱼毒=7：**缺口只出现在"自然轨迹失败"局**, 非全局恒有。
+
+### 可行性结论（决定方案走向）
+1. **方法可行**：模板 + 确定性 steer 反事实链路端到端跑通（M3 方法成立, 可扩展）。
+2. **全局"朝体系 X 引导"（聚合口径）证伪**：默认对手环境里自然策略已接近可达上限,
+   无脑 commit = 窄池/发散成本 > 收益（与 R577 类结论一致）。**不要做全局 steer。**
+3. **缺口是条件性的 = 破局窗口**：仅自然失败/停滞局存在（G3 +5 名）。→ **重定向**：
+   组合层只在 **rescue/pivot 条件触发**时干预（复用 powerTrend/desperate/血线检测），
+   平时只写 Shadow 记录不改变返回。
+4. **口径**：样本小（n=6 单 seed 流, 默认对手）；扩展需 多 seed + 分桶（全样本 vs
+   崩盘/停滞子集）+ 更强/拟真对手环境, 否则缺口被环境优势掩盖。
+
+### 据此修订 P1/P2（实施时生效）
+- P1 报告**分桶双口径**：全样本平均 + 崩盘/停滞子集；崩盘定义 = 血≤15 ∥ rank 落后 ∥ powerTrend 连续下滑。
+- P2 `CompositionPlanner` 输出 `mode: rescue | optimize | shadow`：rescue 才可能影响返回, 其余只记录。
+
+## 十、全面动态性审查与完善（2026-09-07）
+
+> 静态模板 + 可达性 + rescue 触发是骨架, 但战棋是强动态博弈。逐类核对"游戏内动态情况",
+> 发现 12 项遗漏/弱化。原则:**可解析的动态(池/时钟/预算/对手观测)进规则层; 整局联合动态
+> (level×buy×comp 同时优化)留给 Phase4 价值学习+rollout, 不在 P2 硬塞超预算优化。**
+
+### 动态遗漏清单（编号 → 修改 → 落地/优先级）
+| # | 游戏内动态 | 现有缺口 | 修改 | 落地 | 优先级 |
+|---|---|---|---|---|---|
+| D1 | **获取通道异质**：核心卡不只靠商店——发现(三连奖励升1星池/技能/法术)、伙伴、饰品产出 | P_reach 只按商店超几何 → 低估高本核心 | P_reach = 商店P + 发现通道×权重 + 三连路径(对子已握则升)；通道参数版本化 | P1 模型扩展 | 建议 |
+| D2 | **升本×成型的联合**：5/6星核心要 5/6本才进池 | 把升本与成型分开决策, 视野错 | CeilingEstimator 输入 `plannedTierHorizon`（当前+规则级计划 R0 曲线推）；破局动作含"提前升本开窗"且受血线约束 | P2 | **必做** |
+| D3 | **经济爆发回合**：金上限10、靠理财/卖板/技能制造"爆买回合"；commit 常发生在那天 | "看到就买"模型忽略负担能力 | 可达性加 affordability/流动性(金+可卖资产+在途经济)；窗口按"可爆买回合"计时 | P1/P2 | 建议 |
+| D4 | **对手动态**：对手买走你的引擎→共享池稀薄(可观测)；领先者成型→要**反制出口**而非继续成型 | V(route) 无 contest；路线集无 anti-formation | V 减 contest(同引擎对手数加权, 战斗可观测)；路线集加反制出口(复用 counter_tags/R708)；rescue 分"补成型 vs 转 tech" | P2 | 建议 |
+| D5 | **血量时钟**：伤害随回合与存活星递增；危险=剩余回合 vs 还需回合, 非血≤15 | 静态触发误判(早/晚) | 触发改 clock = 预计剩余回合(血/期望伤) < 成型还需回合；commit/rescue 带截止（deadline-aware stopping） | P2 | **必做** |
+| D6 | **阶段目标切换**：Early=曲线/经济, Mid=commit, Late=上限+反制; 早期谈"成型率"是错目标 | 无显式阶段目标 | 按 TurnPhaseEngine 阶段出目标：Early 仅 shadow / Mid commit+rescue / Late counter+上限替代；模板加阶段适用域 | P2 | 建议 |
+| D7 | **发散宽度应自适应**：K 随不确定性/健康/时间/池余下降, commit 后 K=1 | K 常数 | K = f(不确定性, 健康, 阶段)；DPP 阈值化触发不每回合重算 | P3 | 可选 |
+| D8 | **对子/三连的期权价值**：对子不绑体系=转型流动性；三连奖励=免费定向高本 | 只把对子当体系内进度 | CompositionState 加资产维度(对子集/三连进度/发现计数)；对子优先级含通用价值不唯体系论 | P2 | 可选 |
+| D9 | **记忆动态**：见过&放过的核心(被抢概率↑)、已买已卖/已死引擎不算拥有 | 只记"观测过" | CompositionMemory 记 {seenAndPassed, ownedNow, ownedLost, opponentSeen}；P_reach 贝叶斯更新池估计 | P3 | 建议 |
+| D10 | **实时预算与重入**：GetBestAction 一回合多次调用(1365/1376/1387 史例)、~ms、结果须幂等 | 在线重计算/翻转风险 | 同回合状态指纹→缓存结论；先规则后组合 early-exit；DPP/rollout 仅离线/Shadow；审查清单加"重入幂等" | P2 | **必做** |
+| D11 | **验证动态**：模拟器默认对手弱→gap 被掩盖; 真实 lobby 更凶 | P1 只用模拟器采样状态 | P1 增**真实决策点桶**：回放语料(登记册, 同 build) 的 mid-game 状态做同 seed 反事实（离线路评链已具备），分桶上报 | P1 | **必做** |
+| D12 | **成型率直接度量**：名次会掩盖成型差异 | 无"成型率/成型回合"指标 | 增 M5：固定视野 P(核心齐)+成型回合分布 (policy 对照, 条件化 mid/late) | 全阶段 | 可选 |
+
+### 修订汇总（替换前文对应条目）
+- §九"崩盘定义" 由 `血≤15` 升格为 **D5 clock 判定**（血/期望伤 < 成型还需回合），血≤15 仅作兜底。
+- P1 分桶从 2 桶 → **3 桶**：全样本 / 崩盘-clock 子集 / 真实状态子集（D11）。
+- P2 `CompositionPlanner`：mode + **阶段目标（D6）** + **contest/反制感知（D4）** + 幂等缓存（D10）。
+- 代码审查清单追加：①重入幂等 ②rescue 双向验证（崩盘局命中 vs 稳态误伤, 留帧）③contest 观测口径。
+- 验收 M 系列追加 M5（D12）。M1 扩展校验多通道可达性（D1）。
+
+### 结构性边界（诚实声明）
+- "全局动态最优（level×buy×comp 联合）"不能靠规则穷尽；本方案把**可解析动态**落规则层(P2),
+  **不可解析的整局联合动态**明确留给 Phase4（rollout 标签价值学习 + 束搜索/深度规划）。
+  P2 若试图一次覆盖 D2+D3+D4+D6 会变成超参数泥潭 → 分步：先 D2/D5/D10/D11（骨架正确+工程安全），
+  再 D1/D3/D4/D6/D9（模型细化），D7/D8/D12 后置。

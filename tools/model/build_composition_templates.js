@@ -61,14 +61,16 @@ function englishTemplate(c) {
   return {
     compId: c.compId, nameCn: c.name_cn || c.name || c.compId,
     provenance: { src: 'comp_strategies', patch: c.patchNumber || null, tier: c.powerLevel || null },
-    tribes: Array.isArray(c.forcedTribes) ? c.forcedTribes : [],
+    forcedTribes: Array.isArray(c.forcedTribes) ? c.forcedTribes : [],
     direction: inferDirection(c.compId, c.name_cn || ''),
+    medianCoreTier: medianTierOf(core, c),
     engineCardIds: core.length ? core : addon,
     addonCardIds: addon,
     missingLinkType: inferMissingLinks(c.compId, core, addon),
     ceilingPower: null,
+    endgame: { tier: (c.powerLevel === 'S' || c.powerLevel === 'A') ? 6 : 5, template: null },
     activation: tip && tip.whenToCommit ? { requires: tip.whenToCommit, windowTurn: null } : null,
-    sourceRow: 'english:' + c.compId,
+    counters: [],
   };
 }
 function chineseTemplate(guideId) {
@@ -80,16 +82,36 @@ function chineseTemplate(guideId) {
   return {
     compId: guideId, nameCn: g.name || ref.guideName || guideId,
     provenance: { src: 'comp_guides', patch: null, tier: ref.tier || g.tier || null },
-    tribes: Array.isArray(ref.tribes) ? ref.tribes : (Array.isArray(g.tribes) ? g.tribes : []),
+    forcedTribes: Array.isArray(ref.tribes) ? ref.tribes : (Array.isArray(g.tribes) ? g.tribes : []),
     direction: inferDirection(guideId, g.name || ''),
+    medianCoreTier: 99,
     engineCardIds: core, addonCardIds: [],
     trinketCardIds: trinkets,
     missingLinkType: inferMissingLinks(guideId, core, []),
     ceilingPower: null,
+    endgame: { tier: (ref.tier === 'T0' || ref.tier === 'T1') ? 6 : 5, template: null },
     activation: null,
-    sourceRow: 'guide:' + guideId,
+    counters: [],
   };
 }
+
+// median tier of engine cards (freshness.currentTier when available; else 99=unknown)
+function medianTierOf(ids, comp) {
+  var tiers = [];
+  for (var ti = 0; ti < (comp.cards || []).length; ti++) {
+    var cc = comp.cards[ti];
+    if (!cc || !cc.cardId) continue;
+    var raw = String(cc.cardId).replace(/_G$/, '');
+    if (ids.indexOf(raw) >= 0 || ids.indexOf(cc.cardId) >= 0) {
+      var t = cc.freshness && cc.freshness.currentTier ? cc.freshness.currentTier : 0;
+      if (t) tiers.push(t);
+    }
+  }
+  if (!tiers.length) return 99;
+  tiers.sort(function (a, b) { return a - b; });
+  return tiers[Math.floor(tiers.length / 2)];
+}
+
 function inferDirection(compId, nameCn) {
   const s = (compId + ' ' + nameCn);
   if (/毒|烈毒|圣盾|scam|鱼人.*毒|murloc_scam/.test(s)) return 'tech';
