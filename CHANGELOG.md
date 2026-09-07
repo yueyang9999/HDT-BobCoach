@@ -1,6 +1,11 @@
-# Changelog
+﻿# Changelog
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
+
+## 1.2.19 - 2026-09-07
+
+- feat(shadow 采集族, 记录型不改可见推荐): recommend 事件新增 shadowC1(升级三条件)/shadowC6(5→6 本门: turnOk T≥10/boardOk≥8.0/gatePass)/shadowC7(并列: 顶二 gap<0.10 → nearTie/tieGap/topType)——300 场景门禁的 Shadow 语料采集(证据 V8 rho−0.63/V12-13 分值压缩)
+- feat(纪律/工具): AGENTS.md Task Execution Discipline; 离线引擎重评=版本漂移回归(40,357 状态同类型 100%)
 
 ## 1.2.18 - 2026-09-07
 

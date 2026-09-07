@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const fs = require('fs');
 const path = require('path');
@@ -142,7 +142,7 @@ forbid(
   /\.FullName\.Substring\(/i,
   'offline package builder test absolute-path substring enumeration',
 );
-for (const token of ['1.2.18', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
+for (const token of ['1.2.19', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
 

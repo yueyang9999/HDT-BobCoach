@@ -23,7 +23,7 @@ if ([string]::IsNullOrWhiteSpace($hdtDirectory)) {
 $testRoot = Join-Path $env:TEMP ("bobcoach-offline-builder-test-" + [Guid]::NewGuid().ToString("N"))
 Assert-SafeTestRoot $testRoot
 
-$packageName = "BobCoach-1.2.18-win-x64"
+$packageName = "BobCoach-1.2.19-win-x64"
 $zipName = "$packageName.zip"
 $expectedFiles = @(
     "BobCoach.dll",
@@ -65,10 +65,10 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
 
     $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PackageRoot "manifest.json") | ConvertFrom-Json
     Assert-Equal 2 ([int]$manifest.schemaVersion) "manifest schema"
-    Assert-Equal "1.2.18" ([string]$manifest.packageVersion) "manifest package version"
-    Assert-Equal "1.2.18.0" ([string]$manifest.assemblyVersion) "manifest assembly version"
-    Assert-Equal "1.2.18.0" ([string]$manifest.fileVersion) "manifest file version"
-    Assert-Equal "1.2.18" ([string]$manifest.informationalVersion) "manifest informational version"
+    Assert-Equal "1.2.19" ([string]$manifest.packageVersion) "manifest package version"
+    Assert-Equal "1.2.19.0" ([string]$manifest.assemblyVersion) "manifest assembly version"
+    Assert-Equal "1.2.19.0" ([string]$manifest.fileVersion) "manifest file version"
+    Assert-Equal "1.2.19" ([string]$manifest.informationalVersion) "manifest informational version"
     Assert-Equal ".NETFramework,Version=v4.7.2" ([string]$manifest.targetFramework) "manifest framework"
     Assert-Equal "win-x64" ([string]$manifest.runtimeIdentifier) "manifest RID"
     Assert-ExactStrings $expectedFiles @($manifest.files) "manifest files"
@@ -81,7 +81,7 @@ function Assert-ExtractedPackage([string]$PackageRoot, [switch]$SkipReflectionLo
     Assert-Equal (Get-Item -LiteralPath $pluginPath).Length ([long]$manifest.pluginSize) "manifest plugin size"
     $name = [Reflection.AssemblyName]::GetAssemblyName($pluginPath)
     Assert-Equal "BobCoach" $name.Name "plugin assembly name"
-    Assert-Equal "1.2.18.0" $name.Version.ToString() "plugin assembly version"
+    Assert-Equal "1.2.19.0" $name.Version.ToString() "plugin assembly version"
     if (!$SkipReflectionLoad) {
         $bytes = [IO.File]::ReadAllBytes($pluginPath)
         $assembly = [Reflection.Assembly]::ReflectionOnlyLoad($bytes)
@@ -146,7 +146,7 @@ try {
     Assert-ExtractedPackage $extractedPackageRoot
     $releaseReadme = [IO.File]::ReadAllText((Join-Path $extractedPackageRoot "README_OFFLINE.md"), [Text.Encoding]::UTF8)
     Assert-True ($releaseReadme.Contains(
-        "RELEASE CANDIDATE v1.2.18 / NOT PUBLISHED"
+        "RELEASE CANDIDATE v1.2.19 / NOT PUBLISHED"
     )) "release README identifies the unpublished release candidate"
     Assert-True ($releaseReadme.Contains(
         "Windows 11 24H2 最终实机 smoke 尚未完成"
