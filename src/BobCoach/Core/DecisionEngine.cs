@@ -1203,7 +1203,14 @@ namespace BobCoach.Engine
                 }
 
                 if (action.Type == ActionType.PlayMinion)
+                {
                     value += 0.03 * state.HandMinions.Count;
+                    // round263/V145: 金不足且板面未满时, 免费上手牌优先于 Freeze 兜底(玩家低金帧大量 Play/Sell)
+                    int lowGoldNow = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+                    if (lowGoldNow < 3
+                        && (state.BoardMinions == null || state.BoardMinions.Count < 7))
+                        value += 0.30;
+                }
 
                 // ── 出售惩罚 (22局实测: Top4卖26.2%Bot4卖10.3%, 换血是优势策略) ──
                 if (action.Type == ActionType.SellMinion && action.CardId != null)
@@ -2590,6 +2597,36 @@ namespace BobCoach.Engine
                 && !OpponentModel.IsLevelUpLethal(state.Health, state.Turn)
                 && IsDeadWeightSell(state, sellIndex, sold))
                 return true;
+            // M1a(SPACETIME_PLAN 2026-09-08): room/funding sell - board near-full(6+)
+            // or hand backlog(>=7) with buyable shop -> allow selling weakest transition
+            // minion (keeps core/pair memory protection). Evidence: 4263 real frames
+            // 51% player sells before buy (SPACETIME_PLAN_REVIEW).
+            if (sold != null && !sold.Golden
+                && (state.RecentlyBoughtEntityIds == null
+                    || !state.RecentlyBoughtEntityIds.Contains(sold.EntityId)))
+            {
+                int boardCount = state.BoardMinions == null ? 0 : state.BoardMinions.Count;
+                int handCount = state.HandMinions == null ? 0 : state.HandMinions.Count;
+                bool needRoom = boardCount >= 6 || handCount >= 7;
+                bool shopHasBuy = state.ShopMinions != null
+                    && state.ShopMinions.Any(shop => shop != null && !shop.IsSpell);
+                // M1a-ext(round322): low-gold funding sell also allowed (player sells at gold<3 in 56.9% cases)
+                bool lowGoldFunding = gold >= 0 && gold < 3 && shopHasBuy;
+                if ((needRoom || lowGoldFunding) && shopHasBuy)
+                {
+                    var memSnap = _strategyMemory != null ? _strategyMemory.Snapshot : null;
+                    bool isCoreOrPair = memSnap != null && sold.CardId != null
+                        && (memSnap.ObservedCoreCardIds.Contains(NormalizeGoldenId(sold.CardId))
+                            || memSnap.ObservedPairCardIds.Contains(NormalizeGoldenId(sold.CardId)));
+                    double soldPower = sold.Attack * 0.6 + sold.Health * 0.4 + sold.Tier * 2;
+                    bool weakest = state.BoardMinions
+                        .Where(m => m != null)
+                        .All(m => m == sold
+                            || (m.Attack * 0.6 + m.Health * 0.4 + m.Tier * 2) <= soldPower);
+                    if (!isCoreOrPair && weakest)
+                        return true;
+                }
+            }
             return false;
         }
 
@@ -2999,6 +3036,12 @@ namespace BobCoach.Engine
                 if (action.Type == ActionType.Upgrade
                     && OpponentModel.IsLevelUpLethal(state.Health, state.Turn))
                     continue;
+                // M4b(round335): shadow Freeze gate - mirror GetBestAction x0.01 suppression for
+                // no-value freeze (all-tier1 shop, no triple3rd, no econ). Evidence: 5166 Freeze
+                // reco frames 10.3% no-value (V170); players never freeze (frozenShop true=0).
+                if (action.Type == ActionType.FreezeShop
+                    && !HasFreezeWorthKeepingShop(state))
+                    continue;
 
                 try
                 {
@@ -3061,6 +3104,47 @@ namespace BobCoach.Engine
                 }
             }
 
+            // M2(SPACETIME_PLAN 2026-09-08): sell chain bonus - for SellMinion candidates,
+            // simulate sell then best shop buy; add the board-power upgrade delta so sell
+            // (as buy-enabler) can outrank passive freeze/play when a strong card is reachable.
+            // Evidence: recorded scores contain SellMinion in 13.1% frames but it wins top3 in
+            // only 3.0% (single-step undervalue); M1a already makes sell enumerable.
+            for (int si = 0; si < scored.Count; si++)
+            {
+                var sc = scored[si];
+                if (sc == null || sc.Action == null
+                    || sc.Action.Type != ActionType.SellMinion)
+                    continue;
+                try
+                {
+                    var afterSell = _sim.Simulate(state, sc.Action);
+                    if (afterSell == null) continue;
+                    double boardAfterSell = _fe.ComputeBoardPower(afterSell.BoardMinions);
+                    double bestBuyDelta = 0;
+                    if (afterSell.ShopMinions != null && afterSell.Gold >= 3)
+                    {
+                        foreach (var shopCard in afterSell.ShopMinions)
+                        {
+                            if (shopCard == null || shopCard.IsSpell) continue;
+                            var buyAction = new GameAction
+                            {
+                                Type = ActionType.BuyMinion,
+                                TargetIndex = afterSell.ShopMinions.IndexOf(shopCard),
+                            };
+                            var afterBuy = _sim.Simulate(afterSell, buyAction);
+                            if (afterBuy == null) continue;
+                            double boardAfterBuy = _fe.ComputeBoardPower(afterBuy.BoardMinions);
+                            double delta = boardAfterBuy - boardAfterSell;
+                            if (delta > bestBuyDelta) bestBuyDelta = delta;
+                        }
+                    }
+                    if (bestBuyDelta > 0.05)
+                        scored[si] = new BobCoach.Engine.Decision.RankedAction(
+                            sc.Action, sc.ActionKey, sc.Score + bestBuyDelta * 0.5,
+                            sc.Factors);
+                }
+                catch { }
+            }
             scored.Sort((a, b) =>
             {
                 int cmp = b.Score.CompareTo(a.Score);

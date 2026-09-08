@@ -120,6 +120,9 @@ namespace BobCoach.Engine
             // 新回合: 重置基准。
             if (turn != _selfTrackedTurn)
             {
+                // ALG-070 v2 fix(round288): 须先捕获旧回合值再更新,
+                // 否则下方 firstTurnFresh 读到的是已更新为 1 的 _selfTrackedTurn, 恒 false(时序 bug, 部署也无效)。
+                int prevSelfTurn = _selfTrackedTurn;
                 _selfTrackedTurn = turn;
                 _prevShopCount = -1; _prevBoardCount = -1; _prevHandCount = -1; _prevTavernTier = -1;
                 _prevTavernUpgradeCost = -1;
@@ -134,7 +137,9 @@ namespace BobCoach.Engine
                     && _prevTurnMaxGold >= 0 && hdtResourceTag == _prevTurnMaxGold
                     && hdtResourceTag < maxGold;
                 // ALG-070: T1 首帧 RESOURCES=0 是未刷新(回合初满金), 非已消费 -> 首回合需抬满金
-                bool firstTurnFresh = turn == 1 && _prevTurnMaxGold < 0;
+                // v2: 新局 T1 判定用回合回退信号(上局末回合>1 回落 T1 必为新局), 不依赖 Reset/_prevTurnMaxGold
+                bool firstTurnFresh = turn == 1
+                    && (prevSelfTurn < 0 || prevSelfTurn > 1);
                 if (hdtBase < maxGold && !hdtLooksStale && !firstTurnFresh)
                     hdtBase = Math.Max(0, Math.Min(maxGoldWithBonus, hdtResourceTag));
                 else if (hdtBase < maxGold) hdtBase = maxGold;

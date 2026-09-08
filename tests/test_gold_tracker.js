@@ -74,6 +74,8 @@ function advance(g, p) {
         && cost !== Number.MAX_SAFE_INTEGER);
 
     if (turn !== g.selfTrackedTurn) {
+        // ALG-070 v2 sync(round288): 先捕获旧回合值再更新(否则 firstTurnFresh 读到已更新值恒 false)
+        const prevSelfTurn = g.selfTrackedTurn;
         g.selfTrackedTurn = turn;
         g.prevShopCount = -1; g.prevBoardCount = -1; g.prevHandCount = -1; g.prevTavernTier = -1;
         g.prevShopEntityIds = [];
@@ -83,7 +85,9 @@ function advance(g, p) {
         const hdtLooksStale = p.hdtTag != null && p.hdtTag >= 0 && p.hdtTag <= 20
             && g.prevTurnMaxGold != null && g.prevTurnMaxGold >= 0
             && p.hdtTag === g.prevTurnMaxGold && p.hdtTag < maxGold;
-        if (hdtBase < maxGold && !hdtLooksStale) hdtBase = Math.max(0, Math.min(maxGoldWithBonus, p.hdtTag));
+        // ALG-070 v2(round288): 新局 T1 判定=回合回退信号(上局末回合>1 回落 T1 必为新局), 不依赖 Reset
+        const firstTurnFresh = turn === 1 && (prevSelfTurn < 0 || prevSelfTurn > 1);
+        if (hdtBase < maxGold && !hdtLooksStale && !firstTurnFresh) hdtBase = Math.max(0, Math.min(maxGoldWithBonus, p.hdtTag));
         else if (hdtBase < maxGold) hdtBase = maxGold;
         g.prevTurnMaxGold = maxGold;
         g.selfTrackedGold = Math.max(0, Math.min(maxGoldWithBonus, hdtBase + effBonus));
@@ -470,6 +474,35 @@ test("[Bug1] T3 首帧 HDT=旧回合满金(4, 滞后): 抬到本回合满金5", 
     advance(g, frame(2, 4, [1, 2, 3, 4], 0, 0, { hdtTag: 4 })); // T2 maxGold=4
     const t3 = advance(g, frame(3, 3, [1, 2, 3, 4], 0, 0, { hdtTag: 4 })); // hdt=4==上回合满金 → 滞后 → 抬 5
     if (t3 !== 5) return "Bug1: T3 hdt=上回合满金应抬到 5, 实际 " + t3;
+});
+
+// ============================================================================
+// ALG-070 v2 回归(round288): T1 首帧 RESOURCES=0 是未刷新非已消费 -> 抬满金3
+// 时序 bug 修复: 先捕获 prevSelfTurn 再更新(修复前 firstTurnFresh 恒 false)
+// ============================================================================
+test("[ALG-070 v2] 跨局残留: 上局末回合10, 新局T1首帧 hdt=0 -> 抬满金3 (修复前恒0)", () => {
+    const g = newTracker();
+    advance(g, frame(10, 5, [1,2,3,4,5], 0, 5, { hdtTag: 10 })); // 模拟上局结束回合10
+    const t1 = advance(g, frame(1, 4, [11,12,13,14], 0, 1, { hdtTag: 0 })); // 新局T1首帧 hdt=0(未刷新)
+    if (t1 !== 3) return "T1 首帧应抬满金3, 实际 " + t1;
+    return true;
+});
+
+test("[ALG-070 v2] Reset后新局: T1首帧 hdt=0 -> 抬满金3", () => {
+    const g = newTracker();
+    advance(g, frame(9, 5, [1,2,3,4,5], 0, 5, { hdtTag: 10 })); // 上局进行到T9
+    Object.assign(g, newTracker()); // 模拟 Reset
+    const t1 = advance(g, frame(1, 4, [11,12,13,14], 0, 1, { hdtTag: 0 }));
+    if (t1 !== 3) return "T1 首帧应抬满金3, 实际 " + t1;
+    return true;
+});
+
+test("[ALG-070 v2] T2 首帧 hdt=真实消费0(非T1): 不抬, self=0", () => {
+    const g = newTracker();
+    advance(g, frame(1, 4, [1,2,3,4], 0, 1, { hdtTag: 3 }));
+    const t2 = advance(g, frame(2, 3, [1,2,3], 1, 1, { hdtTag: 0 })); // T2 玩家已买1(4-3=1? hdt=0 已花4)
+    if (t2 !== 0) return "T2 hdt=0 应 self=0(真实消费), 实际 " + t2;
+    return true;
 });
 
 // ============================================================================

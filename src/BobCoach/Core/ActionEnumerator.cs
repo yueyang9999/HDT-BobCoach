@@ -178,7 +178,20 @@ namespace BobCoach.Engine
                 }
                 bool hasSellableMinion = state.BoardMinions
                     .Any(m => m != null && !m.Golden);
-                if (liveGold + 1 >= minBuyCost && hasSellableMinion)
+                // M1a(SPACETIME_PLAN 2026-09-08): 扩展 sell 生成 — 除"卖1张够买"外,
+                // board 将满(6)或手牌积压(hand>=7)且店有可买时, 也为"腾位后 buy"生成 sell。
+                // 依据: 94局真实帧 4263 帧中玩家 51% 先 sell 再买(见 SPACETIME_PLAN_REVIEW)。
+                bool boardNearFull = state.BoardMinions.Count >= 6;
+                bool handBacklog = state.HandMinions != null && state.HandMinions.Count >= 7;
+                // shop 有非法术可买随从(MinionData.Cost=-1 属正常, 购买价由规则实时算, 勿用它判可买)
+                bool shopHasBuy = state.ShopMinions.Any(
+                    shop => shop != null && !shop.IsSpell);
+                bool needRoomForBuy = (boardNearFull || handBacklog) && shopHasBuy;
+                // M1a-ext(round322): 纯筹资卖 — 低金(<3)但店有可买且板面有可卖时也生成 sell,
+                // 覆盖 玩家低金 sell 56.9% 中板<6 的筹资场景(实测114帧/94局)。
+                bool lowGoldFunding = liveGold >= 0 && liveGold < 3 && shopHasBuy;
+                if (hasSellableMinion
+                    && (liveGold + 1 >= minBuyCost || needRoomForBuy || lowGoldFunding))
                 {
                     var sellCandidates = state.BoardMinions
                         .Select((m, idx) => new { m, idx, power = m.Attack * 0.6 + m.Health * 0.4 + m.Tier * 2 })
@@ -186,7 +199,7 @@ namespace BobCoach.Engine
                             && (state.RecentlyBoughtEntityIds == null
                                 || !state.RecentlyBoughtEntityIds.Contains(x.m.EntityId)))
                         .OrderBy(x => x.power)
-                        .Take(3)
+                        .Take(needRoomForBuy ? 5 : 3)
                         .ToList();
                     foreach (var x in sellCandidates)
                     {

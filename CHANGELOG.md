@@ -1,6 +1,18 @@
-﻿# Changelog
+# Changelog
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
+
+## 1.2.22 - 2026-09-08
+
+### Fixed
+- ALG-070 v2: T1 首回合金币时序修复(GoldTracker 先捕获 prevSelfTurn 再更新, 跨局残留清除; 29/29 单测)
+
+### Algorithm (时空组合, Shadow 记录侧; 可见推荐经 legacy 门禁)
+- M1a: board>=6 或 hand>=7 且商店有可买时生成卖牌候选(购买时序 x 空间)
+- M1a-ext: 低金(<3)且商店有可买时补充卖牌候选
+- M2: GetRankedCandidates sell 链加成(卖后模拟最佳买, bestBuyDelta x0.5)
+- M4b: shadow FreezeShop 价值门控(镜像 GetBestAction, 无价值冻结不推荐)
+- 验证: sell top1 0.15%->11.25% (C段) / 9.48% (引擎窗); 一致率 29.9->30.0% 无副作用; 编译 697503F6
 
 ## 1.2.21 - 2026-09-08
 

@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 const assert = require("assert");
 const fs = require("fs");
@@ -18,10 +18,10 @@ const notice = read("NOTICE");
 const architecture = read("docs/maintainer/ARCHITECTURE.md");
 const dependencies = read("docs/maintainer/DEPENDENCIES.md");
 const bilingualDisclosureDesign = read("docs/design/双语自述与第三方声明设计_2026-07-21.md");
-const packageName = "BobCoach-1.2.21-win-x64.zip";
+const packageName = "BobCoach-1.2.22-win-x64.zip";
 const releasesUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases";
 const retiredPackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v0.2.0-beta.1/";
-const stablePackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.21/";
+const stablePackageUrl = "https://github.com/yueyang9999/HDT-BobCoach/releases/download/v1.2.22/";
 
 for (const [name, content] of [
     ["README.md", chineseReadme],
@@ -43,11 +43,11 @@ assert.ok(
     chineseReadme.includes("[中文安装教程（新手从这里开始）](docs/user/INSTALL.md)"),
     "Chinese README must expose the beginner installation guide",
 );
-assert.ok(chineseReadme.includes("候选"), "Chinese README must identify v1.2.21 as a release candidate");
+assert.ok(chineseReadme.includes("候选"), "Chinese README must identify v1.2.22 as a release candidate");
 assert.ok(chineseReadme.includes("尚未完成专用实机验收"), "Chinese README must preserve Win10 limitation");
 assert.ok(
     englishReadme.includes("release candidate"),
-    "English README must identify v1.2.21 as a release candidate",
+    "English README must identify v1.2.22 as a release candidate",
 );
 assert.ok(
     englishReadme.includes("dedicated physical validation has not been completed"),
@@ -177,15 +177,15 @@ for (const [name, content, statements] of [
 }
 
 assert.ok(notice.includes("v1.0.0"), "NOTICE must preserve the historical stable release disclosure");
-assert.ok(notice.includes("v1.2.21"), "NOTICE must identify the current release candidate");
-assert.ok(notice.includes("not published"), "NOTICE must not claim the v1.2.21 candidate is published");
+assert.ok(notice.includes("v1.2.22"), "NOTICE must identify the current release candidate");
+assert.ok(notice.includes("not published"), "NOTICE must not claim the v1.2.22 candidate is published");
 assert.ok(notice.includes("Final physical smoke validation on Windows 11 24H2 x64 was not"), "NOTICE must disclose the skipped final physical smoke validation");
 assert.ok(notice.includes("separate explicit owner authorization"), "NOTICE must require authorization for each future release");
 
 for (const [name, content, statement] of [
-    ["README.md", chineseReadme, "releases/download/v1.2.21/BobCoach-1.2.21-win-x64.zip"],
-    ["README.en.md", englishReadme, "releases/download/v1.2.21/BobCoach-1.2.21-win-x64.zip"],
-    ["docs/user/INSTALL.md", installGuide, "releases/download/v1.2.21/BobCoach-1.2.21-win-x64.zip"],
+    ["README.md", chineseReadme, "releases/download/v1.2.22/BobCoach-1.2.22-win-x64.zip"],
+    ["README.en.md", englishReadme, "releases/download/v1.2.22/BobCoach-1.2.22-win-x64.zip"],
+    ["docs/user/INSTALL.md", installGuide, "releases/download/v1.2.22/BobCoach-1.2.22-win-x64.zip"],
 ]) {
     assert.ok(content.includes(statement), `${name} must link the official 1.1.0 installer`);
 }

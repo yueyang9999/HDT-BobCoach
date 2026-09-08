@@ -1,4 +1,4 @@
-﻿[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
 param(
     [string]$PluginDirectory,
     [switch]$Rollback,
@@ -149,10 +149,10 @@ function Assert-PackageIntegrity {
     )
     Assert-ExactSet $expectedManifestFields @($manifest.PSObject.Properties.Name) "Manifest fields"
     if ([int]$manifest.schemaVersion -ne 2) { throw "Unsupported manifest schemaVersion: $($manifest.schemaVersion)" }
-    if ([string]$manifest.packageVersion -ne "1.2.21") { throw "Package version mismatch" }
-    if ([string]$manifest.assemblyVersion -ne "1.2.21.0") { throw "Assembly version contract mismatch" }
-    if ([string]$manifest.fileVersion -ne "1.2.21.0") { throw "File version contract mismatch" }
-    if ([string]$manifest.informationalVersion -ne "1.2.21") { throw "Informational version contract mismatch" }
+    if ([string]$manifest.packageVersion -ne "1.2.22") { throw "Package version mismatch" }
+    if ([string]$manifest.assemblyVersion -ne "1.2.22.0") { throw "Assembly version contract mismatch" }
+    if ([string]$manifest.fileVersion -ne "1.2.22.0") { throw "File version contract mismatch" }
+    if ([string]$manifest.informationalVersion -ne "1.2.22") { throw "Informational version contract mismatch" }
     if ([string]$manifest.targetFramework -ne ".NETFramework,Version=v4.7.2") { throw "Target framework contract mismatch" }
     if ([string]$manifest.runtimeIdentifier -ne "win-x64") { throw "Runtime identifier contract mismatch" }
     if ([string]$manifest.hdtBaselineVersion -ne "1.57.6.0") { throw "HDT baseline contract mismatch" }
