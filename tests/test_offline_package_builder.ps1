@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "offline_package_test_helpers.ps1")
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem

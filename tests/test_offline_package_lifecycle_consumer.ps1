@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet("All", "Success", "Preflight", "DryRun", "ChildFailure", "CanonicalPath", "OutputFlood", "TerminalEvidenceFailure", "ResultPathTakeover", "EnvironmentIsolation", "NestedReparse", "FinalStateCaptureFailure", "StepEvidenceFailure", "DoubleFailure")]
     [string[]]$Scenario = @("All")
