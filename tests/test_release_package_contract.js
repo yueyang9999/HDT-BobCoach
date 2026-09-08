@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
@@ -6,6 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const releaseRoot = path.join(root, 'tools', 'release');
 const errors = [];
+const identity = JSON.parse(fs.readFileSync(path.join(root, 'release_identity.json'), 'utf8'));
 const expectedFiles = [
   'BobCoach.dll',
   'BobCoach.dll.sha256',
@@ -142,7 +143,7 @@ forbid(
   /\.FullName\.Substring\(/i,
   'offline package builder test absolute-path substring enumeration',
 );
-for (const token of ['1.2.19', 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
+for (const token of [identity.packageVersion, 'BobCoach.dll.sha256', 'Get-FileHash', '-Rollback', '-RemoveUserData', 'Windows 10 22H2']) {
   requireText(readme, token, `offline README ${token}`);
 }
 
