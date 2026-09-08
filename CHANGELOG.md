@@ -2,6 +2,19 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.20 - 2026-09-08
+
+### Fixed
+- 发动(Activate)要求友方<种族>目标但场上无对应种族时不再出候选(ALG-069①, 引擎+单测)
+- 阮大师框架占位技能(每回合 2 选 1)不再被建议使用, 消除错位 HP 推荐(ALG-067)
+
+### Shadow / 候选(零副作用, 效果待验证)
+- 发动效果语义化评分(候选D, 文本模式 baseEffect)
+- 早期(T<=6)成长/理财买卡加权(ALG-068)
+
+### Engineering
+- 重建最小行为测试宿主(tools/build/run_behavior_tests.ps1 + tests/ActivateTargetBehavior.cs)
+
 ## 1.2.19 - 2026-09-07
 
 - feat(shadow 采集族, 记录型不改可见推荐): recommend 事件新增 shadowC1(升级三条件)/shadowC6(5→6 本门: turnOk T≥10/boardOk≥8.0/gatePass)/shadowC7(并列: 顶二 gap<0.10 → nearTie/tieGap/topType)——300 场景门禁的 Shadow 语料采集(证据 V8 rho−0.63/V12-13 分值压缩)

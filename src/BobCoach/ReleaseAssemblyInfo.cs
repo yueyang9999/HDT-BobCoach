@@ -2,6 +2,6 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("PolicyBenchmarkRunner")]
-[assembly: AssemblyVersion("1.2.19.0")]
-[assembly: AssemblyFileVersion("1.2.19.0")]
-[assembly: AssemblyInformationalVersion("1.2.19")]
+[assembly: AssemblyVersion("1.2.20.0")]
+[assembly: AssemblyFileVersion("1.2.20.0")]
+[assembly: AssemblyInformationalVersion("1.2.20")]

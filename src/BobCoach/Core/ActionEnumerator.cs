@@ -208,6 +208,8 @@ namespace BobCoach.Engine
                 foreach (var power in state.HeroPowers)
                 {
                     if (power == null) continue;
+                    // ALG-067: 阮大师框架占位技能(每回合 2 选 1, 引擎不可见所选)不可执行, 抑制建议
+                    if (power.CardId == "BG20_HERO_202p") continue;
                     if (HeroPowerRuleCatalog.IsUtilityPowerCardId(power.CardId))
                         continue;
                     if (!string.IsNullOrEmpty(power.CardId)
@@ -241,6 +243,7 @@ namespace BobCoach.Engine
             }
             else if (state.HeroPowerType == "Active"
                 && !HeroPowerRuleCatalog.IsUtilityPowerCardId(state.HeroPowerCardId)
+                && state.HeroPowerCardId != "BG20_HERO_202p" // ALG-067: 阮大师框架占位技能
                 && (rules.TeammateGoldTransfer == null
                     || state.HeroPowerCardId != rules.TeammateGoldTransfer.ActionCardId)
                 && !state.HeroPowerExhausted
@@ -279,6 +282,9 @@ namespace BobCoach.Engine
                     if (!season14.TryGetActivate(boardMinion.CardId, out activate))
                         continue;
                     if (liveGold < activate.ActivateCost)
+                        continue;
+                    // ALG-069: 发动若要求"友方<种族>随从"目标且场上无对应种族 -> 无合法目标, 不出候选(避免无效提示)
+                    if (!HasActivateTargetPresent(state.BoardMinions, activate))
                         continue;
                     string displayName = !string.IsNullOrEmpty(boardMinion.CardName)
                         ? boardMinion.CardName
@@ -354,6 +360,30 @@ namespace BobCoach.Engine
             }
 
             return actions;
+        }
+
+        private static readonly string[] ActivateFriendlyRaceKeywords =
+        {
+            "鱼人","野兽","机械","恶魔","龙","元素","野猪人","纳迦","亡灵","海盗"
+        };
+
+        /// <summary>ALG-069: 发动文本要求以"友方<种族>随从"为目标时, 场上需存在对应种族友方随从</summary>
+        internal static bool HasActivateTargetPresent(
+            System.Collections.Generic.IEnumerable<MinionData> board, ActivateFact activate)
+        {
+            string text = activate.TextZhCn;
+            if (string.IsNullOrEmpty(text) || !text.Contains("友方")) return true; // 无明确友方种族目标要求则放行
+            foreach (string race in ActivateFriendlyRaceKeywords)
+            {
+                if (text.IndexOf("友方" + race, System.StringComparison.Ordinal) < 0) continue;
+                bool any = false;
+                foreach (var m in board)
+                {
+                    if (m != null && MinionData.TribeMatches(m.Tribe, race)) { any = true; break; }
+                }
+                if (!any) return false; // 文本要求友方该族目标但场上不存在 -> 发动无合法目标
+            }
+            return true;
         }
 
         /// <summary>检查英雄技能在当前板面/商店状态下是否有有效目标</summary>

@@ -1164,6 +1164,17 @@ namespace BobCoach.Engine
                 if (action.Type == ActionType.Activate)
                 {
                     int liveGold = state.LiveGold >= 0 ? state.LiveGold : state.Gold;
+                    // 候选D: 发动效果语义化 - 按效果文本给 baseEffect(替代统一 0.5 软分); 无文本/未知回落 0.5 保持接近原行为
+                    double effectBase = 0.5;
+                    var sharedActivate = Engine.Season14RulesEvaluator.GetShared();
+                    ActivateFact activateFact = null;
+                    if (sharedActivate != null
+                        && sharedActivate.TryGetActivate(action.CardId, out activateFact)
+                        && activateFact != null
+                        && !string.IsNullOrEmpty(activateFact.TextZhCn))
+                    {
+                        effectBase = ActivateEffectBaseValue(activateFact.TextZhCn, state.Turn);
+                    }
                     var activateScore = UnifiedActionScorer.Score(
                         "Activate",
                         action.Cost,
@@ -1173,7 +1184,7 @@ namespace BobCoach.Engine
                         state.Health,
                         state.Turn,
                         state.TavernTier,
-                        0.5,
+                        effectBase,
                         0.0,
                         true,
                         boardFull,
@@ -1441,6 +1452,18 @@ namespace BobCoach.Engine
                     && action.TargetIndex < state.ShopMinions.Count
                     && state.ShopMinions[action.TargetIndex].Tier > boardMax)
                     value *= 1.1;
+
+                // ── ALG-068: 早期(T<=6)成长/理财卡加分(玩家拿法: T3 优先每回合提升/出售理财类, 参考真实拿法) ──
+                if (state.Turn <= 6 && action.Type == ActionType.BuyMinion
+                    && action.TargetIndex < state.ShopMinions.Count)
+                {
+                    string growthText = GetHearthDbText(state.ShopMinions[action.TargetIndex].CardId);
+                    if (!string.IsNullOrEmpty(growthText)
+                        && (growthText.Contains("每回合都会提升")
+                            || (growthText.Contains("出售")
+                                && (growthText.Contains("发现") || growthText.Contains("获取一张")))))
+                        value *= 1.8;
+                }
 
                 // ── 后期(T7+)T5+买牌加分: 核心卡价值远超普通卡 ──
                 if (lateGameWeightBoost && action.Type == ActionType.BuyMinion
@@ -4053,6 +4076,21 @@ namespace BobCoach.Engine
                 || (card.CardName != null && card.CardName.Contains("星元自动机")))
                 return 1.0;
             return 0.0;
+        }
+
+        /// <summary>候选D: 发动效果文本 -> 基准价值(统一软评分语义化; 无匹配回落 0.5 贴近原行为)</summary>
+        private static double ActivateEffectBaseValue(string text, int turn)
+        {
+            double v = 0.5;
+            if (text.Contains("触发一个友方")) v = 0.7;
+            else if (text.Contains("使另一个随从") || text.Contains("使一个随从获得")) v = 0.75;
+            else if (text.Contains("发现")) v = 0.8;
+            else if (text.Contains("随机获取")) v = 0.55;
+            else if (text.Contains("属性值")) v = 0.6;
+            else if (text.Contains("攻击")) v = 0.9;
+            else if (text.Contains("召唤")) v = 0.7;
+            else if (text.Contains("铸币")) v = 0.55;
+            return turn <= 10 ? v * 1.12 : v;
         }
 
         private static string GetHearthDbText(string cardId)

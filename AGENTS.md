@@ -254,3 +254,18 @@ Get-Content '<目录>\BobCoach.dll.sha256'   # 应输出: <同一SHA256>  BobCoa
    禁止重新扫描目录考古、禁止凭记忆报语料数。要点: 14 赛季起点 2026-08-04(官方 36.2);
    新环境 build=250339; 1888 XML 是 2025-08~2026-08 跨赛季历史导出非 S14 语料(S14 窗 ~317 局、新环境 57 局);
    firestone-check/xml(1338) 与 replays/xml 重叠勿重复计数; 新环境主数据 = decision-data/replays/global_*.jsonl + firestone-games-*.jsonl。
+
+## Task Execution Discipline (2026-09-08 追加固化, 用户多轮重申)
+7. **自主按优先级执行**: 用户给出方向后, agent 自行排优先级并整链推进, 禁止把下一步选择逐项抛回用户等确认;
+   完成一轮即汇报, 队列自动续(数据缺口如实标注"卡数据"而非停下询问)。
+8. **结论必须筛选验证(STP 强制)**: 任何"结论/阈值/候选"入库前走 STANDARD_TEST_PROCESS_20260908.md T0-T10:
+   数据资格/seed 复现/描述+基线对比/显著性(置换/CI)/混杂清单逐项/覆盖矩阵/Youden 阈值/功效(需 n)/
+   可迁移(A-C 一致; 离线≠实机)/门禁分级。数值主张附 效应量+95%CI+局限; 检验脚本 knowledge-check/_verify_claims.py。
+   违反者只许标"未验证观察/方向级并附 p"。
+9. **工程方法不自造**: 用 STANDARD_WORKFLOWS_ENGINEERING_20260908.md 的 8 环节映射(ADR 决策记录/STROBE+预注册/
+   Google 审查八维度/GitHub Issue Forms+5Whys/Shadow-canary+Conventional Commits/无指责 Postmortem/Runbook/
+   官方质量门禁), 方法附 GitHub/学术来源; 候选入库转 ADR 状态机, 复盘走 postmortem 骨架, bug 单字段化。
+
+10. **项目任务登记纪律(2026-09-08 固化, 用户多轮重申)**: 每轮收尾必须自查 - 用户当日发布的任务/方向/实测反馈当轮登记到
+    E:/HDT-BobCoach-evidence/knowledge-base/PROJECT_TASK_REGISTER.md(状态/登记日期/结束日期); 状态迁移(Done/Blocked/Partial)
+    当轮更新并填日期; 跨会话续接先读该登记册; 不许等用户提醒登记。收尾自查 5 条见登记册。
