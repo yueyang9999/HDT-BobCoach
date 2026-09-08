@@ -347,3 +347,8 @@ Status: Active
 - 影响: 全局 T1 引擎在 0 金下决策 -> Buy 被金拦 -> 仅 Freeze/Play -> 用户无购买建议(非雷诺独有)
 - 修复(摄入层): 回合首快照若 gold 未随 TagChange 更新且 mg>0 -> gold=mg(回合初满金兜底); 待代码定位+单局重验
 ### ALG-070 部署(2026-09-08 14:29): 1.2.21 B5734453 5目录 PASS; GoldTracker firstTurnFresh; 实机待验(T1 购买建议)
+### ALG-070 v2 + 时空组合部署(2026-09-08 18:0x): 1.2.22 AB66B570 5目录 PASS (commit ffc681c)
+- ALG-070 v2: GoldTracker 先捕获 prevSelfTurn 再更新(跨局残留清除), 29/29 JS 单测; 修复目标=144912 等 T1 恒0
+- M1a/M1a-ext/M2: 时空 sell 链(shadow) sell 0.15->11.25pct(C段)/9.48pct(引擎窗); M4b: Freeze 价值门 17.13->15.36pct
+- 验证: runner 同 commit 构建 sha=AB66B570 与部署 DLL 全等; 170344 局 Sell 11.89pct/Freeze 14.05pct 行为一致
+- 待实机复验: T1 购买建议(ALG-070 v2) + shadow 改进对可见推荐贴合度
