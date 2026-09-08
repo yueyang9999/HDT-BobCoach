@@ -133,7 +133,10 @@ namespace BobCoach.Engine
                 bool hdtLooksStale = hdtResourceTag >= 0 && hdtResourceTag <= 20
                     && _prevTurnMaxGold >= 0 && hdtResourceTag == _prevTurnMaxGold
                     && hdtResourceTag < maxGold;
-                if (hdtBase < maxGold && !hdtLooksStale) hdtBase = Math.Max(0, Math.Min(maxGoldWithBonus, hdtResourceTag));
+                // ALG-070: T1 首帧 RESOURCES=0 是未刷新(回合初满金), 非已消费 -> 首回合需抬满金
+                bool firstTurnFresh = turn == 1 && _prevTurnMaxGold < 0;
+                if (hdtBase < maxGold && !hdtLooksStale && !firstTurnFresh)
+                    hdtBase = Math.Max(0, Math.Min(maxGoldWithBonus, hdtResourceTag));
                 else if (hdtBase < maxGold) hdtBase = maxGold;
                 _prevTurnMaxGold = maxGold;
                 // 开局一次性加金: 仅首个有效回合加一次

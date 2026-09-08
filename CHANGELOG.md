@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. The project follows Semantic Versioning for package names.
 
+## 1.2.21 - 2026-09-08
+
+### Fixed
+- T1 首回合金币解析: RESOURCES=0(未刷新)误当已消费致 0 金决策、无购买建议(ALG-070, GoldTracker firstTurnFresh 抬满金)
+
 ## 1.2.20 - 2026-09-08
 
 ### Fixed

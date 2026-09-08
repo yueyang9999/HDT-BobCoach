@@ -202,10 +202,10 @@ function Read-StrictInternalSums([string]$Content) {
 function Assert-ManifestContract($Manifest, [hashtable]$EntryHashes, [hashtable]$EntryLengths) {
     if ([int]$Manifest.schemaVersion -ne 2) { throw "Manifest schema version mismatch" }
     $expected = [ordered]@{
-        packageVersion = "1.2.20"
-        assemblyVersion = "1.2.20.0"
-        fileVersion = "1.2.20.0"
-        informationalVersion = "1.2.20"
+        packageVersion = "1.2.21"
+        assemblyVersion = "1.2.21.0"
+        fileVersion = "1.2.21.0"
+        informationalVersion = "1.2.21"
         targetFramework = ".NETFramework,Version=v4.7.2"
         runtimeIdentifier = "win-x64"
         hdtBaselineVersion = "1.57.6.0"
